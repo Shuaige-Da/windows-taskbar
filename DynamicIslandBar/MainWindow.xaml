@@ -1,0 +1,474 @@
+﻿<Window x:Class="DynamicIslandBar.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        Loaded="Window_Loaded"
+        Width="560" Height="420"
+        Title="DynamicIslandBar">
+    <Window.Resources>
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Placement" Value="Top"/>
+            <Setter Property="VerticalOffset" Value="-8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border CornerRadius="10" Padding="12,8"
+                                MaxWidth="260">
+                            <Border.Background>
+                                <SolidColorBrush Color="#1E1E1E" Opacity="0.95"/>
+                            </Border.Background>
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="15" ShadowDepth="4" Opacity="0.5" Color="Black"/>
+                            </Border.Effect>
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="#E0FFFFFF" FontSize="12"
+                                       TextWrapping="Wrap" LineHeight="18"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10,0,10,10">
+        <Grid x:Name="CapsuleGrid" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+              Width="540" Height="400">
+
+            <!-- ===== 主胶囊背景 ===== -->
+            <Border x:Name="CapsuleBorder"
+                    Height="64" Width="500"
+                    CornerRadius="32"
+                    Padding="14,0"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MouseRightButtonDown="Capsule_RightClick">
+                <Border.Background>
+                    <SolidColorBrush Color="#141414" Opacity="0.92"/>
+                </Border.Background>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="40" ShadowDepth="15" Opacity="0.6" Color="Black"/>
+                </Border.Effect>
+
+                <DockPanel LastChildFill="False">
+
+                    <!-- ===== 左侧：Dock 图标 ===== -->
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
+                                x:Name="DockItems" VerticalAlignment="Center">
+
+                        <!-- 音乐 -->
+                        <Border x:Name="ItemMusic" Height="48" MaxWidth="48" CornerRadius="24"
+                                Cursor="Hand" ClipToBounds="True"
+                                MouseEnter="DockItem_MouseEnter" MouseLeave="DockItem_MouseLeave"
+                                Tag="#FF2D55" Margin="2,0"
+                                Background="#08FFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid Width="48" Height="48">
+                                    <Path Fill="#FF2D55" Stretch="Uniform" Width="22" Height="22"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Data="M12,3 L12,13.55 C11.41,13.21 10.73,13 10,13 C7.79,13 6,14.79 6,17 C6,19.21 7.79,21 10,21 C12.21,21 14,19.21 14,17 L14,7 L18,7 L18,3 Z"/>
+                                </Grid>
+                                <StackPanel x:Name="MusicExpanded" Orientation="Horizontal"
+                                            VerticalAlignment="Center" Visibility="Collapsed" Margin="6,0,14,0">
+                                    <TextBlock Text="正在播放" Foreground="White" FontSize="13"
+                                               FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="夜曲 - 周杰伦" Foreground="#99FFFFFF" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"
+                                                Margin="8,0,0,6" Height="12">
+                                        <Rectangle Width="2" Height="10" Fill="#FF2D55" Margin="2,0">
+                                            <Rectangle.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Height" From="2" To="12" Duration="0:0:0.6"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Rectangle.Triggers>
+                                        </Rectangle>
+                                        <Rectangle Width="2" Height="10" Fill="#FF2D55" Margin="2,0">
+                                            <Rectangle.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Height" From="2" To="12" Duration="0:0:0.6" BeginTime="0:0:0.2"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Rectangle.Triggers>
+                                        </Rectangle>
+                                        <Rectangle Width="2" Height="10" Fill="#FF2D55" Margin="2,0">
+                                            <Rectangle.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Height" From="2" To="12" Duration="0:0:0.6" BeginTime="0:0:0.4"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Rectangle.Triggers>
+                                        </Rectangle>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 电话 -->
+                        <Border x:Name="ItemPhone" Height="48" MaxWidth="48" CornerRadius="24"
+                                Cursor="Hand" ClipToBounds="True"
+                                MouseEnter="DockItem_MouseEnter" MouseLeave="DockItem_MouseLeave"
+                                Tag="#4CD964" Margin="2,0"
+                                Background="#08FFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid Width="48" Height="48">
+                                    <Path Fill="#4CD964" Stretch="Uniform" Width="22" Height="22"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Data="M6.62,10.79 C8.06,13.62 10.38,15.93 13.21,17.38 L15.41,15.18 C15.68,14.91 16.08,14.82 16.43,14.94 C17.55,15.31 18.76,15.51 20,15.51 C20.55,15.51 21,15.96 21,16.51 L21,20 C21,20.55 20.55,21 20,21 C10.61,21 3,13.39 3,4 C3,3.45 3.45,3 4,3 L7.5,3 C8.05,3 8.5,3.45 8.5,4 C8.5,5.25 8.7,6.45 9.07,7.57 C9.18,7.92 9.09,8.32 8.81,8.59 Z"/>
+                                </Grid>
+                                <StackPanel x:Name="PhoneExpanded" Orientation="Horizontal"
+                                            VerticalAlignment="Center" Visibility="Collapsed" Margin="6,0,14,0">
+                                    <TextBlock Text="未接来电" Foreground="White" FontSize="13"
+                                               FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="老板 (3分钟前)" Foreground="#99FFFFFF" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 导航 -->
+                        <Border x:Name="ItemNav" Height="48" MaxWidth="48" CornerRadius="24"
+                                Cursor="Hand" ClipToBounds="True"
+                                MouseEnter="DockItem_MouseEnter" MouseLeave="DockItem_MouseLeave"
+                                Tag="#007AFF" Margin="2,0"
+                                Background="#08FFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid Width="48" Height="48">
+                                    <Path Fill="#007AFF" Stretch="Uniform" Width="22" Height="22"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Data="M20.5,3 L20.34,3.03 L15,5.1 L9,3 L3.36,4.9 C3.15,4.97 3,5.15 3,5.38 L3,20.5 C3,20.78 3.22,21 3.5,21 L3.66,20.97 L9,18.9 L15,21 L20.64,19.1 C20.85,19.03 21,18.85 21,18.62 L21,3.5 C21,3.22 20.78,3 20.5,3 Z M15,19 L9,16.89 L9,5 L15,7.11 Z"/>
+                                </Grid>
+                                <StackPanel x:Name="NavExpanded" Orientation="Horizontal"
+                                            VerticalAlignment="Center" Visibility="Collapsed" Margin="6,0,14,0">
+                                    <TextBlock Text="高德导航" Foreground="White" FontSize="13"
+                                               FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="前方红绿灯右转" Foreground="#99FFFFFF" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- ===== 分割线 ===== -->
+                    <Rectangle Width="1" Height="30" Fill="#30FFFFFF" Margin="12,0"
+                               DockPanel.Dock="Left" VerticalAlignment="Center"/>
+
+                    <!-- ===== 右侧：系统信息区域 ===== -->
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                VerticalAlignment="Center" Margin="0,0,4,0">
+
+                        <!-- WiFi 图标 -->
+                        <Border x:Name="WifiIcon" Width="32" Height="32" CornerRadius="6"
+                                Cursor="Hand" Margin="2,0" Background="#00FFFFFF"
+                                MouseLeftButtonDown="WifiIcon_Click"
+                                MouseEnter="WifiIcon_MouseEnter"
+                                MouseLeave="WifiIcon_MouseLeave">
+                            <Path Fill="#4CD964" Stretch="Uniform" Width="16" Height="16"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M1,9 L3,11 C7.97,6.03 16.03,6.03 21,11 L23,9 C17.18,3.18 6.82,3.18 1,9 Z M5,13 L7,15 C9.76,12.24 14.24,12.24 17,15 L19,13 C15.14,9.14 8.86,9.14 5,13 Z M9,17 L12,20 L15,17 C13.35,15.34 10.66,15.34 9,17 Z"/>
+                        </Border>
+
+                        <!-- 音量图标 -->
+                        <Border x:Name="VolumeIcon" Width="32" Height="32" CornerRadius="6"
+                                Cursor="Hand" Margin="2,0" Background="#00FFFFFF"
+                                MouseLeftButtonDown="VolumeIcon_Click"
+                                MouseEnter="VolumeIcon_MouseEnter"
+                                MouseLeave="VolumeIcon_MouseLeave">
+                            <Path Fill="#4CD964" Stretch="Uniform" Width="16" Height="16"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M3,9 L3,15 L7,15 L12,20 L12,4 L7,9 Z M16.5,12 C16.5,10.23 15.48,8.71 14,7.97 L14,16.02 C15.48,15.29 16.5,13.77 16.5,12 Z M14,3.23 L14,5.29 C16.89,6.15 19,8.83 19,12 C19,15.17 16.89,17.84 14,18.7 L14,20.77 C18,19.86 21,16.28 21,12 C21,7.72 18,4.14 14,3.23 Z"/>
+                        </Border>
+
+                        <!-- 电池图标 -->
+                        <Border x:Name="BatteryIcon" Width="32" Height="32" CornerRadius="6"
+                                Cursor="Hand" Margin="2,0" Background="#00FFFFFF"
+                                MouseLeftButtonDown="BatteryIcon_Click"
+                                MouseEnter="SystemIcon_MouseEnter"
+                                MouseLeave="SystemIcon_MouseLeave">
+                            <Grid>
+                                <Path Fill="#4CD964" Stretch="Uniform" Width="18" Height="14"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Data="M15.67,4 L14,4 L14,2 L10,2 L10,4 L8.33,4 C7.6,4 7,4.6 7,5.33 L7,20.66 C7,21.4 7.6,22 8.33,22 L15.66,22 C16.4,22 17,21.4 17,20.67 L17,5.33 C17,4.6 16.4,4 15.67,4 Z"/>
+                                <TextBlock x:Name="BatteryPercentText" Text=""
+                                           Foreground="White" FontSize="8"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Margin="0,1,0,0" FontWeight="SemiBold"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 分割线 -->
+                        <Rectangle Width="1" Height="30" Fill="#30FFFFFF" Margin="8,0"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- 时钟 -->
+                        <StackPanel VerticalAlignment="Center" Margin="4,0,4,0">
+                            <TextBlock x:Name="ClockText" Text="--:--"
+                                       Foreground="White" FontSize="15" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="DateText" Text="--月--日"
+                                       Foreground="#80FFFFFF" FontSize="10"
+                                       HorizontalAlignment="Center" Margin="0,-1,0,0"/>
+                        </StackPanel>
+
+                        <!-- 分割线 -->
+                        <Rectangle Width="1" Height="30" Fill="#30FFFFFF" Margin="8,0"
+                                   VerticalAlignment="Center"/>
+
+                        <!-- 运行程序按钮 -->
+                        <Border Width="36" Height="36" CornerRadius="18" Cursor="Hand"
+                                Background="#10FFFFFF" x:Name="AppsButton"
+                                MouseEnter="AppsButton_MouseEnter"
+                                MouseLeave="AppsButton_MouseLeave"
+                                MouseLeftButtonDown="AppsButton_Click" ToolTip="运行中的程序">
+                            <Path Fill="#4CD964" Stretch="Uniform" Width="16" Height="16"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M4,4 L10,4 L10,10 L4,10 Z M14,4 L20,4 L20,10 L14,10 Z M4,14 L10,14 L10,20 L4,20 Z M14,14 L20,14 L20,20 L14,20 Z"/>
+                        </Border>
+                    </StackPanel>
+
+                </DockPanel>
+            </Border>
+
+            <!-- ===== 周长流光层（Path虚线动画） ===== -->
+            <Path x:Name="GlowPath"
+                  Stroke="#FF2D55"
+                  StrokeThickness="2.5"
+                  StrokeDashArray="85,200"
+                  StrokeDashCap="Round"
+                  Opacity="0"
+                  IsHitTestVisible="False"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Data="M32,0 L468,0 C485.7,0 500,14.3 500,32 C500,49.7 485.7,64 468,64 L32,64 C14.3,64 0,49.7 0,32 C0,14.3 14.3,0 32,0 Z">
+                <Path.Effect>
+                    <BlurEffect Radius="0.5"/>
+                </Path.Effect>
+            </Path>
+
+            <!-- ===== WiFi 控制面板 ===== -->
+            <Popup x:Name="WifiPopup"
+                   PlacementTarget="{Binding ElementName=WifiIcon}"
+                   Placement="Top"
+                   HorizontalOffset="-144"
+                   VerticalOffset="-12"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True"
+                   Closed="Popup_Closed">
+                <Border x:Name="WifiPanel"
+                        CornerRadius="16" Padding="14"
+                        MouseEnter="WifiPanel_MouseEnter"
+                        MouseLeave="WifiPanel_MouseLeave"
+                        MaxHeight="320" Width="320">
+                    <Border.Background>
+                        <SolidColorBrush Color="#1E1E1E" Opacity="0.92"/>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <!-- Title row -->
+                        <DockPanel Margin="0,0,0,10">
+                            <TextBlock Text="WLAN" Foreground="White" FontSize="15"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="WifiStatusText" Text="已连接"
+                                       Foreground="#80FFFFFF" FontSize="11"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock x:Name="WifiSystemAccessHint" Text=""
+                                       Foreground="#E3B341" FontSize="11"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Visibility="Collapsed"/>
+                            <Button x:Name="WifiRefreshBtn" Content="↻" DockPanel.Dock="Right"
+                                    Foreground="#80FFFFFF" Background="Transparent" BorderThickness="0"
+                                    FontSize="16" Cursor="Hand" Padding="4,0"
+                                    Click="WifiRefresh_Click"/>
+                        </DockPanel>
+                        <!-- Current network -->
+                        <Border x:Name="WifiCurrentNetwork" CornerRadius="8" Padding="10,8"
+                                Background="#20FFFFFF" Margin="0,0,0,8" Visibility="Collapsed">
+                            <DockPanel>
+                                <TextBlock x:Name="WifiCurrentSsid" Text="" Foreground="White"
+                                           FontSize="13" VerticalAlignment="Center"/>
+                                <Button x:Name="WifiDisconnectBtn" Content="断开" DockPanel.Dock="Right"
+                                        Foreground="#80FFFFFF" Background="#30FFFFFF" BorderThickness="0"
+                                        FontSize="11" Cursor="Hand" Padding="8,4"
+                                        Click="WifiDisconnect_Click"/>
+                            </DockPanel>
+                        </Border>
+                        <!-- Network list -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="180">
+                            <StackPanel x:Name="WifiNetworksList"/>
+                        </ScrollViewer>
+                        <!-- Bottom link -->
+                        <Button x:Name="WifiMoreSettingsButton" Content="更多 WiFi 设置" Foreground="#4CD964" Background="Transparent"
+                                BorderThickness="0" Cursor="Hand" HorizontalAlignment="Left"
+                                FontSize="12" Margin="0,8,0,0" Padding="0"
+                                Click="WifiMoreSettings_Click"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- ===== 音量控制面板 ===== -->
+            <Popup x:Name="VolumePopup"
+                   PlacementTarget="{Binding ElementName=VolumeIcon}"
+                   Placement="Top"
+                   HorizontalOffset="-134"
+                   VerticalOffset="-12"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True"
+                   Closed="Popup_Closed">
+                <Border x:Name="VolumePanel"
+                        CornerRadius="16" Padding="14"
+                        MouseEnter="VolumePanel_MouseEnter"
+                        MouseLeave="VolumePanel_MouseLeave"
+                        Width="300">
+                    <Border.Background>
+                        <SolidColorBrush Color="#1E1E1E" Opacity="0.92"/>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <!-- Title -->
+                        <TextBlock Text="音量" Foreground="White" FontSize="15"
+                                   FontWeight="SemiBold" Margin="0,0,0,10"/>
+                        <!-- Volume slider -->
+                        <DockPanel Margin="0,0,0,12">
+                            <TextBlock Text="🔇" Foreground="White" FontSize="14"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="VolumePercentText" Text="0%" Foreground="#80FFFFFF"
+                                       FontSize="12" VerticalAlignment="Center" DockPanel.Dock="Right"
+                                       Margin="8,0,0,0"/>
+                            <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100"
+                                    Value="50" VerticalAlignment="Center"
+                                    Foreground="#4CD964"
+                                    ValueChanged="VolumeSlider_ValueChanged"/>
+                        </DockPanel>
+                        <!-- Mute button -->
+                        <Button x:Name="MuteBtn" Content="静音" Foreground="#80FFFFFF"
+                                Background="#20FFFFFF" BorderThickness="0"
+                                Cursor="Hand" Padding="0,6" FontSize="12" Margin="0,0,0,10"
+                                Click="MuteBtn_Click"/>
+                        <!-- Devices -->
+                        <TextBlock Text="输出设备" Foreground="#80FFFFFF" FontSize="11"
+                                   Margin="0,4,0,6"/>
+                        <StackPanel x:Name="AudioDevicesList"/>
+                        <Button x:Name="VolumeMoreSettingsButton"
+                                Content="更多声音设置"
+                                Foreground="#4CD964"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                HorizontalAlignment="Left"
+                                FontSize="12"
+                                Margin="0,10,0,0"
+                                Padding="0"
+                                Click="VolumeMoreSettings_Click"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- ===== 运行程序弹窗面板 ===== -->
+            <Popup x:Name="AppsPopup"
+                   PlacementTarget="{Binding ElementName=AppsButton}"
+                   Placement="Top"
+                   HorizontalOffset="-142"
+                   VerticalOffset="-12"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True"
+                   Closed="Popup_Closed">
+                <Border x:Name="AppsPanel"
+                        CornerRadius="16" Padding="12"
+                        MouseEnter="AppsPanel_MouseEnter"
+                        MouseLeave="AppsPanel_MouseLeave"
+                        MaxHeight="280" Width="320">
+                    <Border.Background>
+                        <SolidColorBrush Color="#1E1E1E" Opacity="0.88"/>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
+                    </Border.Effect>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="AppsListPanel"/>
+                    </ScrollViewer>
+                </Border>
+            </Popup>
+
+            <Border x:Name="PermissionPromptPanel"
+                    Width="380"
+                    Padding="16"
+                    CornerRadius="18"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,118"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="20">
+                <Border.Background>
+                    <SolidColorBrush Color="#1E1E1E" Opacity="0.95"/>
+                </Border.Background>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.55" Color="Black"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock x:Name="PermissionPromptTitle"
+                               Text="权限请求"
+                               Foreground="White"
+                               FontSize="15"
+                               FontWeight="SemiBold"/>
+                    <TextBlock x:Name="PermissionPromptMessage"
+                               Text=""
+                               Foreground="#CCFFFFFF"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,12"/>
+                    <UniformGrid Columns="3" Rows="1">
+                        <Button Content="接受当前权限"
+                                Margin="0,0,8,0"
+                                Padding="8,6"
+                                BorderThickness="0"
+                                Background="#204CD964"
+                                Foreground="White"
+                                Cursor="Hand"
+                                Click="PermissionAllowCurrent_Click"/>
+                        <Button Content="拒绝"
+                                Margin="0,0,8,0"
+                                Padding="8,6"
+                                BorderThickness="0"
+                                Background="#20FFFFFF"
+                                Foreground="#CCFFFFFF"
+                                Cursor="Hand"
+                                Click="PermissionDeny_Click"/>
+                        <Button Content="接受所有权限"
+                                Padding="8,6"
+                                BorderThickness="0"
+                                Background="#26007AFF"
+                                Foreground="White"
+                                Cursor="Hand"
+                                Click="PermissionAllowAll_Click"/>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+        </Grid>
+    </Grid>
+</Window>
