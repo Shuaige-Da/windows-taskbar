@@ -10,6 +10,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using System.Text;
 using Icon = System.Drawing.Icon;
 
 namespace DynamicIslandBar
@@ -87,6 +88,7 @@ namespace DynamicIslandBar
             RefreshRunningAppsBar();
             _appsRefreshTimer.Start();
             _windowLoaded = true;
+            Dispatcher.BeginInvoke(MaybeWriteLayoutDiagnostics, DispatcherPriority.Loaded);
         }
 
         private void HideDemoDockItems()
@@ -97,16 +99,67 @@ namespace DynamicIslandBar
             GlowPath.Visibility = Visibility.Collapsed;
         }
 
+        private void MaybeWriteLayoutDiagnostics()
+        {
+            if (!string.Equals(Environment.GetEnvironmentVariable("DIB_LAYOUT_DIAGNOSTICS"), "1", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            try
+            {
+                var builder = new StringBuilder();
+                var (screenWidth, screenHeight) = DisplayBoundsProvider.GetPrimaryScreenSize();
+                builder.AppendLine($"screen={screenWidth}x{screenHeight}");
+                builder.AppendLine($"window Left={Left} Top={Top} Width={Width} Height={Height}");
+                var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DynamicIslandBar-layout.txt");
+                File.WriteAllText(path, builder.ToString());
+
+                AppendElementDiagnostics(builder, nameof(CapsuleGrid), CapsuleGrid);
+                AppendElementDiagnostics(builder, nameof(CapsuleBorder), CapsuleBorder);
+                AppendElementDiagnostics(builder, nameof(AppIconsHost), AppIconsHost);
+                AppendElementDiagnostics(builder, nameof(ClockText), ClockText);
+                AppendElementDiagnostics(builder, nameof(DateText), DateText);
+
+                File.WriteAllText(path, builder.ToString());
+            }
+            catch
+            {
+                // Keep diagnostics best-effort only.
+            }
+        }
+
+        private static void AppendElementDiagnostics(StringBuilder builder, string name, FrameworkElement element)
+        {
+            try
+            {
+                var relative = element.Parent is UIElement parent
+                    ? element.TranslatePoint(new Point(0, 0), parent)
+                    : new Point(double.NaN, double.NaN);
+                var screen = element.PointToScreen(new Point(0, 0));
+                builder.AppendLine(
+                    $"{name} Actual={element.ActualWidth}x{element.ActualHeight} Parent=({relative.X},{relative.Y}) Screen=({screen.X},{screen.Y}) Visibility={element.Visibility}");
+            }
+            catch (Exception ex)
+            {
+                builder.AppendLine($"{name} diagnostic failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
         private void ApplyLayout()
         {
-            var screenWidth = SystemParameters.PrimaryScreenWidth;
-            var screenHeight = SystemParameters.PrimaryScreenHeight;
+            var (screenWidth, screenHeight) = DisplayBoundsProvider.GetPrimaryScreenSize();
             _currentLayoutMetrics = CapsuleLayoutManager.GetMetrics(_capsuleConfig.Mode, screenWidth, screenHeight);
+            var frame = CapsuleLayoutManager.GetWindowFrame(
+                _capsuleConfig.Mode,
+                _currentLayoutMetrics,
+                screenWidth,
+                screenHeight);
 
-            Width = _currentLayoutMetrics.CapsuleWidth + 40;
-            Height = 420;
-            Left = (screenWidth - Width) / 2;
-            Top = _capsuleConfig.Mode == CapsuleMode.TopIsland ? 0 : screenHeight - Height;
+            Width = frame.Width;
+            Height = frame.Height;
+            Left = frame.Left;
+            Top = frame.Top;
 
             CapsuleGrid.Width = Width - 20;
             CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
@@ -977,7 +1030,7 @@ namespace DynamicIslandBar
             ReleaseMouseCapture();
 
             var resolvedMode = CapsuleLayoutManager.ResolveDropMode(
-                SystemParameters.PrimaryScreenHeight,
+                DisplayBoundsProvider.GetPrimaryScreenSize().Height,
                 Top,
                 _capsuleConfig.Mode);
 

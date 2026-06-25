@@ -12,6 +12,12 @@ public readonly record struct LayoutMetrics(
     int VisibleAppSlots,
     PopupFlowDirection PopupDirection);
 
+public readonly record struct WindowFrame(
+    double Left,
+    double Top,
+    double Width,
+    double Height);
+
 public static class CapsuleLayoutManager
 {
     public static LayoutMetrics GetMetrics(CapsuleMode mode, double screenWidth, double screenHeight)
@@ -39,5 +45,21 @@ public static class CapsuleLayoutManager
         }
 
         return CapsuleMode.BottomTaskbar;
+    }
+
+    public static WindowFrame GetWindowFrame(
+        CapsuleMode mode,
+        LayoutMetrics metrics,
+        double screenWidth,
+        double screenHeight)
+    {
+        var windowWidth = metrics.CapsuleWidth + 40;
+        const double windowHeight = 420;
+        var left = (screenWidth - windowWidth) / 2;
+        var top = mode == CapsuleMode.TopIsland
+            ? 0
+            : Math.Max(screenHeight - windowHeight, 0);
+
+        return new WindowFrame(left, top, windowWidth, windowHeight);
     }
 }

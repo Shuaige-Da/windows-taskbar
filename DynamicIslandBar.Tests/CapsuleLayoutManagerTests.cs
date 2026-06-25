@@ -26,4 +26,21 @@ public class CapsuleLayoutManagerTests
 
         Assert.Equal(CapsuleMode.TopIsland, mode);
     }
+
+    [Fact]
+    public void GetWindowFrame_CentersBottomModeInsidePrimaryScreen()
+    {
+        var metrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.BottomTaskbar, 2048, 1152);
+
+        var frame = CapsuleLayoutManager.GetWindowFrame(
+            CapsuleMode.BottomTaskbar,
+            metrics,
+            screenWidth: 2048,
+            screenHeight: 1152);
+
+        Assert.Equal(1420, frame.Width);
+        Assert.Equal(420, frame.Height);
+        Assert.Equal(314, frame.Left);
+        Assert.Equal(732, frame.Top);
+    }
 }
