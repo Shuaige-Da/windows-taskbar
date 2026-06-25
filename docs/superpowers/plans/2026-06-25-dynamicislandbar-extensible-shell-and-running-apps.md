@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `MainWindow` as the shell host, but move policy and state into focused helpers: `CapsuleConfigService` for persistence, `CapsuleLayoutManager` for placement and metrics, `CapsuleThemeManager` for presets, and `RunningAppsService` for app discovery and command handling. Use TDD for each non-trivial helper first, then wire the tested helpers into the WPF shell incrementally.
 
-**Tech Stack:** C#, WPF on `net10.0-windows`, xUnit, Win32 interop in `WindowManager`, JSON persistence via `System.Text.Json`.
+**Tech Stack:** C#, WPF on `net8.0-windows`, xUnit, Win32 interop in `WindowManager`, JSON persistence via `System.Text.Json`.
 
 ---
 

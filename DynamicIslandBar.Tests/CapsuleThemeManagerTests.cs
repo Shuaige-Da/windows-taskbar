@@ -1,0 +1,31 @@
+using DynamicIslandBar;
+
+namespace DynamicIslandBar.Tests;
+
+public class CapsuleThemeManagerTests
+{
+    [Theory]
+    [InlineData(CapsuleThemePreset.ClassicDark)]
+    [InlineData(CapsuleThemePreset.GlassGreen)]
+    [InlineData(CapsuleThemePreset.SoftLight)]
+    public void BuildTheme_ReturnsNamedPreset(CapsuleThemePreset preset)
+    {
+        var theme = CapsuleThemeManager.BuildTheme(preset);
+
+        Assert.Equal(preset, theme.Preset);
+        Assert.False(string.IsNullOrWhiteSpace(theme.CapsuleBackground));
+        Assert.False(string.IsNullOrWhiteSpace(theme.PanelBackground));
+    }
+
+    [Fact]
+    public void BuildTheme_PreservesBackgroundImageFields_WhenNotYetUsed()
+    {
+        var theme = CapsuleThemeManager.BuildTheme(
+            CapsuleThemePreset.ClassicDark,
+            backgroundImagePath: @"C:\wallpaper.png",
+            backgroundImageOpacity: 0.65);
+
+        Assert.Equal(@"C:\wallpaper.png", theme.BackgroundImagePath);
+        Assert.Equal(0.65, theme.BackgroundImageOpacity);
+    }
+}
