@@ -1,11 +1,9 @@
-﻿using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace DynamicIslandBar
 {
-    /// <summary>
-    /// ö�ٲ������ǰ�򿪵Ĵ���
-    /// </summary>
     public static class WindowManager
     {
         [DllImport("user32.dll")]
@@ -29,57 +27,172 @@ namespace DynamicIslandBar
         [DllImport("user32.dll")]
         private static extern uint GetWindowLong(IntPtr hWnd, int nIndex);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
         private const int GWL_STYLE = -16;
         private const uint WS_VISIBLE = 0x10000000;
-        private const uint WS_EX_TOOLWINDOW = 0x00000080;
         private const int SW_RESTORE = 9;
+        private const int SW_MINIMIZE = 6;
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
-        public class WindowInfo
+        public sealed class WindowInfo
         {
-            public IntPtr Handle { get; set; }
-            public string Title { get; set; } = "";
+            public IntPtr Handle { get; init; }
+            public string Title { get; init; } = string.Empty;
+            public int ProcessId { get; init; }
+            public string ProcessName { get; init; } = string.Empty;
+            public string? ExecutablePath { get; init; }
+            public bool IsForeground { get; init; }
 
             public void Activate()
             {
                 ShowWindow(Handle, SW_RESTORE);
                 SetForegroundWindow(Handle);
             }
+
+            public void Minimize()
+            {
+                ShowWindow(Handle, SW_MINIMIZE);
+            }
+
+            public void ToggleWindowState()
+            {
+                if (IsForeground && !IsIconic(Handle))
+                {
+                    Minimize();
+                    return;
+                }
+
+                Activate();
+            }
         }
 
-        /// <summary>
-        /// ��ȡ���пɼ����ڵı���;��
-        /// </summary>
         public static List<WindowInfo> GetVisibleWindows()
         {
             var windows = new List<WindowInfo>();
+            var foregroundWindow = GetForegroundWindow();
 
             EnumWindows((hWnd, lParam) =>
             {
-                if (!IsWindowVisible(hWnd)) return true;
+                if (!IsWindowVisible(hWnd))
+                {
+                    return true;
+                }
 
                 var style = GetWindowLong(hWnd, GWL_STYLE);
-                if ((style & WS_VISIBLE) == 0) return true;
-
-                int length = GetWindowTextLength(hWnd);
-                if (length == 0) return true;
-
-                var sb = new StringBuilder(length + 1);
-                GetWindowText(hWnd, sb, sb.Capacity);
-
-                var title = sb.ToString().Trim();
-                if (string.IsNullOrEmpty(title)) return true;
-
-                // �ų�һЩϵͳ����
-                if (title == "Program Manager" || title == "Windows Input Experience")
+                if ((style & WS_VISIBLE) == 0)
+                {
                     return true;
+                }
 
-                windows.Add(new WindowInfo { Handle = hWnd, Title = title });
+                var length = GetWindowTextLength(hWnd);
+                if (length == 0)
+                {
+                    return true;
+                }
+
+                var titleBuilder = new StringBuilder(length + 1);
+                GetWindowText(hWnd, titleBuilder, titleBuilder.Capacity);
+                var title = titleBuilder.ToString().Trim();
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return true;
+                }
+
+                if (title is "Program Manager" or "Windows Input Experience")
+                {
+                    return true;
+                }
+
+                var processId = 0;
+                var processName = string.Empty;
+                string? executablePath = null;
+                try
+                {
+                    GetWindowThreadProcessId(hWnd, out var pid);
+                    processId = (int)pid;
+                    using var process = Process.GetProcessById(processId);
+                    processName = process.ProcessName;
+                    executablePath = TryGetProcessPath(process);
+                }
+                catch
+                {
+                }
+
+                windows.Add(new WindowInfo
+                {
+                    Handle = hWnd,
+                    Title = title,
+                    ProcessId = processId,
+                    ProcessName = processName,
+                    ExecutablePath = executablePath,
+                    IsForeground = hWnd == foregroundWindow
+                });
+
                 return true;
             }, IntPtr.Zero);
 
             return windows;
+        }
+
+        public static bool ToggleWindowState(IntPtr handle)
+        {
+            if (handle == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            if (handle == GetForegroundWindow() && !IsIconic(handle))
+            {
+                return ShowWindow(handle, SW_MINIMIZE);
+            }
+
+            ShowWindow(handle, SW_RESTORE);
+            return SetForegroundWindow(handle);
+        }
+
+        public static bool CloseProcess(int processId)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(processId);
+                if (process.HasExited)
+                {
+                    return true;
+                }
+
+                if (process.CloseMainWindow())
+                {
+                    return true;
+                }
+
+                process.Kill(entireProcessTree: false);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string? TryGetProcessPath(Process process)
+        {
+            try
+            {
+                return process.MainModule?.FileName;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

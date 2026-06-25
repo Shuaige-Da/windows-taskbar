@@ -50,7 +50,10 @@
                     Padding="14,0"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    MouseRightButtonDown="Capsule_RightClick">
+                    MouseRightButtonDown="Capsule_RightClick"
+                    MouseLeftButtonDown="Capsule_DragStart"
+                    MouseLeftButtonUp="Capsule_DragEnd"
+                    MouseMove="Capsule_DragMove">
                 <Border.Background>
                     <SolidColorBrush Color="#141414" Opacity="0.92"/>
                 </Border.Background>
@@ -164,6 +167,27 @@
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </StackPanel>
+                        </Border>
+
+                        <StackPanel x:Name="AppIconsHost"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,4,0"/>
+
+                        <Border x:Name="OverflowFolderButton"
+                                Width="40" Height="40"
+                                CornerRadius="20"
+                                Margin="2,0,0,0"
+                                Cursor="Hand"
+                                Visibility="Collapsed"
+                                Background="#10FFFFFF"
+                                MouseEnter="OverflowFolderButton_MouseEnter"
+                                MouseLeave="OverflowFolderButton_MouseLeave">
+                            <Grid>
+                                <Path Fill="#4CD964" Stretch="Uniform" Width="16" Height="16"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Data="M5,5 L11,5 L11,11 L5,11 Z M13,7 L19,7 L19,13 L13,13 Z M7,13 L13,13 L13,19 L7,19 Z"/>
+                            </Grid>
                         </Border>
                     </StackPanel>
 
@@ -411,6 +435,37 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel x:Name="AppsListPanel"/>
                     </ScrollViewer>
+                </Border>
+            </Popup>
+
+            <Popup x:Name="OverflowAppsPopup"
+                   PlacementTarget="{Binding ElementName=OverflowFolderButton}"
+                   Placement="Top"
+                   HorizontalOffset="0"
+                   VerticalOffset="-12"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True"
+                   Closed="Popup_Closed">
+                <Border x:Name="OverflowAppsPanel"
+                        CornerRadius="16" Padding="12"
+                        MouseEnter="OverflowAppsPanel_MouseEnter"
+                        MouseLeave="OverflowAppsPanel_MouseLeave"
+                        Width="300">
+                    <Border.Background>
+                        <SolidColorBrush Color="#1E1E1E" Opacity="0.92"/>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock Text="更多应用"
+                                   Foreground="White"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,10"/>
+                        <WrapPanel x:Name="OverflowAppsListPanel" ItemWidth="52"/>
+                    </StackPanel>
                 </Border>
             </Popup>
 

@@ -41,4 +41,20 @@ public class RunningAppsServiceTests
         Assert.Equal(2, snapshot.OverflowApps.Count);
         Assert.True(snapshot.HasOverflowFolder);
     }
+
+    [Fact]
+    public void BuildSnapshot_KeepsFavoriteAppsEvenWhenTheyAreNotRunning()
+    {
+        var config = new CapsuleConfig();
+        CapsuleConfigMutator.SetFavorite(config, @"c:\apps\wechat.exe", true);
+        CapsuleConfigMutator.SetKnownLaunchPath(config, @"c:\apps\wechat.exe", @"C:\Apps\WeChat.exe");
+
+        var snapshot = RunningAppsSnapshotBuilder.Build([], config, visibleSlots: 3);
+
+        var favorite = Assert.Single(snapshot.AllApps);
+        Assert.Equal(@"c:\apps\wechat.exe", favorite.AppId);
+        Assert.False(favorite.IsRunning);
+        Assert.True(favorite.IsFavorite);
+        Assert.Equal(@"C:\Apps\WeChat.exe", favorite.ExePath);
+    }
 }
