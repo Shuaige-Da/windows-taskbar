@@ -1,4 +1,5 @@
-﻿using System.Windows;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace DynamicIslandBar
 {
@@ -14,8 +15,29 @@ namespace DynamicIslandBar
             StartupEnvironment.EnsureWindowsFontEnvironment();
             base.OnStartup(e);
 
+            if (TaskbarRestoreWatchdog.TryGetParentProcessId(e.Args, out var parentProcessId))
+            {
+                TaskbarRestoreWatchdog.RunUntilParentExits(parentProcessId);
+                Shutdown();
+                return;
+            }
+
+            TaskbarRestoreWatchdog.StartForCurrentProcess();
+            DispatcherUnhandledException += App_DispatcherUnhandledException;
+
             MainWindow = new MainWindow();
             MainWindow.Show();
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            TaskbarManager.Show();
+            base.OnExit(e);
+        }
+
+        private static void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+        {
+            TaskbarManager.Show();
         }
     }
 }
