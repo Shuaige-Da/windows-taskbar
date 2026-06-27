@@ -194,13 +194,13 @@ internal sealed class CapsuleConfigStore
             BackgroundImagePath = BackgroundImagePath,
             BackgroundImageOpacity = BackgroundImageOpacity,
             BackgroundImageStretchMode = BackgroundImageStretchMode,
-            GlassOpacityPercent = Math.Clamp(GlassOpacityPercent, 0, 100),
-            ShadowPercent = Math.Clamp(ShadowPercent, 0, 100),
-            GlowIntensityPercent = Math.Clamp(GlowIntensityPercent, 0, 100),
-            GlowThicknessPercent = Math.Clamp(GlowThicknessPercent, 0, 100),
-            GlowSpeedPercent = Math.Clamp(GlowSpeedPercent, 0, 100),
-            CapsuleThicknessPercent = Math.Clamp(CapsuleThicknessPercent, 0, 100),
-            CapsuleLengthPercent = Math.Clamp(CapsuleLengthPercent, 0, 100)
+            GlassOpacityPercent = ClampPercent(GlassOpacityPercent),
+            ShadowPercent = ClampPercent(ShadowPercent),
+            GlowIntensityPercent = ClampPercent(GlowIntensityPercent),
+            GlowThicknessPercent = ClampPercent(GlowThicknessPercent),
+            GlowSpeedPercent = ClampPercent(GlowSpeedPercent),
+            CapsuleThicknessPercent = ClampPercent(CapsuleThicknessPercent),
+            CapsuleLengthPercent = ClampPercent(CapsuleLengthPercent)
         };
 
         foreach (var appId in FavoriteApps)
@@ -233,13 +233,18 @@ internal sealed class CapsuleConfigStore
             BackgroundImagePath = config.BackgroundImagePath,
             BackgroundImageOpacity = config.BackgroundImageOpacity,
             BackgroundImageStretchMode = config.BackgroundImageStretchMode,
-            GlassOpacityPercent = Math.Clamp(config.GlassOpacityPercent, 0, 100),
-            ShadowPercent = Math.Clamp(config.ShadowPercent, 0, 100),
-            GlowIntensityPercent = Math.Clamp(config.GlowIntensityPercent, 0, 100),
-            GlowThicknessPercent = Math.Clamp(config.GlowThicknessPercent, 0, 100),
-            GlowSpeedPercent = Math.Clamp(config.GlowSpeedPercent, 0, 100),
-            CapsuleThicknessPercent = Math.Clamp(config.CapsuleThicknessPercent, 0, 100),
-            CapsuleLengthPercent = Math.Clamp(config.CapsuleLengthPercent, 0, 100)
+            GlassOpacityPercent = ClampPercent(config.GlassOpacityPercent),
+            ShadowPercent = ClampPercent(config.ShadowPercent),
+            GlowIntensityPercent = ClampPercent(config.GlowIntensityPercent),
+            GlowThicknessPercent = ClampPercent(config.GlowThicknessPercent),
+            GlowSpeedPercent = ClampPercent(config.GlowSpeedPercent),
+            CapsuleThicknessPercent = ClampPercent(config.CapsuleThicknessPercent),
+            CapsuleLengthPercent = ClampPercent(config.CapsuleLengthPercent)
         };
+    }
+
+    private static int ClampPercent(int percent)
+    {
+        return Math.Clamp(percent, 0, 100);
     }
 }

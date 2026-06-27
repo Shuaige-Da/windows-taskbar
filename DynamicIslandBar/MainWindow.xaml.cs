@@ -165,17 +165,7 @@ namespace DynamicIslandBar
         private void ApplyLayout()
         {
             var (screenWidth, screenHeight) = DisplayBoundsProvider.GetPrimaryScreenSize();
-            _currentLayoutMetrics = CapsuleLayoutManager.GetMetrics(_capsuleConfig.Mode, screenWidth, screenHeight);
-            var baseWidth = _currentLayoutMetrics.CapsuleWidth;
-            var capsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
-                _capsuleConfig.Mode,
-                baseWidth,
-                _capsuleConfig.CapsuleLengthPercent);
-            _currentLayoutMetrics = _currentLayoutMetrics with
-            {
-                CapsuleWidth = capsuleWidth,
-                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, baseWidth, capsuleWidth)
-            };
+            _currentLayoutMetrics = BuildCurrentLayoutMetrics(screenWidth, screenHeight);
             var frame = CapsuleLayoutManager.GetWindowFrame(
                 _capsuleConfig.Mode,
                 _currentLayoutMetrics,
@@ -210,6 +200,21 @@ namespace DynamicIslandBar
             ConfigurePopup(VolumePopup, _currentLayoutMetrics.PopupDirection, -134);
             ConfigurePopup(AppsPopup, _currentLayoutMetrics.PopupDirection, -142);
             ConfigurePopup(OverflowAppsPopup, _currentLayoutMetrics.PopupDirection, 0);
+        }
+
+        private LayoutMetrics BuildCurrentLayoutMetrics(double screenWidth, double screenHeight)
+        {
+            var metrics = CapsuleLayoutManager.GetMetrics(_capsuleConfig.Mode, screenWidth, screenHeight);
+            var capsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
+                _capsuleConfig.Mode,
+                metrics.CapsuleWidth,
+                _capsuleConfig.CapsuleLengthPercent);
+
+            return metrics with
+            {
+                CapsuleWidth = capsuleWidth,
+                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, metrics.CapsuleWidth, capsuleWidth)
+            };
         }
 
         private static int MapVisibleAppSlots(CapsuleMode mode, double baseWidth, double capsuleWidth)
@@ -1277,15 +1282,7 @@ namespace DynamicIslandBar
             {
                 var percent = (int)Math.Round(args.NewValue);
                 valueText.Text = $"{percent}%";
-                updateConfig(percent);
-                CapsuleConfigService.Save(_capsuleConfig);
-                if (refreshLayout)
-                {
-                    ApplyLayout();
-                    RefreshRunningAppsBar();
-                }
-
-                ApplyTheme();
+                ApplyAppearanceSliderValue(updateConfig, percent, refreshLayout);
             };
 
             var panel = new StackPanel
@@ -1309,6 +1306,19 @@ namespace DynamicIslandBar
                 StaysOpenOnClick = true,
                 Foreground = Brushes.White
             };
+        }
+
+        private void ApplyAppearanceSliderValue(Action<int> updateConfig, int percent, bool refreshLayout)
+        {
+            updateConfig(percent);
+            CapsuleConfigService.Save(_capsuleConfig);
+            if (refreshLayout)
+            {
+                ApplyLayout();
+                RefreshRunningAppsBar();
+            }
+
+            ApplyTheme();
         }
 
         private void AddThemeMenuItem(MenuItem parent, CapsuleThemePreset preset, string title)
