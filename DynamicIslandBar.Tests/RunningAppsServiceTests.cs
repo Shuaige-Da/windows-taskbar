@@ -26,6 +26,22 @@ public class RunningAppsServiceTests
     }
 
     [Fact]
+    public void BuildSnapshot_PreservesForegroundStateForGroupedWindowApps()
+    {
+        var snapshot = RunningAppsSnapshotBuilder.Build(
+            [
+                new WindowAppCandidate("微信", @"c:\apps\wechat.exe", 101, false),
+                new WindowAppCandidate("微信聊天", @"c:\apps\wechat.exe", 102, true),
+                new WindowAppCandidate("QQ", @"c:\apps\qq.exe", 201, false)
+            ],
+            new CapsuleConfig(),
+            visibleSlots: 3);
+
+        Assert.True(snapshot.AllApps.Single(app => app.AppId == @"c:\apps\wechat.exe").IsForeground);
+        Assert.False(snapshot.AllApps.Single(app => app.AppId == @"c:\apps\qq.exe").IsForeground);
+    }
+
+    [Fact]
     public void BuildSnapshot_UsesOverflowFolderWhenVisibleAppsExceedCapacity()
     {
         var snapshot = RunningAppsSnapshotBuilder.Build(

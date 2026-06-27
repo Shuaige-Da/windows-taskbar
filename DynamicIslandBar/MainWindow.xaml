@@ -12,6 +12,144 @@
         Width="560" Height="420"
         Title="DynamicIslandBar">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <LinearGradientBrush x:Key="CapsuleGlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#58FFFFFF" Offset="0"/>
+            <GradientStop Color="#16FFFFFF" Offset="0.34"/>
+            <GradientStop Color="#00FFFFFF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CapsuleInnerDepthBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#36D8F5FF" Offset="0"/>
+            <GradientStop Color="#161A3346" Offset="0.42"/>
+            <GradientStop Color="#38000000" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CapsulePrismGlowBrush" StartPoint="0,0.5" EndPoint="1,0.5">
+            <GradientStop Color="#FFFF4FA3" Offset="0"/>
+            <GradientStop Color="#FF6F8CFF" Offset="0.3"/>
+            <GradientStop Color="#FF46E0FF" Offset="0.58"/>
+            <GradientStop Color="#FF4DFF88" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="SummaryGlassBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#26FFFFFF" Offset="0"/>
+            <GradientStop Color="#10182028" Offset="0.55"/>
+            <GradientStop Color="#24000000" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="HoverOverlayGlassBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F02A2D35" Offset="0"/>
+            <GradientStop Color="#EA191B22" Offset="0.58"/>
+            <GradientStop Color="#F00E1015" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CapsuleMenuGlassBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F01A2732" Offset="0"/>
+            <GradientStop Color="#E8121820" Offset="0.58"/>
+            <GradientStop Color="#F0080B10" Offset="1"/>
+        </LinearGradientBrush>
+        <Style x:Key="CapsuleContextMenuStyle" TargetType="{x:Type ContextMenu}">
+            <Setter Property="Foreground" Value="#F2FFFFFF"/>
+            <Setter Property="Background" Value="{StaticResource CapsuleMenuGlassBrush}"/>
+            <Setter Property="BorderBrush" Value="#6646E0FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContextMenu}">
+                        <Border CornerRadius="12"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="22" ShadowDepth="7" Opacity="0.36" Color="Black"/>
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CapsuleMenuItemStyle" TargetType="{x:Type MenuItem}">
+            <Setter Property="Foreground" Value="#F2FFFFFF"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                        <Grid>
+                            <Border x:Name="ItemBorder"
+                                    CornerRadius="8"
+                                    Background="{TemplateBinding Background}"/>
+                            <Grid Margin="{TemplateBinding Padding}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="22"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="18"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="✓"
+                                           Visibility="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Foreground="#4CD964"
+                                           VerticalAlignment="Center"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center"/>
+                                <Path Grid.Column="2"
+                                      x:Name="SubmenuArrow"
+                                      Fill="#BFFFFFFF"
+                                      Width="6"
+                                      Height="10"
+                                      Stretch="Uniform"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center"
+                                      Data="M0,0 L6,5 L0,10 Z"
+                                      Visibility="Collapsed"/>
+                            </Grid>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                   PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Right"
+                                   PopupAnimation="Fade">
+                                <Border CornerRadius="12"
+                                        Background="{StaticResource CapsuleMenuGlassBrush}"
+                                        BorderBrush="#6646E0FF"
+                                        BorderThickness="1"
+                                        Padding="4">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="22" ShadowDepth="7" Opacity="0.36" Color="Black"/>
+                                    </Border.Effect>
+                                    <StackPanel IsItemsHost="True"/>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#2646E0FF"/>
+                            </Trigger>
+                            <Trigger Property="HasItems" Value="True">
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="{x:Type Separator}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Separator}">
+                        <Border Height="1"
+                                Margin="10,5"
+                                Background="#24FFFFFF"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="ToolTip">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -45,23 +183,31 @@
 
             <!-- ===== 主胶囊背景 ===== -->
             <Border x:Name="CapsuleBorder"
-                    Height="64" Width="500"
-                    CornerRadius="32"
-                    Padding="14,0"
+                    Height="80" Width="500"
+                    CornerRadius="40"
+                    Padding="0"
+                    BorderBrush="{StaticResource CapsulePrismGlowBrush}"
+                    BorderThickness="1.4"
+                    SnapsToDevicePixels="True"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     MouseRightButtonDown="Capsule_RightClick"
-                    MouseLeftButtonDown="Capsule_DragStart"
-                    MouseLeftButtonUp="Capsule_DragEnd"
-                    MouseMove="Capsule_DragMove">
+                    PreviewMouseLeftButtonDown="Capsule_DragStart"
+                    PreviewMouseLeftButtonUp="Capsule_DragEnd"
+                    PreviewMouseMove="Capsule_DragMove">
                 <Border.Background>
-                    <SolidColorBrush Color="#141414" Opacity="0.92"/>
+                    <StaticResource ResourceKey="CapsuleInnerDepthBrush"/>
                 </Border.Background>
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="40" ShadowDepth="15" Opacity="0.6" Color="Black"/>
-                </Border.Effect>
+                <Grid>
+                    <Border CornerRadius="36"
+                            Height="32"
+                            Margin="22,3,22,0"
+                            VerticalAlignment="Top"
+                            Background="{StaticResource CapsuleGlassSheenBrush}"
+                            Opacity="0.72"
+                            IsHitTestVisible="False"/>
 
-                <DockPanel LastChildFill="False">
+                    <DockPanel LastChildFill="True" Margin="14,0">
 
                     <!-- ===== 左侧：Dock 图标 ===== -->
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
@@ -180,7 +326,9 @@
                                 Margin="2,0,0,0"
                                 Cursor="Hand"
                                 Visibility="Collapsed"
-                                Background="#10FFFFFF"
+                                Background="#12FFFFFF"
+                                BorderBrush="#16FFFFFF"
+                                BorderThickness="1"
                                 MouseEnter="OverflowFolderButton_MouseEnter"
                                 MouseLeave="OverflowFolderButton_MouseLeave">
                             <Grid>
@@ -201,7 +349,8 @@
 
                         <!-- WiFi 图标 -->
                         <Border x:Name="WifiIcon" Width="32" Height="32" CornerRadius="6"
-                                Cursor="Hand" Margin="2,0" Background="#00FFFFFF"
+                                Cursor="Hand" Margin="2,0" Background="#06FFFFFF"
+                                BorderBrush="#08FFFFFF" BorderThickness="1"
                                 MouseLeftButtonDown="WifiIcon_Click"
                                 MouseEnter="WifiIcon_MouseEnter"
                                 MouseLeave="WifiIcon_MouseLeave">
@@ -212,7 +361,8 @@
 
                         <!-- 音量图标 -->
                         <Border x:Name="VolumeIcon" Width="32" Height="32" CornerRadius="6"
-                                Cursor="Hand" Margin="2,0" Background="#00FFFFFF"
+                                Cursor="Hand" Margin="2,0" Background="#06FFFFFF"
+                                BorderBrush="#08FFFFFF" BorderThickness="1"
                                 MouseLeftButtonDown="VolumeIcon_Click"
                                 MouseEnter="VolumeIcon_MouseEnter"
                                 MouseLeave="VolumeIcon_MouseLeave">
@@ -223,7 +373,8 @@
 
                         <!-- 电池图标 -->
                         <Border x:Name="BatteryIcon" Width="32" Height="32" CornerRadius="6"
-                                Cursor="Hand" Margin="2,0" Background="#00FFFFFF"
+                                Cursor="Hand" Margin="2,0" Background="#06FFFFFF"
+                                BorderBrush="#08FFFFFF" BorderThickness="1"
                                 MouseLeftButtonDown="BatteryIcon_Click"
                                 MouseEnter="SystemIcon_MouseEnter"
                                 MouseLeave="SystemIcon_MouseLeave">
@@ -258,7 +409,8 @@
 
                         <!-- 运行程序按钮 -->
                         <Border Width="36" Height="36" CornerRadius="18" Cursor="Hand"
-                                Background="#10FFFFFF" x:Name="AppsButton"
+                                Background="#12FFFFFF" BorderBrush="#16FFFFFF" BorderThickness="1"
+                                x:Name="AppsButton"
                                 MouseEnter="AppsButton_MouseEnter"
                                 MouseLeave="AppsButton_MouseLeave"
                                 MouseLeftButtonDown="AppsButton_Click" ToolTip="运行中的程序">
@@ -268,24 +420,112 @@
                         </Border>
                     </StackPanel>
 
-                </DockPanel>
+                    <Border x:Name="ActiveAppSummaryPanel"
+                            Height="44"
+                            MaxWidth="520"
+                            Margin="18,0"
+                            Padding="10,0,14,0"
+                            CornerRadius="22"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource SummaryGlassBrush}"
+                            BorderBrush="#4CD964"
+                            BorderThickness="1.2"
+                            Visibility="Collapsed"
+                            IsHitTestVisible="False">
+                        <DockPanel LastChildFill="True">
+                            <ContentControl x:Name="ActiveAppSummaryIcon"
+                                            Width="26"
+                                            Height="26"
+                                            VerticalAlignment="Center"
+                                            DockPanel.Dock="Left"/>
+                            <StackPanel Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Margin="9,0,0,0">
+                                <TextBlock x:Name="ActiveAppSummaryTitle"
+                                           Text=""
+                                           Foreground="White"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="180"/>
+                                <TextBlock x:Name="ActiveAppSummarySubtitle"
+                                           Text=""
+                                           Foreground="#88FFFFFF"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Margin="8,0,0,0"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="260"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    </DockPanel>
+                </Grid>
             </Border>
 
-            <!-- ===== 周长流光层（Path虚线动画） ===== -->
-            <Path x:Name="GlowPath"
-                  Stroke="#FF2D55"
-                  StrokeThickness="2.5"
-                  StrokeDashArray="85,200"
-                  StrokeDashCap="Round"
-                  Opacity="0"
-                  IsHitTestVisible="False"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Data="M32,0 L468,0 C485.7,0 500,14.3 500,32 C500,49.7 485.7,64 468,64 L32,64 C14.3,64 0,49.7 0,32 C0,14.3 14.3,0 32,0 Z">
-                <Path.Effect>
-                    <BlurEffect Radius="0.5"/>
-                </Path.Effect>
-            </Path>
+            <!-- ===== 应用悬浮说明层：不参与主栏布局，避免推动后续图标 ===== -->
+            <Canvas x:Name="AppHoverOverlayLayer"
+                    Width="{Binding ElementName=CapsuleGrid, Path=Width}"
+                    Height="{Binding ElementName=CapsuleGrid, Path=Height}"
+                    IsHitTestVisible="False"
+                    Panel.ZIndex="5">
+                <Grid x:Name="AppHoverOverlayPanel"
+                      Width="172"
+                      Height="40"
+                      Opacity="0"
+                      Visibility="Collapsed"
+                      RenderTransformOrigin="0,0.5">
+                    <Grid.RenderTransform>
+                        <ScaleTransform x:Name="AppHoverOverlayScale" ScaleX="0.94" ScaleY="0.94"/>
+                    </Grid.RenderTransform>
+
+                    <Border x:Name="AppHoverOverlayBackground"
+                            CornerRadius="20"
+                            Background="{StaticResource HoverOverlayGlassBrush}"
+                            BorderBrush="#28FFFFFF"
+                            BorderThickness="1">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="24" ShadowDepth="8" Opacity="0.5" Color="Black"/>
+                        </Border.Effect>
+                    </Border>
+
+                    <Rectangle x:Name="AppHoverOverlayGlow"
+                               RadiusX="20"
+                               RadiusY="20"
+                               Stroke="#4CD964"
+                               StrokeThickness="2.6"
+                               StrokeDashCap="Round"
+                               Opacity="0.9"/>
+
+                    <DockPanel Margin="10,0,12,0" LastChildFill="True">
+                        <ContentControl x:Name="AppHoverOverlayIcon"
+                                        Width="22"
+                                        Height="22"
+                                        VerticalAlignment="Center"
+                                        DockPanel.Dock="Left"/>
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="8,0,0,0">
+                            <TextBlock x:Name="AppHoverOverlayTitle"
+                                       Foreground="White"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="92"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="AppHoverOverlayStatus"
+                                       Foreground="#94FFFFFF"
+                                       FontSize="10"
+                                       VerticalAlignment="Center"
+                                       Margin="7,0,0,0"
+                                       MaxWidth="48"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Grid>
+            </Canvas>
 
             <!-- ===== WiFi 控制面板 ===== -->
             <Popup x:Name="WifiPopup"
@@ -299,11 +539,13 @@
                    Closed="Popup_Closed">
                 <Border x:Name="WifiPanel"
                         CornerRadius="16" Padding="14"
+                        BorderBrush="#6046E0FF"
+                        BorderThickness="1"
                         MouseEnter="WifiPanel_MouseEnter"
                         MouseLeave="WifiPanel_MouseLeave"
                         MaxHeight="320" Width="320">
                     <Border.Background>
-                        <SolidColorBrush Color="#1E1E1E" Opacity="0.92"/>
+                        <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
                     </Border.Background>
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
@@ -362,11 +604,13 @@
                    Closed="Popup_Closed">
                 <Border x:Name="VolumePanel"
                         CornerRadius="16" Padding="14"
+                        BorderBrush="#6046E0FF"
+                        BorderThickness="1"
                         MouseEnter="VolumePanel_MouseEnter"
                         MouseLeave="VolumePanel_MouseLeave"
                         Width="300">
                     <Border.Background>
-                        <SolidColorBrush Color="#1E1E1E" Opacity="0.92"/>
+                        <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
                     </Border.Background>
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
@@ -423,11 +667,13 @@
                    Closed="Popup_Closed">
                 <Border x:Name="AppsPanel"
                         CornerRadius="16" Padding="12"
+                        BorderBrush="#6046E0FF"
+                        BorderThickness="1"
                         MouseEnter="AppsPanel_MouseEnter"
                         MouseLeave="AppsPanel_MouseLeave"
                         MaxHeight="280" Width="320">
                     <Border.Background>
-                        <SolidColorBrush Color="#1E1E1E" Opacity="0.88"/>
+                        <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
                     </Border.Background>
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
@@ -449,11 +695,13 @@
                    Closed="Popup_Closed">
                 <Border x:Name="OverflowAppsPanel"
                         CornerRadius="16" Padding="12"
+                        BorderBrush="#6046E0FF"
+                        BorderThickness="1"
                         MouseEnter="OverflowAppsPanel_MouseEnter"
                         MouseLeave="OverflowAppsPanel_MouseLeave"
                         Width="300">
                     <Border.Background>
-                        <SolidColorBrush Color="#1E1E1E" Opacity="0.92"/>
+                        <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
                     </Border.Background>
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
@@ -473,13 +721,15 @@
                     Width="380"
                     Padding="16"
                     CornerRadius="18"
+                    BorderBrush="#6046E0FF"
+                    BorderThickness="1"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Bottom"
                     Margin="0,0,0,118"
                     Visibility="Collapsed"
                     Panel.ZIndex="20">
                 <Border.Background>
-                    <SolidColorBrush Color="#1E1E1E" Opacity="0.95"/>
+                    <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
                 </Border.Background>
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.55" Color="Black"/>

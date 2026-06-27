@@ -22,4 +22,38 @@ public class MainWindowUiLogicTests
         Assert.False(menuState.CanCloseApp);
         Assert.True(menuState.CanToggleFavorite);
     }
+
+    [Fact]
+    public void GetOverlayFrame_PlacesOverlayBesideIconWithoutChangingIconSlot()
+    {
+        var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            iconLeft: 120,
+            iconTop: 180,
+            iconWidth: 40,
+            iconHeight: 40,
+            overlayWidth: 172,
+            overlayHeight: 40,
+            layerWidth: 540,
+            layerHeight: 400);
+
+        Assert.Equal(166, frame.Left);
+        Assert.Equal(180, frame.Top);
+    }
+
+    [Fact]
+    public void GetOverlayFrame_ClampsOverlayInsideLayerNearRightEdge()
+    {
+        var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            iconLeft: 470,
+            iconTop: 180,
+            iconWidth: 40,
+            iconHeight: 40,
+            overlayWidth: 172,
+            overlayHeight: 40,
+            layerWidth: 540,
+            layerHeight: 400);
+
+        Assert.Equal(360, frame.Left);
+        Assert.Equal(180, frame.Top);
+    }
 }

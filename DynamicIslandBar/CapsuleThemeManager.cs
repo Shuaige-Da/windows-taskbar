@@ -20,10 +20,10 @@ public static class CapsuleThemeManager
         {
             CapsuleThemePreset.GlassGreen => new CapsuleTheme(
                 preset,
-                CapsuleBackground: "#CC142018",
-                PanelBackground: "#D91E2B24",
+                CapsuleBackground: "#B814302A",
+                PanelBackground: "#D317211E",
                 AccentColor: "#4CD964",
-                BorderBrush: "#334CD964",
+                BorderBrush: "#554CD964",
                 BackgroundImagePath: backgroundImagePath,
                 BackgroundImageOpacity: backgroundImageOpacity),
             CapsuleThemePreset.SoftLight => new CapsuleTheme(
@@ -36,10 +36,10 @@ public static class CapsuleThemeManager
                 BackgroundImageOpacity: backgroundImageOpacity),
             _ => new CapsuleTheme(
                 preset,
-                CapsuleBackground: "#EB141414",
-                PanelBackground: "#F01E1E1E",
+                CapsuleBackground: "#A6183144",
+                PanelBackground: "#D8182634",
                 AccentColor: "#4CD964",
-                BorderBrush: "#22FFFFFF",
+                BorderBrush: "#78D8F3FF",
                 BackgroundImagePath: backgroundImagePath,
                 BackgroundImageOpacity: backgroundImageOpacity)
         };

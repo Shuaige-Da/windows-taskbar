@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Text;
+using System.Globalization;
 using Icon = System.Drawing.Icon;
 
 namespace DynamicIslandBar
@@ -20,18 +21,22 @@ namespace DynamicIslandBar
         private readonly DispatcherTimer _glowStopTimer;
         private readonly DispatcherTimer _clockTimer;
         private readonly DispatcherTimer _hoverCloseTimer;
+        private readonly DispatcherTimer _capsuleHoverCollapseTimer;
         private readonly DispatcherTimer _appsRefreshTimer;
         private Storyboard? _glowSpinStoryboard;
         private Storyboard? _dockExpandStoryboard;
         private Storyboard? _dockCollapseStoryboard;
+        private TranslateTransform? _capsuleGlowTransform;
         private bool _suppressVolumeEvent;
         private bool _windowLoaded;
         private int _wifiRefreshVersion;
         private int _volumeRefreshVersion;
+        private int _runningAppsRefreshVersion;
         private PopupState? _pendingHoverClosePopup;
         private PermissionPromptState? _pendingPermissionPrompt;
         private WifiAccessIssue _lastWifiAccessIssue = WifiAccessIssue.None;
         private readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Color> _accentCache = new(StringComparer.OrdinalIgnoreCase);
         private CapsuleConfig _capsuleConfig = new();
         private CapsuleTheme _currentTheme = CapsuleThemeManager.BuildTheme(CapsuleThemePreset.ClassicDark);
         private LayoutMetrics _currentLayoutMetrics;
@@ -40,6 +45,9 @@ namespace DynamicIslandBar
         private Point _dragStartPoint;
         private double _dragStartLeft;
         private double _dragStartTop;
+        private string? _lastPrimaryActivatedAppId;
+        private DateTime _lastPrimaryActivatedAtUtc;
+        private RunningAppEntry? _hoveredApp;
 
         public MainWindow()
         {
@@ -51,6 +59,8 @@ namespace DynamicIslandBar
             _clockTimer.Start();
             _hoverCloseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
             _hoverCloseTimer.Tick += HoverCloseTimer_Tick;
+            _capsuleHoverCollapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(130) };
+            _capsuleHoverCollapseTimer.Tick += CapsuleHoverCollapseTimer_Tick;
             _appsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
             _appsRefreshTimer.Tick += AppsRefreshTimer_Tick;
         }
@@ -84,7 +94,6 @@ namespace DynamicIslandBar
             ApplyTheme();
             UpdateClock();
             UpdateBatteryStatus();
-            TaskbarManager.Show();
             RefreshRunningAppsBar();
             _appsRefreshTimer.Start();
             _windowLoaded = true;
@@ -96,7 +105,6 @@ namespace DynamicIslandBar
             ItemMusic.Visibility = Visibility.Collapsed;
             ItemPhone.Visibility = Visibility.Collapsed;
             ItemNav.Visibility = Visibility.Collapsed;
-            GlowPath.Visibility = Visibility.Collapsed;
         }
 
         private void MaybeWriteLayoutDiagnostics()
@@ -118,6 +126,14 @@ namespace DynamicIslandBar
                 AppendElementDiagnostics(builder, nameof(CapsuleGrid), CapsuleGrid);
                 AppendElementDiagnostics(builder, nameof(CapsuleBorder), CapsuleBorder);
                 AppendElementDiagnostics(builder, nameof(AppIconsHost), AppIconsHost);
+                for (var index = 0; index < AppIconsHost.Children.Count; index++)
+                {
+                    if (AppIconsHost.Children[index] is FrameworkElement appIcon)
+                    {
+                        AppendElementDiagnostics(builder, $"AppIcon[{index}]", appIcon);
+                    }
+                }
+
                 AppendElementDiagnostics(builder, nameof(ClockText), ClockText);
                 AppendElementDiagnostics(builder, nameof(DateText), DateText);
 
@@ -150,6 +166,16 @@ namespace DynamicIslandBar
         {
             var (screenWidth, screenHeight) = DisplayBoundsProvider.GetPrimaryScreenSize();
             _currentLayoutMetrics = CapsuleLayoutManager.GetMetrics(_capsuleConfig.Mode, screenWidth, screenHeight);
+            var baseWidth = _currentLayoutMetrics.CapsuleWidth;
+            var capsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
+                _capsuleConfig.Mode,
+                baseWidth,
+                _capsuleConfig.CapsuleLengthPercent);
+            _currentLayoutMetrics = _currentLayoutMetrics with
+            {
+                CapsuleWidth = capsuleWidth,
+                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, baseWidth, capsuleWidth)
+            };
             var frame = CapsuleLayoutManager.GetWindowFrame(
                 _capsuleConfig.Mode,
                 _currentLayoutMetrics,
@@ -164,7 +190,10 @@ namespace DynamicIslandBar
             CapsuleGrid.Width = Width - 20;
             CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
             CapsuleBorder.Height = _currentLayoutMetrics.CapsuleHeight;
-            CapsuleBorder.CornerRadius = new CornerRadius(_currentLayoutMetrics.CapsuleHeight / 2);
+            UpdateCapsuleCornerRadius(_currentLayoutMetrics.CapsuleHeight);
+            CapsuleBorder.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                ? VerticalAlignment.Top
+                : VerticalAlignment.Center;
             CapsuleGrid.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
                 ? VerticalAlignment.Top
                 : VerticalAlignment.Bottom;
@@ -176,10 +205,40 @@ namespace DynamicIslandBar
                 ? new Thickness(0, 118, 0, 0)
                 : new Thickness(0, 0, 0, 118);
 
+            ApplySystemTaskbarVisibility();
             ConfigurePopup(WifiPopup, _currentLayoutMetrics.PopupDirection, -144);
             ConfigurePopup(VolumePopup, _currentLayoutMetrics.PopupDirection, -134);
             ConfigurePopup(AppsPopup, _currentLayoutMetrics.PopupDirection, -142);
             ConfigurePopup(OverflowAppsPopup, _currentLayoutMetrics.PopupDirection, 0);
+        }
+
+        private static int MapVisibleAppSlots(CapsuleMode mode, double baseWidth, double capsuleWidth)
+        {
+            var maxSlots = mode == CapsuleMode.TopIsland ? 5 : 8;
+            var minSlots = mode == CapsuleMode.TopIsland ? 2 : 3;
+            if (baseWidth <= 0)
+            {
+                return minSlots;
+            }
+
+            var ratio = Math.Clamp(capsuleWidth / baseWidth, 0, 1);
+            return Math.Clamp((int)Math.Round(maxSlots * ratio), minSlots, maxSlots);
+        }
+
+        private void ApplySystemTaskbarVisibility()
+        {
+            if (_capsuleConfig.Mode == CapsuleMode.BottomTaskbar)
+            {
+                TaskbarManager.Hide();
+                return;
+            }
+
+            TaskbarManager.Show();
+        }
+
+        private void UpdateCapsuleCornerRadius(double height)
+        {
+            CapsuleBorder.CornerRadius = new CornerRadius(height / 2);
         }
 
         private void ConfigurePopup(Popup popup, PopupFlowDirection direction, double horizontalOffset)
@@ -196,20 +255,70 @@ namespace DynamicIslandBar
                 _capsuleConfig.BackgroundImagePath,
                 _capsuleConfig.BackgroundImageOpacity);
 
-            CapsuleBorder.Background = CreateBrush(_currentTheme.CapsuleBackground);
-            CapsuleBorder.BorderBrush = CreateBrush(_currentTheme.BorderBrush);
-            CapsuleBorder.BorderThickness = new Thickness(1);
+            CapsuleBorder.Background = CapsuleAppearanceMapper.BuildBackgroundBrush(_capsuleConfig.GlassOpacityPercent);
+            UpdateCapsuleGlowBrush(null);
+            CapsuleBorder.BorderThickness = new Thickness(CapsuleAppearanceMapper.MapGlowThickness(_capsuleConfig.GlowThicknessPercent));
+            CapsuleBorder.Effect = CapsuleAppearanceMapper.BuildShadowEffect(_capsuleConfig.ShadowPercent);
+            ApplyCapsuleThickness();
 
-            WifiPanel.Background = CreateBrush(_currentTheme.PanelBackground);
-            VolumePanel.Background = CreateBrush(_currentTheme.PanelBackground);
-            AppsPanel.Background = CreateBrush(_currentTheme.PanelBackground);
-            OverflowAppsPanel.Background = CreateBrush(_currentTheme.PanelBackground);
-            PermissionPromptPanel.Background = CreateBrush(_currentTheme.PanelBackground);
+            ApplyGlassPanelTheme(WifiPanel);
+            ApplyGlassPanelTheme(VolumePanel);
+            ApplyGlassPanelTheme(AppsPanel);
+            ApplyGlassPanelTheme(OverflowAppsPanel);
+            ApplyGlassPanelTheme(PermissionPromptPanel);
+            ApplyGlassPanelTheme(AppHoverOverlayBackground);
         }
 
         private static Brush CreateBrush(string color)
         {
             return (Brush)new BrushConverter().ConvertFromString(color)!;
+        }
+
+        private void ApplyGlassPanelTheme(Border panel)
+        {
+            panel.Background = CapsuleAppearanceMapper.BuildPanelBackgroundBrush(_capsuleConfig.GlassOpacityPercent);
+            panel.BorderBrush = CapsuleAppearanceMapper.BuildPanelBorderBrush(_capsuleConfig.GlowIntensityPercent);
+            panel.BorderThickness = new Thickness(1);
+            panel.Effect = CapsuleAppearanceMapper.BuildPanelShadowEffect(_capsuleConfig.ShadowPercent);
+        }
+
+        private void UpdateCapsuleGlowBrush(Color? accent)
+        {
+            var brush = CapsuleAppearanceMapper.BuildGlowBrush(_capsuleConfig.GlowIntensityPercent, accent);
+            _capsuleGlowTransform = brush.RelativeTransform as TranslateTransform;
+            CapsuleBorder.BorderBrush = brush;
+            StartCapsuleGlowMarquee();
+        }
+
+        private void StartCapsuleGlowMarquee()
+        {
+            if (_capsuleGlowTransform == null)
+            {
+                return;
+            }
+
+            _capsuleGlowTransform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation
+            {
+                From = -1,
+                To = 1,
+                Duration = CapsuleAppearanceMapper.MapGlowDuration(_capsuleConfig.GlowSpeedPercent),
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            });
+        }
+
+        private void ApplyCapsuleThickness()
+        {
+            if (_currentLayoutMetrics.CapsuleHeight <= 0)
+            {
+                return;
+            }
+
+            var height = CapsuleAppearanceMapper.MapCapsuleHeight(
+                _currentLayoutMetrics.CapsuleHeight,
+                _capsuleConfig.CapsuleThicknessPercent);
+            CapsuleBorder.Height = height;
+            UpdateCapsuleCornerRadius(height);
         }
 
         #region ClockAndBattery
@@ -248,15 +357,32 @@ namespace DynamicIslandBar
         private void InitGlowAnimation()
         {
             _glowSpinStoryboard = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
-            var dashAnim = new DoubleAnimation
+            var overlayDashAnim = new DoubleAnimation
             {
                 From = 0,
-                To = -285,
-                Duration = TimeSpan.FromSeconds(2)
+                To = -92,
+                Duration = TimeSpan.FromSeconds(1.45)
             };
-            Storyboard.SetTarget(dashAnim, GlowPath);
-            Storyboard.SetTargetProperty(dashAnim, new PropertyPath(Shape.StrokeDashOffsetProperty));
-            _glowSpinStoryboard.Children.Add(dashAnim);
+            Storyboard.SetTarget(overlayDashAnim, AppHoverOverlayGlow);
+            Storyboard.SetTargetProperty(overlayDashAnim, new PropertyPath(Shape.StrokeDashOffsetProperty));
+            _glowSpinStoryboard.Children.Add(overlayDashAnim);
+            _glowSpinStoryboard.Begin();
+        }
+
+        private void ShowGlow(RunningAppEntry? app = null)
+        {
+            if (app != null)
+            {
+                ApplyGlowAccent(app);
+            }
+
+            _glowStopTimer.Stop();
+        }
+
+        private void ScheduleGlowHide()
+        {
+            _glowStopTimer.Stop();
+            _glowStopTimer.Start();
         }
 
         private void InitDockAnimations()
@@ -295,6 +421,52 @@ namespace DynamicIslandBar
         private void GlowStopTimer_Tick(object? sender, EventArgs e)
         {
             _glowStopTimer.Stop();
+            UpdateCapsuleGlowBrush(null);
+        }
+
+        private void ExpandCapsuleForHover()
+        {
+            _capsuleHoverCollapseTimer.Stop();
+            AnimateCapsuleHeight(GetBaseCapsuleHeight() + 12, TimeSpan.FromMilliseconds(230), new BackEase
+            {
+                EasingMode = EasingMode.EaseOut,
+                Amplitude = 0.45
+            });
+        }
+
+        private void ScheduleCapsuleHoverCollapse()
+        {
+            _capsuleHoverCollapseTimer.Stop();
+            _capsuleHoverCollapseTimer.Start();
+        }
+
+        private void CapsuleHoverCollapseTimer_Tick(object? sender, EventArgs e)
+        {
+            _capsuleHoverCollapseTimer.Stop();
+            AnimateCapsuleHeight(GetBaseCapsuleHeight(), TimeSpan.FromMilliseconds(260), new QuadraticEase
+            {
+                EasingMode = EasingMode.EaseInOut
+            });
+        }
+
+        private double GetBaseCapsuleHeight()
+        {
+            return _currentLayoutMetrics.CapsuleHeight > 0
+                ? CapsuleAppearanceMapper.MapCapsuleHeight(_currentLayoutMetrics.CapsuleHeight, _capsuleConfig.CapsuleThicknessPercent)
+                : CapsuleBorder.Height;
+        }
+
+        private void AnimateCapsuleHeight(double targetHeight, TimeSpan duration, IEasingFunction easing)
+        {
+            UpdateCapsuleCornerRadius(targetHeight);
+
+            var animation = new DoubleAnimation
+            {
+                To = targetHeight,
+                Duration = duration,
+                EasingFunction = easing
+            };
+            CapsuleBorder.BeginAnimation(HeightProperty, animation);
         }
 
         #endregion
@@ -312,10 +484,27 @@ namespace DynamicIslandBar
 
         private void RefreshRunningAppsBarCore()
         {
-            var windows = WindowManager.GetVisibleWindows()
-                .Where(window => !IsSelfWindow(window))
-                .ToList();
+            var refreshVersion = ++_runningAppsRefreshVersion;
+            Task.Run(() =>
+            {
+                var windows = WindowManager.GetVisibleWindows()
+                    .Where(window => !IsSelfWindow(window))
+                    .ToList();
 
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (refreshVersion != _runningAppsRefreshVersion)
+                    {
+                        return;
+                    }
+
+                    ApplyRunningAppsRefresh(windows);
+                });
+            });
+        }
+
+        private void ApplyRunningAppsRefresh(IReadOnlyList<WindowManager.WindowInfo> windows)
+        {
             var candidates = new List<WindowAppCandidate>();
             var configDirty = false;
             foreach (var window in windows)
@@ -383,12 +572,13 @@ namespace DynamicIslandBar
             AppIconsHost.Children.Clear();
             foreach (var app in _runningAppsSnapshot.MainBarApps)
             {
-                AppIconsHost.Children.Add(CreateAppIcon(app, 40));
+                AppIconsHost.Children.Add(CreateAppIcon(app, 40, expandOnHover: true));
             }
 
             OverflowFolderButton.Visibility = _runningAppsSnapshot.HasOverflowFolder
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            UpdateActiveAppSummary(_hoveredApp ?? GetPrimarySummaryApp(), _hoveredApp == null ? "当前窗口" : "正在运行");
         }
 
         private void RenderOverflowAppsPanel()
@@ -396,7 +586,7 @@ namespace DynamicIslandBar
             OverflowAppsListPanel.Children.Clear();
             foreach (var app in _runningAppsSnapshot.OverflowApps)
             {
-                OverflowAppsListPanel.Children.Add(CreateAppIcon(app, 44));
+                OverflowAppsListPanel.Children.Add(CreateAppIcon(app, 44, expandOnHover: false));
             }
         }
 
@@ -487,7 +677,7 @@ namespace DynamicIslandBar
             return row;
         }
 
-        private Border CreateAppIcon(RunningAppEntry app, double size)
+        private Border CreateAppIcon(RunningAppEntry app, double size, bool expandOnHover)
         {
             var border = new Border
             {
@@ -496,14 +686,47 @@ namespace DynamicIslandBar
                 CornerRadius = new CornerRadius(size / 2),
                 Margin = new Thickness(2, 0, 2, 0),
                 Cursor = Cursors.Hand,
-                Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
                 Tag = app,
                 Opacity = app.IsRunning ? 1 : 0.55,
+                ClipToBounds = true,
                 Child = BuildAppIconVisual(app, size * 0.48)
             };
 
-            border.MouseEnter += (_, _) => border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
-            border.MouseLeave += (_, _) => border.Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+            border.MouseEnter += (_, _) =>
+            {
+                var accent = GetAppAccentColor(app);
+                border.Background = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255));
+                border.BorderBrush = new SolidColorBrush(Color.FromArgb(92, accent.R, accent.G, accent.B));
+                _hoveredApp = app;
+                ExpandCapsuleForHover();
+                ShowGlow(app);
+
+                if (expandOnHover)
+                {
+                    ShowAppHoverOverlay(border, app);
+                }
+            };
+            border.MouseLeave += (_, _) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255));
+                border.BorderBrush = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+                if (ReferenceEquals(_hoveredApp, app) || _hoveredApp?.AppId == app.AppId)
+                {
+                    _hoveredApp = null;
+                }
+
+                UpdateActiveAppSummary(GetPrimarySummaryApp(), "当前窗口");
+                ScheduleCapsuleHoverCollapse();
+                ScheduleGlowHide();
+
+                if (expandOnHover)
+                {
+                    HideAppHoverOverlay(app);
+                }
+            };
             border.MouseLeftButtonDown += (_, e) =>
             {
                 e.Handled = true;
@@ -516,6 +739,103 @@ namespace DynamicIslandBar
             };
 
             return border;
+        }
+
+        private void ShowAppHoverOverlay(FrameworkElement iconHost, RunningAppEntry app)
+        {
+            var position = iconHost.TransformToAncestor(CapsuleGrid).Transform(new Point(0, 0));
+            var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+                position.X,
+                position.Y,
+                iconHost.ActualWidth > 0 ? iconHost.ActualWidth : iconHost.Width,
+                iconHost.ActualHeight > 0 ? iconHost.ActualHeight : iconHost.Height,
+                AppHoverOverlayPanel.Width,
+                AppHoverOverlayPanel.Height,
+                AppHoverOverlayLayer.ActualWidth > 0 ? AppHoverOverlayLayer.ActualWidth : CapsuleGrid.Width,
+                AppHoverOverlayLayer.ActualHeight > 0 ? AppHoverOverlayLayer.ActualHeight : CapsuleGrid.Height);
+
+            Canvas.SetLeft(AppHoverOverlayPanel, frame.Left);
+            Canvas.SetTop(AppHoverOverlayPanel, frame.Top);
+
+            var accent = GetAppAccentColor(app);
+            AppHoverOverlayIcon.Content = BuildAppIconVisual(app, 18);
+            AppHoverOverlayTitle.Text = app.DisplayName;
+            AppHoverOverlayStatus.Text = app.IsRunning ? "正在运行" : "已固定";
+            AppHoverOverlayGlow.Stroke = new SolidColorBrush(accent);
+            AppHoverOverlayBackground.BorderBrush = new SolidColorBrush(Color.FromArgb(72, accent.R, accent.G, accent.B));
+
+            AppHoverOverlayPanel.Visibility = Visibility.Visible;
+            AppHoverOverlayPanel.BeginAnimation(OpacityProperty, new DoubleAnimation
+            {
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(120),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            });
+            AppHoverOverlayScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation
+            {
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(140),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            });
+            AppHoverOverlayScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation
+            {
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(140),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            });
+        }
+
+        private void HideAppHoverOverlay(RunningAppEntry app)
+        {
+            if (_hoveredApp != null && !string.Equals(_hoveredApp.AppId, app.AppId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            AppHoverOverlayPanel.BeginAnimation(OpacityProperty, new DoubleAnimation
+            {
+                To = 0,
+                Duration = TimeSpan.FromMilliseconds(90),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            });
+            AppHoverOverlayScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation
+            {
+                To = 0.94,
+                Duration = TimeSpan.FromMilliseconds(100),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            });
+            AppHoverOverlayScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation
+            {
+                To = 0.94,
+                Duration = TimeSpan.FromMilliseconds(100),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            });
+        }
+
+        private RunningAppEntry? GetPrimarySummaryApp()
+        {
+            return _runningAppsSnapshot.MainBarApps.FirstOrDefault(app => app.IsForeground)
+                ?? _runningAppsSnapshot.AllApps.FirstOrDefault(app => app.IsForeground)
+                ?? _runningAppsSnapshot.MainBarApps.FirstOrDefault()
+                ?? _runningAppsSnapshot.AllApps.FirstOrDefault(app => app.IsRunning);
+        }
+
+        private void UpdateActiveAppSummary(RunningAppEntry? app, string status)
+        {
+            if (app == null)
+            {
+                ActiveAppSummaryPanel.Visibility = Visibility.Collapsed;
+                ActiveAppSummaryIcon.Content = null;
+                ActiveAppSummaryTitle.Text = string.Empty;
+                ActiveAppSummarySubtitle.Text = string.Empty;
+                return;
+            }
+
+            ActiveAppSummaryPanel.Visibility = Visibility.Visible;
+            ActiveAppSummaryIcon.Content = BuildAppIconVisual(app, 20);
+            ActiveAppSummaryTitle.Text = app.DisplayName;
+            ActiveAppSummarySubtitle.Text = status;
+            ApplyGlowAccent(app);
         }
 
         private FrameworkElement BuildAppIconVisual(RunningAppEntry app, double iconSize)
@@ -579,6 +899,112 @@ namespace DynamicIslandBar
             }
         }
 
+        private void ApplyGlowAccent(RunningAppEntry app)
+        {
+            var accent = GetAppAccentColor(app);
+            UpdateCapsuleGlowBrush(accent);
+            ActiveAppSummaryPanel.BorderBrush = new SolidColorBrush(Color.FromArgb(168, accent.R, accent.G, accent.B));
+        }
+
+        private Color GetAppAccentColor(RunningAppEntry app)
+        {
+            var cacheKey = !string.IsNullOrWhiteSpace(app.ExePath) ? app.ExePath : app.AppId;
+            if (_accentCache.TryGetValue(cacheKey, out var cached))
+            {
+                return cached;
+            }
+
+            var iconSource = GetIconSource(app.ExePath);
+            var color = iconSource is BitmapSource bitmap
+                ? ExtractAccentColor(bitmap, app.DisplayName)
+                : BuildFallbackAccentColor(app.DisplayName);
+            _accentCache[cacheKey] = color;
+            return color;
+        }
+
+        private static Color ExtractAccentColor(BitmapSource source, string fallbackSeed)
+        {
+            try
+            {
+                var bitmap = source.Format == PixelFormats.Bgra32
+                    ? source
+                    : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+
+                var width = bitmap.PixelWidth;
+                var height = bitmap.PixelHeight;
+                var stride = width * 4;
+                var pixels = new byte[stride * height];
+                bitmap.CopyPixels(pixels, stride, 0);
+
+                double redTotal = 0;
+                double greenTotal = 0;
+                double blueTotal = 0;
+                double weightTotal = 0;
+                for (var i = 0; i < pixels.Length; i += 4)
+                {
+                    var blue = pixels[i];
+                    var green = pixels[i + 1];
+                    var red = pixels[i + 2];
+                    var alpha = pixels[i + 3];
+                    if (alpha < 48)
+                    {
+                        continue;
+                    }
+
+                    var max = Math.Max(red, Math.Max(green, blue));
+                    var min = Math.Min(red, Math.Min(green, blue));
+                    var saturation = max - min;
+                    if (max < 48 || saturation < 18)
+                    {
+                        continue;
+                    }
+
+                    var weight = (alpha / 255.0) * (1 + saturation / 64.0);
+                    redTotal += red * weight;
+                    greenTotal += green * weight;
+                    blueTotal += blue * weight;
+                    weightTotal += weight;
+                }
+
+                if (weightTotal <= 0)
+                {
+                    return BuildFallbackAccentColor(fallbackSeed);
+                }
+
+                return BoostAccent(Color.FromRgb(
+                    (byte)Math.Clamp((int)Math.Round(redTotal / weightTotal), 0, 255),
+                    (byte)Math.Clamp((int)Math.Round(greenTotal / weightTotal), 0, 255),
+                    (byte)Math.Clamp((int)Math.Round(blueTotal / weightTotal), 0, 255)));
+            }
+            catch
+            {
+                return BuildFallbackAccentColor(fallbackSeed);
+            }
+        }
+
+        private static Color BuildFallbackAccentColor(string seed)
+        {
+            var hash = seed.Aggregate(17, (current, ch) => (current * 31) + ch);
+            var palette = new[]
+            {
+                Color.FromRgb(76, 217, 100),
+                Color.FromRgb(0, 122, 255),
+                Color.FromRgb(255, 45, 85),
+                Color.FromRgb(255, 149, 0),
+                Color.FromRgb(90, 200, 250)
+            };
+
+            return palette[Math.Abs(hash) % palette.Length];
+        }
+
+        private static Color BoostAccent(Color color)
+        {
+            return Color.FromRgb(
+                (byte)Math.Clamp(color.R + 18, 0, 255),
+                (byte)Math.Clamp(color.G + 18, 0, 255),
+                (byte)Math.Clamp(color.B + 18, 0, 255));
+        }
+
         private static string GetFallbackIconGlyph(string displayName)
         {
             var trimmed = displayName.Trim();
@@ -590,15 +1016,58 @@ namespace DynamicIslandBar
             HidePermissionPrompt();
             CloseAllPanels();
 
-            if (app.IsRunning)
+            switch (AppPrimaryActionResolver.Resolve(app, GetRecentlyActivatedAppId()))
             {
-                WindowManager.ToggleWindowState(app.RepresentativeWindowHandle);
-                return;
+                case AppPrimaryAction.Minimize:
+                    WindowManager.MinimizeWindow(app.RepresentativeWindowHandle);
+                    ClearRecentPrimaryActivation(app.AppId);
+                    return;
+                case AppPrimaryAction.ActivateOrLaunch:
+                default:
+                    if (app.IsRunning)
+                    {
+                        if (WindowManager.ActivateWindow(app.RepresentativeWindowHandle))
+                        {
+                            TrackRecentPrimaryActivation(app.AppId);
+                        }
+
+                        return;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(app.ExePath))
+                    {
+                        TryLaunchApp(app.ExePath);
+                        TrackRecentPrimaryActivation(app.AppId);
+                    }
+
+                    return;
+            }
+        }
+
+        private string? GetRecentlyActivatedAppId()
+        {
+            if (string.IsNullOrWhiteSpace(_lastPrimaryActivatedAppId))
+            {
+                return null;
             }
 
-            if (!string.IsNullOrWhiteSpace(app.ExePath))
+            return DateTime.UtcNow - _lastPrimaryActivatedAtUtc <= TimeSpan.FromSeconds(2)
+                ? _lastPrimaryActivatedAppId
+                : null;
+        }
+
+        private void TrackRecentPrimaryActivation(string appId)
+        {
+            _lastPrimaryActivatedAppId = appId;
+            _lastPrimaryActivatedAtUtc = DateTime.UtcNow;
+        }
+
+        private void ClearRecentPrimaryActivation(string appId)
+        {
+            if (string.Equals(_lastPrimaryActivatedAppId, appId, StringComparison.OrdinalIgnoreCase))
             {
-                TryLaunchApp(app.ExePath);
+                _lastPrimaryActivatedAppId = null;
+                _lastPrimaryActivatedAtUtc = default;
             }
         }
 
@@ -659,6 +1128,7 @@ namespace DynamicIslandBar
             menu.Items.Add(runItem);
             menu.Items.Add(favoriteItem);
 
+            StyleCapsuleContextMenu(menu);
             host.ContextMenu = menu;
             menu.IsOpen = true;
         }
@@ -686,10 +1156,49 @@ namespace DynamicIslandBar
                 Foreground = Brushes.White
             };
 
+            var settingsMenu = new MenuItem { Header = "设置", Foreground = Brushes.White };
+
             var themeMenu = new MenuItem { Header = "风格", Foreground = Brushes.White };
             AddThemeMenuItem(themeMenu, CapsuleThemePreset.ClassicDark, "ClassicDark");
             AddThemeMenuItem(themeMenu, CapsuleThemePreset.GlassGreen, "GlassGreen");
             AddThemeMenuItem(themeMenu, CapsuleThemePreset.SoftLight, "SoftLight");
+
+            var appearanceMenu = new MenuItem { Header = "外观", Foreground = Brushes.White };
+            appearanceMenu.Items.Add(CreateAppearanceSliderItem(
+                "透明度",
+                _capsuleConfig.GlassOpacityPercent,
+                value => CapsuleConfigMutator.SetGlassOpacityPercent(_capsuleConfig, value)));
+            appearanceMenu.Items.Add(CreateAppearanceSliderItem(
+                "阴影",
+                _capsuleConfig.ShadowPercent,
+                value => CapsuleConfigMutator.SetShadowPercent(_capsuleConfig, value)));
+            appearanceMenu.Items.Add(CreateAppearanceSliderItem(
+                "胶囊粗细",
+                _capsuleConfig.CapsuleThicknessPercent,
+                value => CapsuleConfigMutator.SetCapsuleThicknessPercent(_capsuleConfig, value)));
+            appearanceMenu.Items.Add(CreateAppearanceSliderItem(
+                "胶囊长度",
+                _capsuleConfig.CapsuleLengthPercent,
+                value => CapsuleConfigMutator.SetCapsuleLengthPercent(_capsuleConfig, value),
+                refreshLayout: true));
+
+            var glowMenu = new MenuItem { Header = "流光", Foreground = Brushes.White };
+            glowMenu.Items.Add(CreateAppearanceSliderItem(
+                "亮度",
+                _capsuleConfig.GlowIntensityPercent,
+                value => CapsuleConfigMutator.SetGlowIntensityPercent(_capsuleConfig, value)));
+            glowMenu.Items.Add(CreateAppearanceSliderItem(
+                "粗细",
+                _capsuleConfig.GlowThicknessPercent,
+                value => CapsuleConfigMutator.SetGlowThicknessPercent(_capsuleConfig, value)));
+            glowMenu.Items.Add(CreateAppearanceSliderItem(
+                "速度",
+                _capsuleConfig.GlowSpeedPercent,
+                value => CapsuleConfigMutator.SetGlowSpeedPercent(_capsuleConfig, value)));
+
+            settingsMenu.Items.Add(themeMenu);
+            settingsMenu.Items.Add(appearanceMenu);
+            settingsMenu.Items.Add(glowMenu);
 
             var hideTaskbar = new MenuItem { Header = "隐藏系统任务栏", Foreground = Brushes.White };
             hideTaskbar.Click += (_, _) => TaskbarManager.Hide();
@@ -704,7 +1213,7 @@ namespace DynamicIslandBar
                 Application.Current.Shutdown();
             };
 
-            menu.Items.Add(themeMenu);
+            menu.Items.Add(settingsMenu);
             menu.Items.Add(new Separator());
             menu.Items.Add(hideTaskbar);
             menu.Items.Add(showTaskbar);
@@ -713,9 +1222,93 @@ namespace DynamicIslandBar
 
             if (sender is FrameworkElement host)
             {
+                StyleCapsuleContextMenu(menu);
                 host.ContextMenu = menu;
                 menu.IsOpen = true;
             }
+        }
+
+        private void StyleCapsuleContextMenu(ContextMenu menu)
+        {
+            menu.Style = (Style)FindResource("CapsuleContextMenuStyle");
+            foreach (var item in menu.Items.OfType<MenuItem>())
+            {
+                StyleCapsuleMenuItem(item);
+            }
+        }
+
+        private void StyleCapsuleMenuItem(MenuItem item)
+        {
+            item.Style = (Style)FindResource("CapsuleMenuItemStyle");
+            item.Foreground = Brushes.White;
+            foreach (var child in item.Items.OfType<MenuItem>())
+            {
+                StyleCapsuleMenuItem(child);
+            }
+        }
+
+        private MenuItem CreateAppearanceSliderItem(
+            string title,
+            int initialValue,
+            Action<int> updateConfig,
+            bool refreshLayout = false)
+        {
+            var valueText = new TextBlock
+            {
+                Text = $"{initialValue}%",
+                Foreground = Brushes.White,
+                Width = 42,
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var slider = new Slider
+            {
+                Minimum = 0,
+                Maximum = 100,
+                Width = 150,
+                Value = initialValue,
+                IsMoveToPointEnabled = true,
+                TickFrequency = 1,
+                SmallChange = 1,
+                LargeChange = 10,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            slider.ValueChanged += (_, args) =>
+            {
+                var percent = (int)Math.Round(args.NewValue);
+                valueText.Text = $"{percent}%";
+                updateConfig(percent);
+                CapsuleConfigService.Save(_capsuleConfig);
+                if (refreshLayout)
+                {
+                    ApplyLayout();
+                    RefreshRunningAppsBar();
+                }
+
+                ApplyTheme();
+            };
+
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(2, 4, 2, 4)
+            };
+            panel.Children.Add(new TextBlock
+            {
+                Text = title,
+                Foreground = Brushes.White,
+                Width = 54,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            panel.Children.Add(slider);
+            panel.Children.Add(valueText);
+
+            return new MenuItem
+            {
+                Header = panel,
+                StaysOpenOnClick = true,
+                Foreground = Brushes.White
+            };
         }
 
         private void AddThemeMenuItem(MenuItem parent, CapsuleThemePreset preset, string title)
@@ -747,6 +1340,7 @@ namespace DynamicIslandBar
         {
             if (sender is Border border)
             {
+                ExpandCapsuleForHover();
                 SetSystemIconHighlight(border, true);
                 if (border.Name == nameof(BatteryIcon))
                 {
@@ -760,11 +1354,13 @@ namespace DynamicIslandBar
             if (sender is Border border)
             {
                 SetSystemIconHighlight(border, false);
+                ScheduleCapsuleHoverCollapse();
             }
         }
 
         private void WifiIcon_MouseEnter(object sender, MouseEventArgs e)
         {
+            ExpandCapsuleForHover();
             SetSystemIconHighlight(WifiIcon, true);
             ShowHoverPopup(GetWifiPopupState(), RefreshWifiPanel);
         }
@@ -772,11 +1368,13 @@ namespace DynamicIslandBar
         private void WifiIcon_MouseLeave(object sender, MouseEventArgs e)
         {
             SetSystemIconHighlight(WifiIcon, false);
+            ScheduleCapsuleHoverCollapse();
             ScheduleHoverPopupClose(GetWifiPopupState());
         }
 
         private void VolumeIcon_MouseEnter(object sender, MouseEventArgs e)
         {
+            ExpandCapsuleForHover();
             SetSystemIconHighlight(VolumeIcon, true);
             ShowHoverPopup(GetVolumePopupState(), RefreshVolumePanel);
         }
@@ -784,11 +1382,13 @@ namespace DynamicIslandBar
         private void VolumeIcon_MouseLeave(object sender, MouseEventArgs e)
         {
             SetSystemIconHighlight(VolumeIcon, false);
+            ScheduleCapsuleHoverCollapse();
             ScheduleHoverPopupClose(GetVolumePopupState());
         }
 
         private void AppsButton_MouseEnter(object sender, MouseEventArgs e)
         {
+            ExpandCapsuleForHover();
             SetSystemIconHighlight(AppsButton, true);
             ShowHoverPopup(GetAppsPopupState(), RefreshAppsList);
         }
@@ -796,11 +1396,13 @@ namespace DynamicIslandBar
         private void AppsButton_MouseLeave(object sender, MouseEventArgs e)
         {
             SetSystemIconHighlight(AppsButton, false);
+            ScheduleCapsuleHoverCollapse();
             ScheduleHoverPopupClose(GetAppsPopupState());
         }
 
         private void OverflowFolderButton_MouseEnter(object sender, MouseEventArgs e)
         {
+            ExpandCapsuleForHover();
             SetSystemIconHighlight(OverflowFolderButton, true);
             ShowHoverPopup(GetOverflowPopupState(), RefreshOverflowAppsPanel);
         }
@@ -808,6 +1410,7 @@ namespace DynamicIslandBar
         private void OverflowFolderButton_MouseLeave(object sender, MouseEventArgs e)
         {
             SetSystemIconHighlight(OverflowFolderButton, false);
+            ScheduleCapsuleHoverCollapse();
             ScheduleHoverPopupClose(GetOverflowPopupState());
         }
 
@@ -863,8 +1466,12 @@ namespace DynamicIslandBar
         {
             border.Background = new SolidColorBrush(
                 highlighted
-                    ? Color.FromArgb(30, 255, 255, 255)
-                    : Color.FromArgb(0, 255, 255, 255));
+                    ? Color.FromArgb(42, 255, 255, 255)
+                    : Color.FromArgb(10, 255, 255, 255));
+            border.BorderBrush = new SolidColorBrush(
+                highlighted
+                    ? Color.FromArgb(48, 76, 217, 100)
+                    : Color.FromArgb(12, 255, 255, 255));
         }
 
         private PopupState GetWifiPopupState() => new()
@@ -1004,7 +1611,8 @@ namespace DynamicIslandBar
             _dragStartPoint = PointToScreen(e.GetPosition(this));
             _dragStartLeft = Left;
             _dragStartTop = Top;
-            CaptureMouse();
+            Mouse.Capture(CapsuleBorder, CaptureMode.SubTree);
+            e.Handled = true;
         }
 
         private void Capsule_DragMove(object sender, MouseEventArgs e)
@@ -1027,7 +1635,8 @@ namespace DynamicIslandBar
             }
 
             _isDraggingCapsule = false;
-            ReleaseMouseCapture();
+            Mouse.Capture(null);
+            e.Handled = true;
 
             var resolvedMode = CapsuleLayoutManager.ResolveDropMode(
                 DisplayBoundsProvider.GetPrimaryScreenSize().Height,

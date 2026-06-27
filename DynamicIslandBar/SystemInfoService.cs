@@ -24,16 +24,16 @@ namespace DynamicIslandBar
 
         public static string GetBatteryInfo()
         {
-            if (!GetSystemPowerStatus(out var s)) return "�޷���ȡ�����Ϣ";
+            if (!GetSystemPowerStatus(out var s)) return "无法读取电池信息";
             var pct = s.BatteryLifePercent > 100 ? 100 : s.BatteryLifePercent;
-            var charging = s.ACLineStatus == 1 ? " �� ���ڳ��" : "";
+            var charging = s.ACLineStatus == 1 ? " - 正在充电" : "";
             var timeStr = "";
             if (s.BatteryLifeTime > 0 && s.BatteryLifeTime != 0x7FFFFFFF)
             {
                 var ts = TimeSpan.FromSeconds(s.BatteryLifeTime);
-                timeStr = $"\nʣ��ʱ��: {ts.Hours}Сʱ{ts.Minutes}����";
+                timeStr = $"\n剩余时间: {ts.Hours}小时{ts.Minutes}分钟";
             }
-            return $"���: {pct}%{charging}{timeStr}";
+            return $"电量: {pct}%{charging}{timeStr}";
         }
 
         public static int GetBatteryPercent()

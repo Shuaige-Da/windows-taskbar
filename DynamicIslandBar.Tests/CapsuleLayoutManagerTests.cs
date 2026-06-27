@@ -11,6 +11,9 @@ public class CapsuleLayoutManagerTests
         var top = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
 
         Assert.True(bottom.CapsuleWidth > top.CapsuleWidth);
+        Assert.Equal(80, bottom.CapsuleHeight);
+        Assert.Equal(72, top.CapsuleHeight);
+        Assert.Equal(8, bottom.VisibleAppSlots);
         Assert.True(bottom.VisibleAppSlots > top.VisibleAppSlots);
         Assert.Equal(PopupFlowDirection.Up, bottom.PopupDirection);
         Assert.Equal(PopupFlowDirection.Down, top.PopupDirection);
@@ -41,6 +44,6 @@ public class CapsuleLayoutManagerTests
         Assert.Equal(1420, frame.Width);
         Assert.Equal(420, frame.Height);
         Assert.Equal(314, frame.Left);
-        Assert.Equal(732, frame.Top);
+        Assert.Equal(902, frame.Top);
     }
 }

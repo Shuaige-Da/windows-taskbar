@@ -28,4 +28,14 @@ public class CapsuleThemeManagerTests
         Assert.Equal(@"C:\wallpaper.png", theme.BackgroundImagePath);
         Assert.Equal(0.65, theme.BackgroundImageOpacity);
     }
+
+    [Fact]
+    public void BuildTheme_ClassicDarkUsesTranslucentGlassBackground()
+    {
+        var theme = CapsuleThemeManager.BuildTheme(CapsuleThemePreset.ClassicDark);
+
+        var alpha = Convert.ToByte(theme.CapsuleBackground.Substring(1, 2), 16);
+
+        Assert.True(alpha < 0xCC);
+    }
 }

@@ -26,13 +26,13 @@ public static class CapsuleLayoutManager
         {
             CapsuleMode.TopIsland => new LayoutMetrics(
                 CapsuleWidth: 760,
-                CapsuleHeight: 64,
+                CapsuleHeight: 72,
                 VisibleAppSlots: 5,
                 PopupDirection: PopupFlowDirection.Down),
             _ => new LayoutMetrics(
                 CapsuleWidth: Math.Min(screenWidth - 120, 1380),
-                CapsuleHeight: 72,
-                VisibleAppSlots: 12,
+                CapsuleHeight: 80,
+                VisibleAppSlots: 8,
                 PopupDirection: PopupFlowDirection.Up)
         };
     }
@@ -56,9 +56,10 @@ public static class CapsuleLayoutManager
         var windowWidth = metrics.CapsuleWidth + 40;
         const double windowHeight = 420;
         var left = (screenWidth - windowWidth) / 2;
+        var capsuleBottomOffset = ((windowHeight - metrics.CapsuleHeight) / 2) + metrics.CapsuleHeight;
         var top = mode == CapsuleMode.TopIsland
             ? 0
-            : Math.Max(screenHeight - windowHeight, 0);
+            : Math.Max(screenHeight - capsuleBottomOffset, 0);
 
         return new WindowFrame(left, top, windowWidth, windowHeight);
     }

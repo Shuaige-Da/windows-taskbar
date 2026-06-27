@@ -54,13 +54,12 @@ namespace DynamicIslandBar
 
             public void Activate()
             {
-                ShowWindow(Handle, SW_RESTORE);
-                SetForegroundWindow(Handle);
+                ActivateWindow(Handle);
             }
 
             public void Minimize()
             {
-                ShowWindow(Handle, SW_MINIMIZE);
+                MinimizeWindow(Handle);
             }
 
             public void ToggleWindowState()
@@ -152,11 +151,31 @@ namespace DynamicIslandBar
 
             if (handle == GetForegroundWindow() && !IsIconic(handle))
             {
-                return ShowWindow(handle, SW_MINIMIZE);
+                return MinimizeWindow(handle);
+            }
+
+            return ActivateWindow(handle);
+        }
+
+        public static bool ActivateWindow(IntPtr handle)
+        {
+            if (handle == IntPtr.Zero)
+            {
+                return false;
             }
 
             ShowWindow(handle, SW_RESTORE);
             return SetForegroundWindow(handle);
+        }
+
+        public static bool MinimizeWindow(IntPtr handle)
+        {
+            if (handle == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            return ShowWindow(handle, SW_MINIMIZE);
         }
 
         public static bool CloseProcess(int processId)

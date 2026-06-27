@@ -18,7 +18,8 @@ public sealed record RunningAppEntry(
     bool IsFavorite,
     bool IsHiddenInCapsule,
     nint RepresentativeWindowHandle,
-    int RepresentativeProcessId = 0);
+    int RepresentativeProcessId = 0,
+    bool IsForeground = false);
 
 public sealed record RunningAppsSnapshot(
     IReadOnlyList<RunningAppEntry> AllApps,
@@ -64,7 +65,8 @@ public static class RunningAppsSnapshotBuilder
                 IsFavorite: config.FavoriteApps.Contains(group.Key),
                 IsHiddenInCapsule: config.HiddenApps.Contains(group.Key),
                 RepresentativeWindowHandle: group.First().WindowHandle,
-                RepresentativeProcessId: group.First().ProcessId))
+                RepresentativeProcessId: group.First().ProcessId,
+                IsForeground: group.Any(candidate => candidate.IsForeground)))
             .ToList();
 
         var apps = new List<RunningAppEntry>(runningApps);
@@ -83,7 +85,8 @@ public static class RunningAppsSnapshotBuilder
                 IsFavorite: true,
                 IsHiddenInCapsule: config.HiddenApps.Contains(favoriteAppId),
                 RepresentativeWindowHandle: 0,
-                RepresentativeProcessId: 0));
+                RepresentativeProcessId: 0,
+                IsForeground: false));
         }
 
         apps = apps
