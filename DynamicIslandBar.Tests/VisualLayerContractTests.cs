@@ -160,6 +160,16 @@ public class VisualLayerContractTests
         Assert.Contains("IsRunningAppsRefreshInteractive()", code);
     }
 
+    [Fact]
+    public void MainWindow_ApplyLayoutPreservesConfiguredCapsuleThickness()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(", code);
+        Assert.Contains("CapsuleBorder.Height = capsuleHeight;", code);
+        Assert.DoesNotContain("CapsuleBorder.Height = _currentLayoutMetrics.CapsuleHeight;", code);
+    }
+
     private static string ReadMainWindowXaml()
     {
         return ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");

@@ -136,20 +136,20 @@ public class CapsuleAppearanceSettingsTests
     }
 
     [Theory]
-    [InlineData(80, 0, 72)]
-    [InlineData(80, 50, 80)]
-    [InlineData(80, 100, 88)]
+    [InlineData(80, 0, 53.3333)]
+    [InlineData(80, 50, 66.6667)]
+    [InlineData(80, 100, 80)]
     public void MapCapsuleHeight_MapsPercentToThickness(double baseHeight, int percent, double expected)
     {
         Assert.Equal(expected, CapsuleAppearanceMapper.MapCapsuleHeight(baseHeight, percent), precision: 1);
     }
 
     [Theory]
-    [InlineData(CapsuleMode.BottomTaskbar, 1380, 0, 620)]
-    [InlineData(CapsuleMode.BottomTaskbar, 1380, 50, 1000)]
-    [InlineData(CapsuleMode.BottomTaskbar, 1380, 100, 1380)]
-    [InlineData(CapsuleMode.TopIsland, 760, 0, 360)]
-    [InlineData(CapsuleMode.TopIsland, 760, 50, 560)]
+    [InlineData(CapsuleMode.BottomTaskbar, 1920, 0, 760)]
+    [InlineData(CapsuleMode.BottomTaskbar, 1920, 50, 1340)]
+    [InlineData(CapsuleMode.BottomTaskbar, 1920, 100, 1920)]
+    [InlineData(CapsuleMode.TopIsland, 760, 0, 760)]
+    [InlineData(CapsuleMode.TopIsland, 760, 50, 760)]
     [InlineData(CapsuleMode.TopIsland, 760, 100, 760)]
     public void MapCapsuleWidth_MapsPercentToLength(CapsuleMode mode, double baseWidth, int percent, double expected)
     {

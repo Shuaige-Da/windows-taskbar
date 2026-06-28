@@ -5,6 +5,8 @@ namespace DynamicIslandBar;
 
 public static class CapsuleAppearanceMapper
 {
+    public const double TopIslandDefaultWidth = 760d;
+
     public static LinearGradientBrush BuildBackgroundBrush(int opacityPercent)
     {
         var opacity = Math.Clamp(opacityPercent, 0, 100) / 100.0;
@@ -118,14 +120,21 @@ public static class CapsuleAppearanceMapper
 
     public static double MapCapsuleHeight(double baseHeight, int capsuleThicknessPercent)
     {
-        var ratio = Math.Clamp(capsuleThicknessPercent, 0, 100) / 100.0;
-        return baseHeight - 8 + (16 * ratio);
+        var displayRatio = Math.Clamp(capsuleThicknessPercent, 0, 100) / 100.0;
+        var ratio = 0.5 + (displayRatio * 0.5);
+        var minimumHeight = baseHeight / 3d;
+        return minimumHeight + ((baseHeight - minimumHeight) * ratio);
     }
 
     public static double MapCapsuleWidth(CapsuleMode mode, double baseWidth, int capsuleLengthPercent)
     {
+        if (mode == CapsuleMode.TopIsland)
+        {
+            return Math.Min(TopIslandDefaultWidth, baseWidth);
+        }
+
         var ratio = Math.Clamp(capsuleLengthPercent, 0, 100) / 100.0;
-        var minWidth = mode == CapsuleMode.TopIsland ? 360d : 620d;
+        var minWidth = TopIslandDefaultWidth;
         minWidth = Math.Min(minWidth, baseWidth);
         return minWidth + ((baseWidth - minWidth) * ratio);
     }

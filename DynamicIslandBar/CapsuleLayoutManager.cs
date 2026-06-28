@@ -30,7 +30,7 @@ public static class CapsuleLayoutManager
                 VisibleAppSlots: 5,
                 PopupDirection: PopupFlowDirection.Down),
             _ => new LayoutMetrics(
-                CapsuleWidth: Math.Min(screenWidth - 120, 1380),
+                CapsuleWidth: screenWidth,
                 CapsuleHeight: 80,
                 VisibleAppSlots: 8,
                 PopupDirection: PopupFlowDirection.Up)

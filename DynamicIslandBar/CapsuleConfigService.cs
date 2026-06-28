@@ -31,7 +31,7 @@ public sealed class CapsuleConfig
     public int GlowIntensityPercent { get; set; } = 82;
     public int GlowThicknessPercent { get; set; } = 42;
     public int GlowSpeedPercent { get; set; } = 58;
-    public int CapsuleThicknessPercent { get; set; } = 50;
+    public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
 }
 
@@ -182,7 +182,7 @@ internal sealed class CapsuleConfigStore
     public int GlowIntensityPercent { get; set; } = 82;
     public int GlowThicknessPercent { get; set; } = 42;
     public int GlowSpeedPercent { get; set; } = 58;
-    public int CapsuleThicknessPercent { get; set; } = 50;
+    public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
 
     public CapsuleConfig ToConfig()

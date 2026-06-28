@@ -14,6 +14,8 @@ public class CapsuleConfigServiceTests
         Assert.Empty(config.FavoriteApps);
         Assert.Empty(config.HiddenApps);
         Assert.Empty(config.KnownLaunchPaths);
+        Assert.Equal(100, config.CapsuleThicknessPercent);
+        Assert.Equal(100, config.CapsuleLengthPercent);
     }
 
     [Fact]

@@ -178,9 +178,12 @@ namespace DynamicIslandBar
             Top = frame.Top;
 
             CapsuleGrid.Width = Width - 20;
+            var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                _currentLayoutMetrics.CapsuleHeight,
+                _capsuleConfig.CapsuleThicknessPercent);
             CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
-            CapsuleBorder.Height = _currentLayoutMetrics.CapsuleHeight;
-            UpdateCapsuleCornerRadius(_currentLayoutMetrics.CapsuleHeight);
+            CapsuleBorder.Height = capsuleHeight;
+            UpdateCapsuleCornerRadius(capsuleHeight);
             CapsuleBorder.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
                 ? VerticalAlignment.Top
                 : VerticalAlignment.Center;
