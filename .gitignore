@@ -1,2 +1,20 @@
 .vs/
 .worktrees/
+
+# Build artifacts
+**/obj/
+**/bin/
+
+# Release artifacts
+artifacts/
+release/DynamicIslandBar-v*/
+*.zip
+*.msi
+*.nupkg
+
+# Visual Studio Installer Projects local output
+Setup1/**/.vs/
+Setup1/**/Debug/
+Setup1/**/Release/
+Setup1/**/*.log
+Setup1/**/setup.exe

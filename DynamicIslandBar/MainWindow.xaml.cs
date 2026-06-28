@@ -61,7 +61,7 @@ namespace DynamicIslandBar
             _hoverCloseTimer.Tick += HoverCloseTimer_Tick;
             _capsuleHoverCollapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(130) };
             _capsuleHoverCollapseTimer.Tick += CapsuleHoverCollapseTimer_Tick;
-            _appsRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+            _appsRefreshTimer = new DispatcherTimer { Interval = RunningAppsRefreshPolicy.GetInterval(false) };
             _appsRefreshTimer.Tick += AppsRefreshTimer_Tick;
         }
 
@@ -335,7 +335,25 @@ namespace DynamicIslandBar
 
         private void AppsRefreshTimer_Tick(object? sender, EventArgs e)
         {
+            UpdateRunningAppsRefreshInterval();
             RefreshRunningAppsBar();
+        }
+
+        private bool IsRunningAppsRefreshInteractive()
+        {
+            return _hoveredApp != null
+                || CapsuleBorder.IsMouseOver
+                || AppsPopup.IsOpen
+                || OverflowAppsPopup.IsOpen;
+        }
+
+        private void UpdateRunningAppsRefreshInterval()
+        {
+            var interval = RunningAppsRefreshPolicy.GetInterval(IsRunningAppsRefreshInteractive());
+            if (_appsRefreshTimer.Interval != interval)
+            {
+                _appsRefreshTimer.Interval = interval;
+            }
         }
 
         private void UpdateClock()
@@ -547,8 +565,15 @@ namespace DynamicIslandBar
             }
 
             RenderMainBarApps();
-            RenderAppsManagementPanel();
-            RenderOverflowAppsPanel();
+            if (AppsPopup.IsOpen)
+            {
+                RenderAppsManagementPanel();
+            }
+
+            if (OverflowAppsPopup.IsOpen)
+            {
+                RenderOverflowAppsPanel();
+            }
         }
 
         private static bool IsSelfWindow(WindowManager.WindowInfo window)
@@ -713,6 +738,8 @@ namespace DynamicIslandBar
                 {
                     ShowAppHoverOverlay(border, app);
                 }
+
+                UpdateRunningAppsRefreshInterval();
             };
             border.MouseLeave += (_, _) =>
             {
@@ -731,6 +758,8 @@ namespace DynamicIslandBar
                 {
                     HideAppHoverOverlay(app);
                 }
+
+                UpdateRunningAppsRefreshInterval();
             };
             border.MouseLeftButtonDown += (_, e) =>
             {
@@ -1521,6 +1550,7 @@ namespace DynamicIslandBar
                 popupState.Popup.IsOpen = true;
             }
 
+            UpdateRunningAppsRefreshInterval();
             refreshAction();
         }
 
@@ -1552,6 +1582,7 @@ namespace DynamicIslandBar
 
             _pendingHoverClosePopup.Popup.IsOpen = false;
             _pendingHoverClosePopup = null;
+            UpdateRunningAppsRefreshInterval();
         }
 
         private void WifiIcon_Click(object sender, MouseButtonEventArgs e)
@@ -1594,6 +1625,7 @@ namespace DynamicIslandBar
             SetSystemIconHighlight(OverflowFolderButton, OverflowFolderButton.IsMouseOver || OverflowAppsPanel.IsMouseOver);
             _wifiRefreshVersion++;
             _volumeRefreshVersion++;
+            UpdateRunningAppsRefreshInterval();
         }
 
         private void RefreshAppsList()
@@ -2121,6 +2153,7 @@ namespace DynamicIslandBar
             SetSystemIconHighlight(VolumeIcon, false);
             SetSystemIconHighlight(AppsButton, false);
             SetSystemIconHighlight(OverflowFolderButton, false);
+            UpdateRunningAppsRefreshInterval();
         }
     }
 }

@@ -15,13 +15,6 @@ namespace DynamicIslandBar
             StartupEnvironment.EnsureWindowsFontEnvironment();
             base.OnStartup(e);
 
-            if (TaskbarRestoreWatchdog.TryGetParentProcessId(e.Args, out var parentProcessId))
-            {
-                TaskbarRestoreWatchdog.RunUntilParentExits(parentProcessId);
-                Shutdown();
-                return;
-            }
-
             TaskbarRestoreWatchdog.StartForCurrentProcess();
             DispatcherUnhandledException += App_DispatcherUnhandledException;
 

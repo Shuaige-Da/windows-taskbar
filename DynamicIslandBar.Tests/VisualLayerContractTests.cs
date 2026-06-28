@@ -134,6 +134,32 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"ActiveAppSummaryPanel\"", xaml);
     }
 
+    [Fact]
+    public void MainWindow_DefersFloatingAppPanelRenderingUntilPanelsAreOpen()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("if (AppsPopup.IsOpen)", code);
+        Assert.Contains("if (OverflowAppsPopup.IsOpen)", code);
+        Assert.DoesNotContain(
+            """
+            RenderMainBarApps();
+            RenderAppsManagementPanel();
+            RenderOverflowAppsPanel();
+            """,
+            code);
+    }
+
+    [Fact]
+    public void MainWindow_ThrottlesRunningAppsRefreshWhenIdle()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("RunningAppsRefreshPolicy.GetInterval(false)", code);
+        Assert.Contains("UpdateRunningAppsRefreshInterval()", code);
+        Assert.Contains("IsRunningAppsRefreshInteractive()", code);
+    }
+
     private static string ReadMainWindowXaml()
     {
         return ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
