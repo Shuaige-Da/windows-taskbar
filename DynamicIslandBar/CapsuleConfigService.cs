@@ -33,6 +33,8 @@ public sealed class CapsuleConfig
     public int GlowSpeedPercent { get; set; } = 58;
     public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
+    public int CenterCardWidthPercent { get; set; } = 58;
+    public string? CenterCardAppId { get; set; }
 }
 
 public static class CapsuleConfigSerializer
@@ -124,6 +126,16 @@ public static class CapsuleConfigMutator
         config.CapsuleLengthPercent = ClampPercent(percent);
     }
 
+    public static void SetCenterCardWidthPercent(CapsuleConfig config, int percent)
+    {
+        config.CenterCardWidthPercent = ClampPercent(percent);
+    }
+
+    public static void SetCenterCardApp(CapsuleConfig config, string? appId)
+    {
+        config.CenterCardAppId = string.IsNullOrWhiteSpace(appId) ? null : appId;
+    }
+
     private static int ClampPercent(int percent)
     {
         return Math.Clamp(percent, 0, 100);
@@ -184,6 +196,8 @@ internal sealed class CapsuleConfigStore
     public int GlowSpeedPercent { get; set; } = 58;
     public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
+    public int CenterCardWidthPercent { get; set; } = 58;
+    public string? CenterCardAppId { get; set; }
 
     public CapsuleConfig ToConfig()
     {
@@ -200,7 +214,9 @@ internal sealed class CapsuleConfigStore
             GlowThicknessPercent = ClampPercent(GlowThicknessPercent),
             GlowSpeedPercent = ClampPercent(GlowSpeedPercent),
             CapsuleThicknessPercent = ClampPercent(CapsuleThicknessPercent),
-            CapsuleLengthPercent = ClampPercent(CapsuleLengthPercent)
+            CapsuleLengthPercent = ClampPercent(CapsuleLengthPercent),
+            CenterCardWidthPercent = ClampPercent(CenterCardWidthPercent),
+            CenterCardAppId = CenterCardAppId
         };
 
         foreach (var appId in FavoriteApps)
@@ -239,7 +255,9 @@ internal sealed class CapsuleConfigStore
             GlowThicknessPercent = ClampPercent(config.GlowThicknessPercent),
             GlowSpeedPercent = ClampPercent(config.GlowSpeedPercent),
             CapsuleThicknessPercent = ClampPercent(config.CapsuleThicknessPercent),
-            CapsuleLengthPercent = ClampPercent(config.CapsuleLengthPercent)
+            CapsuleLengthPercent = ClampPercent(config.CapsuleLengthPercent),
+            CenterCardWidthPercent = ClampPercent(config.CenterCardWidthPercent),
+            CenterCardAppId = config.CenterCardAppId
         };
     }
 

@@ -27,7 +27,7 @@ public static class CapsuleLayoutManager
             CapsuleMode.TopIsland => new LayoutMetrics(
                 CapsuleWidth: 760,
                 CapsuleHeight: 72,
-                VisibleAppSlots: 5,
+                VisibleAppSlots: 3,
                 PopupDirection: PopupFlowDirection.Down),
             _ => new LayoutMetrics(
                 CapsuleWidth: screenWidth,

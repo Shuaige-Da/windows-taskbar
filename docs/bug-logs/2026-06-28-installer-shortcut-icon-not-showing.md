@@ -1,6 +1,4 @@
-# 安装包桌面快捷方式图标不显示问题记录
-
-日期：2026-06-28
+# 2026-06-28 安装包桌面快捷方式图标不显示问题记录
 
 ## 问题现象
 
@@ -51,30 +49,18 @@
 主要根因有三个：
 
 1. WPF 项目没有在 `.csproj` 中配置 `ApplicationIcon`，导致 `DynamicIslandBar.exe` 自身没有稳定内嵌应用图标。
-
 2. Visual Studio Installer Projects 生成的是 Windows Installer 广告快捷方式，桌面快捷方式实际指向 Installer 缓存文件，不直接指向安装目录中的 exe。
-
 3. 原始 `DynamicIslandBar-AppIcon.ico` 虽然 Windows 能读取，但对 MSI 广告快捷方式不够稳。Installer 对 ICO 兼容性更挑剔，使用传统未压缩图标帧更可靠。
 
 ## 修复内容
 
 1. 生成 MSI 兼容的 Legacy 图标：
 
-   ```text
-   D:\UI-win\DynamicIslandBar\Assets\DynamicIslandBar-AppIcon-Legacy.ico
-   ```
-
-   这份图标包含 `16/24/32/48/64/128/256` 多尺寸，并使用更传统的 ICO 格式，适合 MSI 快捷方式使用。
+   `D:\UI-win\DynamicIslandBar\Assets\DynamicIslandBar-AppIcon-Legacy.ico`
 
 2. 在 WPF 项目中内嵌应用图标：
 
-   文件：
-
-   ```text
-   D:\UI-win\DynamicIslandBar\DynamicIslandBar.csproj
-   ```
-
-   配置：
+   文件：[DynamicIslandBar.csproj](D:/UI-win/DynamicIslandBar/DynamicIslandBar.csproj)
 
    ```xml
    <ApplicationIcon>Assets\DynamicIslandBar-AppIcon-Legacy.ico</ApplicationIcon>
@@ -82,11 +68,7 @@
 
 3. 修改 Setup Project 配置：
 
-   文件：
-
-   ```text
-   D:\UI-win\Setup1\DynamicIslandBar.Setup\DynamicIslandBar.Setup\DynamicIslandBar.Setup.vdproj
-   ```
+   文件：`D:\UI-win\Setup1\DynamicIslandBar.Setup\DynamicIslandBar.Setup\DynamicIslandBar.Setup.vdproj`
 
    修改点：
 
@@ -113,45 +95,29 @@
 
    删除 Installer 广告快捷方式后，重建一个普通快捷方式，直接指向：
 
-   ```text
-   D:\win-ui1.0\DynamicIslandBar.exe
-   ```
+   `D:\win-ui1.0\DynamicIslandBar.exe`
 
    并设置图标：
 
-   ```text
-   D:\UI-win\DynamicIslandBar\Assets\DynamicIslandBar-AppIcon-Legacy.ico
-   ```
+   `D:\UI-win\DynamicIslandBar\Assets\DynamicIslandBar-AppIcon-Legacy.ico`
 
 ## 下次遇到类似问题时的检查清单
 
 1. 先确认 `.ico` 文件是否有效，并且包含多尺寸图标。
-
-2. 确认 `.csproj` 是否配置了：
-
-   ```xml
-   <ApplicationIcon>Assets\xxx.ico</ApplicationIcon>
-   ```
-
+2. 确认 `.csproj` 是否配置了 `<ApplicationIcon>Assets\\xxx.ico</ApplicationIcon>`。
 3. 重新 `dotnet publish` 后，从发布目录的 exe 提取关联图标，确认 exe 本身已经带图标。
-
 4. 检查桌面 `.lnk`：
-
    - `TargetPath` 是否直接指向真实 exe
    - `IconLocation` 是否指向正确图标
-   - 如果指向 `AppData\Roaming\Microsoft\Installer\{...}`，说明它是 MSI 广告快捷方式
-
+   - 如果指向 `AppData\\Roaming\\Microsoft\\Installer\\{...}`，说明它是 MSI 广告快捷方式
 5. 如果是 MSI 广告快捷方式：
-
    - 优先使用 Legacy ICO
    - 设置 `ARPPRODUCTICON`
    - 升级 `ProductVersion`
    - 更换 `ProductCode`
    - 更换 `PackageCode`
    - 卸载旧版本后重新安装
-
 6. 如果配置都正确但桌面仍旧显示旧图标：
-
    - 删除旧快捷方式
    - 重启资源管理器或执行 `ie4uinit.exe -show`
    - 必要时重启电脑

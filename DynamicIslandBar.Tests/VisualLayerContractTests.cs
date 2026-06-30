@@ -19,7 +19,9 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"CapsuleBorder\"", xaml);
         Assert.Contains("Padding=\"0\"", xaml);
         Assert.Contains("BorderThickness=\"1.4\"", xaml);
-        Assert.Contains("<DockPanel LastChildFill=\"True\" Margin=\"14,0\">", xaml);
+        Assert.Contains("<Grid Margin=\"14,0\">", xaml);
+        Assert.Contains("<ColumnDefinition Width=\"*\"/>", xaml);
+        Assert.Contains("Grid.Column=\"2\"", xaml);
         Assert.DoesNotContain("Background=\"{StaticResource CapsuleInnerDepthBrush}\"", xaml);
         Assert.DoesNotContain("x:Name=\"CapsuleAmbientGlowBorder\"", xaml);
         Assert.DoesNotContain("x:Name=\"CapsuleGlowBorder\"", xaml);
@@ -166,8 +168,79 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(", code);
+        Assert.Contains("CapsuleBorder.BeginAnimation(HeightProperty, null);", code);
         Assert.Contains("CapsuleBorder.Height = capsuleHeight;", code);
         Assert.DoesNotContain("CapsuleBorder.Height = _currentLayoutMetrics.CapsuleHeight;", code);
+    }
+
+    [Fact]
+    public void MainWindow_DoesNotDoubleScaleSystemParametersByDpi()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("return DisplayBoundsProvider.GetPrimaryScreenSize();", code);
+        Assert.DoesNotContain("width / dpi.DpiScaleX", code);
+        Assert.DoesNotContain("height / dpi.DpiScaleY", code);
+    }
+
+    [Fact]
+    public void MainWindow_CenterCardHasLyricsAndDetailsLayers()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("x:Name=\"CenterCardLyricsLayer\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardLyricsViewport\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardDetailsLayer\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardLyricMarqueeText\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardLeftWave\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardRightWave\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardTransportControls\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardPlayPauseButton\"", xaml);
+        Assert.Contains("Click=\"CenterCardPlayPause_Click\"", xaml);
+        Assert.Contains("Click=\"CenterCardPrevious_Click\"", xaml);
+        Assert.Contains("Click=\"CenterCardNext_Click\"", xaml);
+        Assert.Contains("Click=\"CenterCardVolume_Click\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardAppSelectorButton\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardAppsPopup\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardAppsListPanel\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardLeftResizeHandle\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardRightResizeHandle\"", xaml);
+        Assert.Contains("Grid.Column=\"0\"", xaml);
+        Assert.Contains("Stroke=\"#D8FFFFFF\"", xaml);
+        Assert.Contains("Background=\"Transparent\"", xaml);
+        Assert.Contains("BorderThickness=\"0\"", xaml);
+        Assert.Contains("Data=\"M0,0 L5,5 L10,0\"", xaml);
+        Assert.DoesNotContain("CenterCardAppSelectorButton\"\r\n                                        Grid.Column=\"1\"", xaml);
+        Assert.DoesNotContain("x:Name=\"CenterCardAppActions\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CenterCardSupportsHoverAndWidthDrag()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("UpdateCenterCardPresentation(", code);
+        Assert.Contains("CenterCard_MouseEnter", code);
+        Assert.Contains("CenterCardResizeHandle_DragDelta", code);
+        Assert.Contains("CenterCardAppSelector_Click", code);
+        Assert.Contains("CenterCardAppSelector_MouseEnter", code);
+        Assert.Contains("CenterCardAppsPanel_MouseLeave", code);
+        Assert.Contains("OpenCenterCardAppsPopup", code);
+        Assert.Contains("RenderCenterCardAppsPanel", code);
+        Assert.Contains("ClearCenterCardAppSelectorHighlight", code);
+        Assert.DoesNotContain("OpenCenterCardAppSelector", code);
+        Assert.DoesNotContain("SetSystemIconHighlight(CenterCardAppSelectorButton", code);
+        Assert.DoesNotContain("CenterCardActions_Click", code);
+        Assert.Contains("SetCenterCardWidthPercent", code);
+        Assert.Contains("SetCenterCardApp", code);
+        Assert.Contains("CenterCardPresentationPolicy.Build", code);
+        Assert.Contains("WindowsMediaSessionSnapshotSource", code);
+        Assert.Contains("_centerCardMediaRefreshTimer", code);
+        Assert.Contains("CenterCardMediaSnapshotProvider.Resolve", code);
+        Assert.Contains("CenterCardPlayPause_Click", code);
+        Assert.Contains("FindVisualChildren<Rectangle>(CenterCardRightWave)", code);
+        Assert.Contains("ApplyCenterCardLyricsLayout", code);
+        Assert.Contains("CenterCardLayoutPolicy.GetLyricsLayout", code);
     }
 
     private static string ReadMainWindowXaml()

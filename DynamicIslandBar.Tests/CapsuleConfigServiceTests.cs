@@ -16,6 +16,8 @@ public class CapsuleConfigServiceTests
         Assert.Empty(config.KnownLaunchPaths);
         Assert.Equal(100, config.CapsuleThicknessPercent);
         Assert.Equal(100, config.CapsuleLengthPercent);
+        Assert.Equal(58, config.CenterCardWidthPercent);
+        Assert.Null(config.CenterCardAppId);
     }
 
     [Fact]
@@ -42,5 +44,19 @@ public class CapsuleConfigServiceTests
         CapsuleConfigMutator.SetFavorite(config, "wechat", false);
 
         Assert.DoesNotContain("wechat", config.FavoriteApps);
+    }
+
+    [Fact]
+    public void Serialize_RoundTripsCenterCardSettings()
+    {
+        var config = new CapsuleConfig();
+
+        CapsuleConfigMutator.SetCenterCardApp(config, "cloudmusic");
+        CapsuleConfigMutator.SetCenterCardWidthPercent(config, 130);
+
+        var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
+
+        Assert.Equal("cloudmusic", restored.CenterCardAppId);
+        Assert.Equal(100, restored.CenterCardWidthPercent);
     }
 }

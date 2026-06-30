@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DynamicIslandBar 中心卡片媒体态预览</title>
+  <style>
+    :root {
+      --capsule-width: min(1760px, calc(100vw - 80px));
+      --capsule-height: 96px;
+      --card-width: 680px;
+      --glass: rgba(42, 61, 73, 0.58);
+      --glass-strong: rgba(19, 26, 34, 0.78);
+      --line: rgba(134, 232, 255, 0.48);
+      --green: #4af07a;
+      --cyan: #58e7ff;
+      --pink: #ff5dbb;
+      --yellow: #d9f24d;
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.58);
+      font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 22% 24%, rgba(47, 144, 255, 0.34), transparent 34%),
+        radial-gradient(circle at 86% 30%, rgba(0, 255, 210, 0.18), transparent 30%),
+        linear-gradient(135deg, #b8d5e8 0%, #79a9cf 38%, #0f1a34 100%);
+    }
+
+    .desktop-window {
+      position: absolute;
+      left: 12vw;
+      top: 7vh;
+      width: 76vw;
+      height: 74vh;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      overflow: hidden;
+    }
+
+    .desktop-window::before {
+      content: "";
+      display: block;
+      height: 54px;
+      background: rgba(255, 255, 255, 0.7);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .mock-content {
+      width: 62%;
+      height: 54%;
+      margin: 8vh auto 0;
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.62)),
+        repeating-linear-gradient(0deg, transparent 0 28px, rgba(20, 40, 70, 0.06) 29px 30px);
+      opacity: 0.72;
+    }
+
+    .toolbar {
+      position: absolute;
+      left: 50%;
+      bottom: 154px;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      padding: 8px;
+      border: 1px solid rgba(93, 223, 255, 0.36);
+      border-radius: 20px;
+      background: rgba(8, 15, 22, 0.62);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+      z-index: 3;
+    }
+
+    .toolbar button {
+      border: 0;
+      padding: 9px 16px;
+      color: rgba(255, 255, 255, 0.74);
+      border-radius: 14px;
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .toolbar button.active {
+      color: white;
+      background: rgba(68, 227, 255, 0.18);
+      box-shadow: inset 0 0 0 1px rgba(115, 235, 255, 0.22);
+    }
+
+    .capsule-wrap {
+      position: absolute;
+      left: 50%;
+      bottom: 42px;
+      width: var(--capsule-width);
+      height: 126px;
+      transform: translateX(-50%);
+      z-index: 2;
+    }
+
+    .capsule {
+      position: absolute;
+      inset: 15px 0;
+      border-radius: 999px;
+      background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 20% 78%, rgba(255, 255, 255, 0.08)),
+        linear-gradient(90deg, rgba(88, 118, 128, 0.72), rgba(7, 12, 16, 0.76) 58%, rgba(14, 23, 20, 0.7));
+      border: 1px solid rgba(168, 242, 255, 0.24);
+      backdrop-filter: blur(24px) saturate(1.3);
+      box-shadow: 0 22px 48px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      overflow: hidden;
+    }
+
+    .capsule::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 2px;
+      background: linear-gradient(90deg, var(--pink), var(--cyan), var(--green), var(--yellow), var(--pink));
+      background-size: 260% 100%;
+      animation: edge-run 5.4s linear infinite;
+      opacity: 0.86;
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    @keyframes edge-run {
+      to { background-position: 260% 0; }
+    }
+
+    .icon-row,
+    .system-row {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 2;
+    }
+
+    .icon-row {
+      left: 28px;
+    }
+
+    .system-row {
+      right: 28px;
+      gap: 12px;
+    }
+
+    .app-icon,
+    .sys-icon,
+    .grid-icon {
+      display: grid;
+      place-items: center;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      color: white;
+      font-weight: 800;
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.2);
+    }
+
+    .app-icon:nth-child(1) { color: #7aa4ff; }
+    .app-icon:nth-child(2) { color: #f64b8b; }
+    .app-icon:nth-child(3) { color: #b771ff; }
+    .app-icon:nth-child(4) { color: #4ac8ff; }
+    .app-icon:nth-child(5) { color: #ffffff; }
+    .app-icon:nth-child(6) { color: #43f071; }
+
+    .separator {
+      width: 1px;
+      height: 50px;
+      margin: 0 8px;
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    .sys-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      color: var(--green);
+      background: rgba(0, 0, 0, 0.24);
+    }
+
+    .time {
+      min-width: 110px;
+      padding-left: 18px;
+      border-left: 1px solid rgba(255, 255, 255, 0.2);
+      line-height: 1.12;
+      text-align: center;
+    }
+
+    .time strong {
+      display: block;
+      font-size: 25px;
+      letter-spacing: -0.03em;
+    }
+
+    .time span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid-icon {
+      width: 58px;
+      height: 58px;
+      color: var(--green);
+      font-size: 24px;
+    }
+
+    .center-card {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: var(--card-width);
+      min-width: 440px;
+      max-width: 920px;
+      height: 62px;
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+      background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.12), transparent 34%),
+        rgba(10, 18, 27, 0.66);
+      border: 1px solid rgba(124, 142, 255, 0.62);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 0 26px rgba(95, 102, 255, 0.26);
+      overflow: hidden;
+      transition: height 220ms cubic-bezier(.2, .9, .2, 1), border-radius 220ms, box-shadow 220ms, background 220ms;
+      z-index: 4;
+    }
+
+    .center-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 2px;
+      background: linear-gradient(90deg, #7f8aff, #42eeff, #64f68b, #ff63b7, #7f8aff);
+      background-size: 240% 100%;
+      animation: edge-run 4.4s linear infinite;
+      opacity: 0.55;
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .center-card:hover {
+      height: 112px;
+      border-radius: 32px;
+      background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.16), transparent 36%),
+        rgba(8, 15, 24, 0.78);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 34px rgba(85, 229, 255, 0.25);
+    }
+
+    .resize-handle {
+      position: absolute;
+      top: 50%;
+      width: 10px;
+      height: 36px;
+      transform: translateY(-50%);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.36);
+      cursor: ew-resize;
+      opacity: 0;
+      transition: opacity 160ms;
+      z-index: 7;
+    }
+
+    .capsule[data-mode="app"] .center-card {
+      height: 64px;
+      border-radius: 999px;
+    }
+
+    .capsule[data-mode="app"] .center-card:hover {
+      height: 112px;
+      border-radius: 32px;
+    }
+
+    .center-card:hover .resize-handle {
+      opacity: 1;
+    }
+
+    .resize-handle.left { left: 12px; }
+    .resize-handle.right { right: 12px; }
+
+    .lyrics-mode,
+    .detail-mode {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      transition: opacity 160ms, transform 220ms;
+    }
+
+    .lyrics-mode {
+      padding: 0 72px;
+      gap: 16px;
+      opacity: 1;
+    }
+
+    .center-card:hover .lyrics-mode,
+    .capsule[data-mode="app"] .lyrics-mode {
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+    }
+
+    .music-dot {
+      flex: 0 0 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #07151b;
+      font-weight: 900;
+      background: linear-gradient(135deg, #f8e64f, #3ff5bc);
+      box-shadow: 0 0 22px rgba(77, 245, 180, 0.5);
+    }
+
+    .marquee-window {
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+    }
+
+    .marquee-text {
+      display: inline-block;
+      min-width: 100%;
+      padding-left: 100%;
+      animation: lyric-marquee 12s linear infinite;
+    }
+
+    @keyframes lyric-marquee {
+      to { transform: translateX(-100%); }
+    }
+
+    .wave {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 36px;
+    }
+
+    .wave span {
+      display: block;
+      width: 4px;
+      height: 12px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, var(--cyan), var(--green));
+      box-shadow: 0 0 14px rgba(77, 238, 255, 0.58);
+      animation: bounce 680ms ease-in-out infinite alternate;
+    }
+
+    .wave span:nth-child(2) { animation-delay: 80ms; height: 22px; background: linear-gradient(180deg, var(--pink), var(--cyan)); }
+    .wave span:nth-child(3) { animation-delay: 150ms; height: 30px; }
+    .wave span:nth-child(4) { animation-delay: 40ms; height: 18px; }
+    .wave span:nth-child(5) { animation-delay: 210ms; height: 26px; background: linear-gradient(180deg, var(--yellow), var(--green)); }
+
+    @keyframes bounce {
+      from { transform: scaleY(.58); opacity: .58; }
+      to { transform: scaleY(1.14); opacity: 1; }
+    }
+
+    .detail-mode {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 14px 44px;
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+    }
+
+    .center-card:hover .detail-mode,
+    .capsule[data-mode="app"] .detail-mode {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .capsule[data-mode="app"] .detail-mode {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      padding: 9px 44px;
+    }
+
+    .capsule[data-mode="app"] .center-card:hover .detail-mode {
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 14px 44px;
+    }
+
+    .track-info {
+      min-width: 0;
+    }
+
+    .selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sub {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+    }
+
+    .buttons {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-btn {
+      display: grid;
+      place-items: center;
+      min-width: 34px;
+      height: 34px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 999px;
+      color: white;
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .control-btn.play {
+      width: 46px;
+      height: 46px;
+      color: #06151a;
+      background: linear-gradient(135deg, #4be8ff, #63f58d);
+      box-shadow: 0 0 26px rgba(85, 236, 255, 0.45);
+    }
+
+    .progress {
+      width: 260px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      overflow: hidden;
+    }
+
+    .progress span {
+      display: block;
+      width: 43%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+      box-shadow: 0 0 14px rgba(90, 240, 255, 0.62);
+    }
+
+    .extra {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 12px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 13px;
+    }
+
+    .volume {
+      width: 86px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      overflow: hidden;
+    }
+
+    .volume span {
+      display: block;
+      width: 68%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--cyan));
+    }
+
+    .capsule[data-mode="app"] .music-only {
+      display: none;
+    }
+
+    .capsule[data-mode="app"] .track-title::before {
+      content: "Codex";
+    }
+
+    .capsule[data-mode="app"] .track-title {
+      font-size: 18px;
+    }
+
+    .capsule[data-mode="app"] .center-card:not(:hover) .selector {
+      display: none;
+    }
+
+    .capsule[data-mode="app"] .center-card:not(:hover) .title {
+      font-size: 16px;
+    }
+
+    .capsule[data-mode="app"] .center-card:not(:hover) .sub {
+      font-size: 11px;
+      margin-top: 1px;
+    }
+
+    .capsule[data-mode="app"] .song-title,
+    .capsule[data-mode="app"] .lyric-line {
+      display: none;
+    }
+
+    .capsule[data-mode="app"] .sub::before {
+      content: "当前窗口 · 正在运行 · 单击激活 / 再次单击最小化";
+    }
+
+    .capsule[data-mode="app"] .extra::before {
+      content: "隐藏 · 固定 · 退出";
+      color: rgba(255,255,255,.78);
+    }
+
+    .hint {
+      position: absolute;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      text-align: center;
+      z-index: 4;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="desktop-window">
+    <div class="mock-content"></div>
+  </div>
+
+  <div class="toolbar" aria-label="预览模式切换">
+    <button class="active" data-mode="music">音乐应用：未悬浮歌词态</button>
+    <button data-mode="app">非音乐应用：详情态</button>
+  </div>
+
+  <div class="capsule-wrap">
+    <div class="capsule" id="capsule" data-mode="music">
+      <div class="icon-row">
+        <div class="app-icon">D</div>
+        <div class="app-icon">抖</div>
+        <div class="app-icon">VS</div>
+        <div class="app-icon">V</div>
+        <div class="app-icon">▣</div>
+        <div class="app-icon">微</div>
+        <div class="app-icon">✚</div>
+        <div class="separator"></div>
+      </div>
+
+      <div class="center-card" id="centerCard">
+        <div class="resize-handle left" data-side="left" title="拖动调节中心卡片长度"></div>
+        <div class="resize-handle right" data-side="right" title="拖动调节中心卡片长度"></div>
+
+        <div class="lyrics-mode">
+          <div class="music-dot">♪</div>
+          <div class="wave music-only" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="marquee-window">
+            <span class="marquee-text">我在黄昏里等风经过　　想把温柔都唱给你听　　我在黄昏里等风经过　　</span>
+          </div>
+          <div class="wave music-only" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+
+        <div class="detail-mode">
+          <div class="track-info">
+            <div class="selector">运行中应用 ▾</div>
+            <div class="title">
+              <span class="music-dot" style="width:28px;height:28px;font-size:13px;">♪</span>
+              <span class="track-title"></span>
+              <span class="song-title">正在播放 · 像鱼 - 王贰浪</span>
+            </div>
+            <div class="sub"><span class="lyric-line">歌词：我在黄昏里等风经过</span></div>
+          </div>
+
+          <div class="controls music-only">
+            <div class="buttons">
+              <button class="control-btn">⇄</button>
+              <button class="control-btn">‹</button>
+              <button class="control-btn play">Ⅱ</button>
+              <button class="control-btn">›</button>
+              <button class="control-btn">↻</button>
+            </div>
+            <div class="progress"><span></span></div>
+          </div>
+
+          <div class="extra">
+            <span class="music-only">音量</span>
+            <div class="volume music-only"><span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="system-row">
+        <div class="sys-icon">Wi</div>
+        <div class="sys-icon">Vol</div>
+        <div class="sys-icon">Bat</div>
+        <div class="time"><strong>14:37</strong><span>6月28日 周日</span></div>
+        <div class="grid-icon">▦</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">提示：音乐模式下，不悬浮中心卡片只显示滚动歌词；鼠标移上中心卡片展开详情。拖动卡片左右小条可以调节长度。</div>
+
+  <script>
+    const capsule = document.getElementById('capsule');
+    const buttons = document.querySelectorAll('.toolbar button');
+    const card = document.getElementById('centerCard');
+    let dragStartX = 0;
+    let dragStartWidth = 680;
+    let dragging = false;
+    let activeSide = 'right';
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        buttons.forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        capsule.dataset.mode = button.dataset.mode;
+      });
+    });
+
+    document.querySelectorAll('.resize-handle').forEach((handle) => {
+      handle.addEventListener('pointerdown', (event) => {
+        dragging = true;
+        activeSide = handle.dataset.side || 'right';
+        dragStartX = event.clientX;
+        dragStartWidth = card.getBoundingClientRect().width;
+        handle.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+    });
+
+    window.addEventListener('pointermove', (event) => {
+      if (!dragging) {
+        return;
+      }
+
+      const rawDelta = event.clientX - dragStartX;
+      const widthDelta = activeSide === 'left' ? -rawDelta * 2 : rawDelta * 2;
+      const next = Math.max(440, Math.min(920, dragStartWidth + widthDelta));
+      document.documentElement.style.setProperty('--card-width', `${next}px`);
+    });
+
+    window.addEventListener('pointerup', () => {
+      dragging = false;
+    });
+  </script>
+</body>
+</html>

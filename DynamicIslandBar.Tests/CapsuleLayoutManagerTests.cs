@@ -21,6 +21,14 @@ public class CapsuleLayoutManagerTests
     }
 
     [Fact]
+    public void GetMetrics_LeavesRoomForCenterCardInTopIslandMode()
+    {
+        var top = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
+
+        Assert.Equal(3, top.VisibleAppSlots);
+    }
+
+    [Fact]
     public void ResolveDropMode_SnapsToTopWhenCloseToTopThreshold()
     {
         var mode = CapsuleLayoutManager.ResolveDropMode(

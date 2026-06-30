@@ -175,6 +175,44 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="CenterCardButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Foreground" Value="#F2FFFFFF"/>
+            <Setter Property="Background" Value="#18FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#24FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                                CornerRadius="12"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#2846E0FF"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#6646E0FF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#3A4CD964"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#804CD964"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="10,0,10,10">
@@ -207,10 +245,16 @@
                             Opacity="0.72"
                             IsHitTestVisible="False"/>
 
-                    <DockPanel LastChildFill="True" Margin="14,0">
+                    <Grid Margin="14,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
                     <!-- ===== 左侧：Dock 图标 ===== -->
-                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left"
+                    <StackPanel Orientation="Horizontal" Grid.Column="0"
                                 x:Name="DockItems" VerticalAlignment="Center">
 
                         <!-- 音乐 -->
@@ -340,11 +384,11 @@
                     </StackPanel>
 
                     <!-- ===== 分割线 ===== -->
-                    <Rectangle Width="1" Height="30" Fill="#30FFFFFF" Margin="12,0"
-                               DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                    <Rectangle Grid.Column="1" Width="1" Height="30" Fill="#30FFFFFF" Margin="12,0"
+                               VerticalAlignment="Center"/>
 
                     <!-- ===== 右侧：系统信息区域 ===== -->
-                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                    <StackPanel Orientation="Horizontal" Grid.Column="3"
                                 VerticalAlignment="Center" Margin="0,0,4,0">
 
                         <!-- WiFi 图标 -->
@@ -420,48 +464,183 @@
                         </Border>
                     </StackPanel>
 
+                    <Grid x:Name="CenterCardSlot"
+                          Grid.Column="2"
+                          ClipToBounds="True"
+                          SizeChanged="CenterCardSlot_SizeChanged">
                     <Border x:Name="ActiveAppSummaryPanel"
                             Height="44"
-                            MaxWidth="520"
+                            Width="520"
                             Margin="18,0"
-                            Padding="10,0,14,0"
+                            Padding="0"
                             CornerRadius="22"
                             VerticalAlignment="Center"
                             Background="{StaticResource SummaryGlassBrush}"
                             BorderBrush="#4CD964"
                             BorderThickness="1.2"
                             Visibility="Collapsed"
-                            IsHitTestVisible="False">
-                        <DockPanel LastChildFill="True">
-                            <ContentControl x:Name="ActiveAppSummaryIcon"
-                                            Width="26"
-                                            Height="26"
-                                            VerticalAlignment="Center"
-                                            DockPanel.Dock="Left"/>
-                            <StackPanel Orientation="Horizontal"
-                                        VerticalAlignment="Center"
-                                        Margin="9,0,0,0">
-                                <TextBlock x:Name="ActiveAppSummaryTitle"
-                                           Text=""
-                                           Foreground="White"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="180"/>
-                                <TextBlock x:Name="ActiveAppSummarySubtitle"
-                                           Text=""
-                                           Foreground="#88FFFFFF"
-                                           FontSize="11"
-                                           VerticalAlignment="Center"
-                                           Margin="8,0,0,0"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="260"/>
-                            </StackPanel>
-                        </DockPanel>
-                    </Border>
+                            ClipToBounds="True"
+                            HorizontalAlignment="Center"
+                            MouseEnter="CenterCard_MouseEnter"
+                            MouseLeave="CenterCard_MouseLeave"
+                            MouseLeftButtonDown="CenterCard_MouseLeftButtonDown">
+                        <Grid>
+                            <Grid x:Name="CenterCardLyricsLayer"
+                                  Margin="42,0"
+                                  Visibility="Collapsed"
+                                  ClipToBounds="True">
+                                <DockPanel LastChildFill="True" VerticalAlignment="Center">
+                                    <ContentControl x:Name="CenterCardLyricsIcon"
+                                                    Width="28"
+                                                    Height="28"
+                                                    DockPanel.Dock="Left"
+                                                    VerticalAlignment="Center"/>
+                                    <StackPanel x:Name="CenterCardLeftWave"
+                                                Orientation="Horizontal"
+                                                DockPanel.Dock="Left"
+                                                Height="24"
+                                                Margin="10,0,10,0"
+                                                VerticalAlignment="Center">
+                                        <Rectangle Width="3" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="#4AF07A" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="24" RadiusX="1.5" RadiusY="1.5" Fill="#FF5DBB" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="CenterCardRightWave"
+                                                Orientation="Horizontal"
+                                                DockPanel.Dock="Right"
+                                                Height="24"
+                                                Margin="10,0,0,0"
+                                                VerticalAlignment="Center">
+                                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="24" RadiusX="1.5" RadiusY="1.5" Fill="#FF5DBB" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="#4AF07A" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                    </StackPanel>
+                                    <Grid x:Name="CenterCardLyricsViewport" ClipToBounds="True">
+                                        <TextBlock x:Name="CenterCardLyricMarqueeText"
+                                                   Text=""
+                                                   Foreground="White"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="NoWrap">
+                                            <TextBlock.RenderTransform>
+                                                <TranslateTransform x:Name="CenterCardLyricMarqueeTransform"/>
+                                            </TextBlock.RenderTransform>
+                                        </TextBlock>
+                                    </Grid>
+                                </DockPanel>
+                            </Grid>
 
-                    </DockPanel>
+                            <Grid x:Name="CenterCardDetailsLayer"
+                                  Margin="38,0"
+                                  Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border x:Name="CenterCardAppSelectorButton"
+                                        Grid.Column="0"
+                                        Width="24"
+                                        Height="28"
+                                        Margin="0,0,8,0"
+                                        Cursor="Hand"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        MouseLeftButtonDown="CenterCardAppSelector_Click"
+                                        MouseEnter="CenterCardAppSelector_MouseEnter"
+                                        MouseLeave="CenterCardAppSelector_MouseLeave">
+                                    <Path Stroke="#D8FFFFFF"
+                                          StrokeThickness="1.8"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          Stretch="Uniform"
+                                          Width="10"
+                                          Height="6"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Data="M0,0 L5,5 L10,0"/>
+                                </Border>
+
+                                <ContentControl x:Name="ActiveAppSummaryIcon"
+                                                Grid.Column="1"
+                                                Width="28"
+                                                Height="28"
+                                                VerticalAlignment="Center"/>
+
+                                <StackPanel Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            Margin="10,0,12,0">
+                                    <TextBlock x:Name="ActiveAppSummaryTitle"
+                                               Text=""
+                                               Foreground="White"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="ActiveAppSummarySubtitle"
+                                               Text=""
+                                               Foreground="#88FFFFFF"
+                                               FontSize="11"
+                                               Margin="0,2,0,0"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <StackPanel x:Name="CenterCardTransportControls"
+                                            Grid.Column="3"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,12,0"
+                                            Visibility="Collapsed">
+                                    <Button x:Name="CenterCardPlaybackModeButton" Content="↻" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放顺序"/>
+                                    <Button x:Name="CenterCardPreviousButton" Content="‹" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click"/>
+                                    <Button x:Name="CenterCardPlayPauseButton" Content="Ⅱ" Width="34" Height="34" Margin="3,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放 / 暂停" Click="CenterCardPlayPause_Click"/>
+                                    <Button x:Name="CenterCardNextButton" Content="›" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="下一首" Click="CenterCardNext_Click"/>
+                                    <Button x:Name="CenterCardVolumeButton" Content="Vol" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click"/>
+                                </StackPanel>
+
+                            </Grid>
+
+                            <Thumb x:Name="CenterCardLeftResizeHandle"
+                                   Width="10"
+                                   Height="32"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   Cursor="SizeWE"
+                                   DragDelta="CenterCardResizeHandle_DragDelta"
+                                   DragCompleted="CenterCardResizeHandle_DragCompleted"
+                                   Tag="Left"
+                                   Opacity="0">
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Border CornerRadius="5" Background="#70FFFFFF"/>
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                            <Thumb x:Name="CenterCardRightResizeHandle"
+                                   Width="10"
+                                   Height="32"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   Cursor="SizeWE"
+                                   DragDelta="CenterCardResizeHandle_DragDelta"
+                                   DragCompleted="CenterCardResizeHandle_DragCompleted"
+                                   Tag="Right"
+                                   Opacity="0">
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Border CornerRadius="5" Background="#70FFFFFF"/>
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Grid>
+                    </Border>
+                    </Grid>
+
+                    </Grid>
                 </Grid>
             </Border>
 
@@ -713,6 +892,39 @@
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,10"/>
                         <WrapPanel x:Name="OverflowAppsListPanel" ItemWidth="52"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <Popup x:Name="CenterCardAppsPopup"
+                   PlacementTarget="{Binding ElementName=CenterCardAppSelectorButton}"
+                   Placement="Top"
+                   HorizontalOffset="0"
+                   VerticalOffset="-12"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True"
+                   Closed="Popup_Closed">
+                <Border x:Name="CenterCardAppsPanel"
+                        CornerRadius="16" Padding="12"
+                        BorderBrush="#6046E0FF"
+                        BorderThickness="1"
+                        MouseEnter="CenterCardAppsPanel_MouseEnter"
+                        MouseLeave="CenterCardAppsPanel_MouseLeave"
+                        Width="300">
+                    <Border.Background>
+                        <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.5" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock Text="中心应用"
+                                   Foreground="White"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,10"/>
+                        <WrapPanel x:Name="CenterCardAppsListPanel" ItemWidth="52"/>
                     </StackPanel>
                 </Border>
             </Popup>
