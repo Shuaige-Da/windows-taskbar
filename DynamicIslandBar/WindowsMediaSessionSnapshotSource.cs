@@ -50,7 +50,7 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
 
             var playbackInfo = session.GetPlaybackInfo();
             var isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            var lyric = string.IsNullOrWhiteSpace(artist) ? title : $"{title} - {artist}";
+            var lyric = title; // GSMTC doesn't provide actual lyrics; show title as marquee text
 
             return new CenterCardMediaSnapshot(
                 IsMusicApp: true,

@@ -595,11 +595,26 @@
                                             VerticalAlignment="Center"
                                             Margin="0,0,12,0"
                                             Visibility="Collapsed">
-                                    <Button x:Name="CenterCardPlaybackModeButton" Content="↻" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放顺序"/>
-                                    <Button x:Name="CenterCardPreviousButton" Content="‹" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click"/>
-                                    <Button x:Name="CenterCardPlayPauseButton" Content="Ⅱ" Width="34" Height="34" Margin="3,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放 / 暂停" Click="CenterCardPlayPause_Click"/>
-                                    <Button x:Name="CenterCardNextButton" Content="›" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="下一首" Click="CenterCardNext_Click"/>
-                                    <Button x:Name="CenterCardVolumeButton" Content="Vol" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click"/>
+                                    <Button x:Name="CenterCardPlaybackModeButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="顺序播放" Click="CenterCardPlaybackMode_Click">
+                                        <Path x:Name="CenterCardPlaybackModeIcon" Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                              Data="M4,6 H20 M4,12 H20 M4,18 H14"/>
+                                    </Button>
+                                    <Button x:Name="CenterCardPreviousButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click">
+                                        <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                              Data="M6,6 L8,6 L8,18 L6,18 Z M9.5,12 L18,6 L18,18 Z"/>
+                                    </Button>
+                                    <Button x:Name="CenterCardPlayPauseButton" Width="34" Height="34" Margin="3,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放 / 暂停" Click="CenterCardPlayPause_Click">
+                                        <Path x:Name="CenterCardPlayPauseIcon" Fill="White" Stretch="Uniform" Width="14" Height="14"
+                                              Data="M6,4 L6,20 L10,20 L10,4 Z M14,4 L14,20 L18,20 L18,4 Z"/>
+                                    </Button>
+                                    <Button x:Name="CenterCardNextButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="下一首" Click="CenterCardNext_Click">
+                                        <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                              Data="M6,6 L14.5,12 L6,18 Z M16,6 L18,6 L18,18 L16,18 Z"/>
+                                    </Button>
+                                    <Button x:Name="CenterCardVolumeButton" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click">
+                                        <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                              Data="M3,9 L3,15 L7,15 L12,20 L12,4 L7,9 Z M16.5,12 C16.5,10.23 15.48,8.71 14,7.97 L14,16.02 C15.48,15.29 16.5,13.77 16.5,12 Z"/>
+                                    </Button>
                                 </StackPanel>
 
                             </Grid>
@@ -636,6 +651,67 @@
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
+
+                            <!-- 音乐进度条（悬浮+播放中显示） -->
+                            <StackPanel x:Name="CenterCardProgressPanel"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Bottom"
+                                        Height="18"
+                                        Margin="42,0,42,2"
+                                        Visibility="Collapsed">
+                                <TextBlock x:Name="CenterCardCurrentTime"
+                                           Text="0:00"
+                                           Foreground="#70FFFFFF"
+                                           FontSize="9"
+                                           FontFamily="Consolas"
+                                           VerticalAlignment="Center"
+                                           Width="30"
+                                           TextAlignment="Right"/>
+                                <ProgressBar x:Name="CenterCardProgressBar"
+                                             Height="4"
+                                             Minimum="0"
+                                             Maximum="100"
+                                             Value="0"
+                                             Foreground="#FF2D55"
+                                             Background="#25FFFFFF"
+                                             BorderThickness="0"
+                                             Margin="6,0"
+                                             VerticalAlignment="Center"
+                                             MouseLeftButtonDown="CenterCardProgress_Click"
+                                             Cursor="Hand">
+                                    <ProgressBar.Resources>
+                                        <Style TargetType="ProgressBar">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ProgressBar">
+                                                        <Border CornerRadius="2" Background="{TemplateBinding Background}">
+                                                            <Grid>
+                                                                <Border x:Name="PART_Track"/>
+                                                                <Border x:Name="PART_Indicator"
+                                                                        CornerRadius="2"
+                                                                        Background="{TemplateBinding Foreground}"
+                                                                        HorizontalAlignment="Left"
+                                                                        RenderTransformOrigin="0,0.5">
+                                                                    <Border.RenderTransform>
+                                                                        <ScaleTransform ScaleX="{TemplateBinding Value}"/>
+                                                                    </Border.RenderTransform>
+                                                                </Border>
+                                                            </Grid>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ProgressBar.Resources>
+                                </ProgressBar>
+                                <TextBlock x:Name="CenterCardTotalTime"
+                                           Text="0:00"
+                                           Foreground="#70FFFFFF"
+                                           FontSize="9"
+                                           FontFamily="Consolas"
+                                           VerticalAlignment="Center"
+                                           Width="30"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
                     </Grid>
@@ -830,6 +906,36 @@
                                 Margin="0,10,0,0"
                                 Padding="0"
                                 Click="VolumeMoreSettings_Click"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- ===== 中心卡片音量弹窗（紧贴音量按钮） ===== -->
+            <Popup x:Name="CenterCardVolumePopup"
+                   PlacementTarget="{Binding ElementName=CenterCardVolumeButton}"
+                   Placement="Top"
+                   HorizontalOffset="-65"
+                   VerticalOffset="-8"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="False">
+                <Border CornerRadius="10" Padding="8,6" Width="180"
+                        BorderBrush="#4046E0FF" BorderThickness="1"
+                        MouseEnter="CenterCardVolumePopup_MouseEnter"
+                        MouseLeave="CenterCardVolumePopup_MouseLeave">
+                    <Border.Background>
+                        <SolidColorBrush Color="#222222" Opacity="0.95"/>
+                    </Border.Background>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="🎵" Foreground="#FF5DBB" FontSize="12"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <Slider x:Name="CenterCardVolumeSlider" Minimum="0" Maximum="100"
+                                Width="100" VerticalAlignment="Center"
+                                Foreground="#FF5DBB"
+                                ValueChanged="CenterCardVolumeSlider_ValueChanged"/>
+                        <TextBlock x:Name="CenterCardVolumePercentText" Text="--%"
+                                   Foreground="#80FFFFFF" FontSize="10"
+                                   VerticalAlignment="Center" Margin="6,0,0,0" Width="30"/>
                     </StackPanel>
                 </Border>
             </Popup>

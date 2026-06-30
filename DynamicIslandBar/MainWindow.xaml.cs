@@ -33,6 +33,7 @@ namespace DynamicIslandBar
         private readonly DispatcherTimer _capsuleHoverCollapseTimer;
         private readonly DispatcherTimer _appsRefreshTimer;
         private readonly DispatcherTimer _centerCardMediaRefreshTimer;
+        private readonly DispatcherTimer _progressTimer;
         private readonly ICenterCardMediaSnapshotSource _centerCardMediaSource = new WindowsMediaSessionSnapshotSource();
         private Storyboard? _glowSpinStoryboard;
         private Storyboard? _dockExpandStoryboard;
@@ -62,6 +63,17 @@ namespace DynamicIslandBar
         private RunningAppEntry? _hoveredApp;
         private CenterCardMediaSnapshot? _centerCardLiveMediaSnapshot;
         private int _centerCardMediaRefreshVersion;
+        private MediaService? _mediaService;
+        private TimeSpan _mediaDuration = TimeSpan.Zero;
+        private TimeSpan _lastMediaPosition = TimeSpan.Zero;
+        private DateTime _lastMediaUpdateUtc = DateTime.MinValue;
+        private bool _isProgressInterpolationActive;
+        private bool _isMusicPlaying;
+        private int _volumeControlAppPid;
+        private Slider? _appVolumeSlider;
+        private Panel? _appVolumePanel;
+        private LyricsService _lyricsService = new();
+        private int _playbackModeIndex;
 
         public MainWindow()
         {
@@ -77,8 +89,10 @@ namespace DynamicIslandBar
             _capsuleHoverCollapseTimer.Tick += CapsuleHoverCollapseTimer_Tick;
             _appsRefreshTimer = new DispatcherTimer { Interval = RunningAppsRefreshPolicy.GetInterval(false) };
             _appsRefreshTimer.Tick += AppsRefreshTimer_Tick;
-            _centerCardMediaRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _centerCardMediaRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _centerCardMediaRefreshTimer.Tick += CenterCardMediaRefreshTimer_Tick;
+            _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            _progressTimer.Tick += ProgressTimer_Tick;
         }
 
         private sealed class PopupState
@@ -115,8 +129,20 @@ namespace DynamicIslandBar
             RefreshRunningAppsBar();
             _appsRefreshTimer.Start();
             _centerCardMediaRefreshTimer.Start();
+            _progressTimer.Start();
+            _ = InitMediaServiceAsync();
             _windowLoaded = true;
             Dispatcher.BeginInvoke(MaybeWriteLayoutDiagnostics, DispatcherPriority.Loaded);
+        }
+
+        private async Task InitMediaServiceAsync()
+        {
+            try
+            {
+                _mediaService = new MediaService();
+                await _mediaService.InitializeAsync();
+            }
+            catch { /* Media service unavailable */ }
         }
 
         private void HideDemoDockItems()
@@ -377,6 +403,25 @@ namespace DynamicIslandBar
             await RefreshCenterCardMediaSnapshotAsync();
         }
 
+        private void ProgressTimer_Tick(object? sender, EventArgs e)
+        {
+            // Interpolate progress bar position between media refresh ticks for smooth movement
+            if (!_isProgressInterpolationActive || !_isMusicPlaying || _mediaDuration.TotalSeconds <= 0)
+                return;
+
+            if (CenterCardProgressPanel.Visibility != Visibility.Visible)
+                return;
+
+            var elapsed = DateTime.UtcNow - _lastMediaUpdateUtc;
+            var interpolatedPosition = _lastMediaPosition + elapsed;
+            if (interpolatedPosition > _mediaDuration)
+                interpolatedPosition = _mediaDuration;
+
+            var pct = interpolatedPosition.TotalSeconds / _mediaDuration.TotalSeconds * 100;
+            CenterCardProgressBar.Value = Math.Clamp(pct, 0, 100);
+            CenterCardCurrentTime.Text = FormatTime(interpolatedPosition);
+        }
+
         private async Task RefreshCenterCardMediaSnapshotAsync()
         {
             var app = GetPrimarySummaryApp();
@@ -395,6 +440,82 @@ namespace DynamicIslandBar
 
             _centerCardLiveMediaSnapshot = snapshot;
             UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+
+            // Update progress bar from MediaService timeline
+            if (_mediaService != null)
+            {
+                try
+                {
+                    // Tell MediaService which session to use (from the snapshot's AUMID)
+                    var aumid = snapshot?.SourceAppUserModelId;
+                    _mediaService.SetTargetSession(aumid);
+                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] AUMID={aumid}, snapshot={(snapshot != null ? "ok" : "null")}");
+
+                    var info = await _mediaService.GetMediaInfoAsync();
+                    _isMusicPlaying = info.IsPlaying;
+                    _mediaDuration = info.Duration;
+
+                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Title={info.Title}, Artist={info.Artist}, Playing={info.IsPlaying}, Pos={info.Position}, Dur={info.Duration}");
+
+                    if (_isMusicPlaying && info.Duration.TotalSeconds > 0)
+                    {
+                        _lastMediaPosition = info.Position;
+                        _lastMediaUpdateUtc = DateTime.UtcNow;
+                        _isProgressInterpolationActive = true;
+
+                        var pct = info.Position.TotalSeconds / info.Duration.TotalSeconds * 100;
+                        CenterCardProgressBar.Value = Math.Clamp(pct, 0, 100);
+                        CenterCardCurrentTime.Text = FormatTime(info.Position);
+                        CenterCardTotalTime.Text = FormatTime(info.Duration);
+                    }
+                    else
+                    {
+                        _isProgressInterpolationActive = false;
+                    }
+
+                    // Update play/pause icon
+                    CenterCardPlayPauseIcon.Data = Geometry.Parse(
+                        _isMusicPlaying
+                            ? "M6,4 L6,20 L10,20 L10,4 Z M14,4 L14,20 L18,20 L18,4 Z"
+                            : "M8,5 L8,19 L19,12 Z");
+
+                    // Fetch and update real lyrics from LRCLIB
+                    if (snapshot != null && !string.IsNullOrWhiteSpace(info.Title) && info.Duration.TotalSeconds > 0)
+                    {
+                        var lyricsFound = await _lyricsService.EnsureLyricsAsync(
+                            info.Title ?? string.Empty,
+                            info.Artist ?? string.Empty,
+                            info.Duration);
+                        System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Lyrics: found={lyricsFound}, hasLyrics={_lyricsService.HasLyrics}");
+
+                        var currentLyric = _lyricsService.GetCurrentLyric(info.Position);
+                        System.Diagnostics.Debug.WriteLine($"[MediaRefresh] CurrentLyric at {info.Position}: {(currentLyric != null ? (currentLyric.Length > 40 ? currentLyric[..40] : currentLyric) : "null")}");
+
+                        if (!string.IsNullOrWhiteSpace(currentLyric) && currentLyric != snapshot.Lyric)
+                        {
+                            _centerCardLiveMediaSnapshot = snapshot with { Lyric = currentLyric };
+                            UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+                        }
+                    }
+
+                    // Sync playback mode from session
+                    _playbackModeIndex = _mediaService.GetPlaybackMode();
+                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] PlaybackMode={_playbackModeIndex}");
+                    UpdatePlaybackModeIcon();
+
+                    // Re-update progress panel visibility now that media state is fresh
+                    var showProgress = _isCenterCardHovered && _isMusicPlaying && _mediaDuration.TotalSeconds > 0;
+                    CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
+                    // Re-apply hover height if needed (expanded height differs with/without progress)
+                    if (_isCenterCardHovered)
+                    {
+                        UpdateCenterCardHoverVisual(new CenterCardPresentation(
+                            CenterCardDisplayMode.MusicDetails, string.Empty, string.Empty,
+                            false, true, false));
+                    }
+                }
+                catch { /* Ignore timeline errors */ }
+            }
         }
 
         private bool IsRunningAppsRefreshInteractive()
@@ -961,6 +1082,11 @@ namespace DynamicIslandBar
             CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
             CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;
             CenterCardTransportControls.Visibility = state.ShowTransportControls ? Visibility.Visible : Visibility.Collapsed;
+
+            // Show progress panel when music app + hovered + playing
+            var showProgress = state.ShowTransportControls && _isMusicPlaying && _mediaDuration.TotalSeconds > 0;
+            CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
+
             ApplyCenterCardTransportDensity();
             ApplyCenterCardLyricsLayout();
             UpdateCenterCardHoverVisual(state);
@@ -1027,7 +1153,8 @@ namespace DynamicIslandBar
         private void UpdateCenterCardHoverVisual(CenterCardPresentation state)
         {
             var expanded = _isCenterCardHovered;
-            var targetHeight = expanded ? 66 : 44;
+            var showProgress = expanded && CenterCardProgressPanel.Visibility == Visibility.Visible;
+            var targetHeight = expanded ? (showProgress ? 72 : 66) : 44;
             var targetRadius = targetHeight / 2;
             var duration = TimeSpan.FromMilliseconds(expanded ? 220 : 180);
             IEasingFunction easing = expanded
@@ -1280,15 +1407,124 @@ namespace DynamicIslandBar
             SendMediaKey(VirtualKeyMediaNextTrack);
         }
 
+        private async void CenterCardPlaybackMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_mediaService == null)
+                return;
+
+            _playbackModeIndex = (_playbackModeIndex + 1) % 4;
+            await _mediaService.SetPlaybackModeAsync(_playbackModeIndex);
+            UpdatePlaybackModeIcon();
+        }
+
+        private void UpdatePlaybackModeIcon()
+        {
+            var tooltips = new[] { "顺序播放", "列表循环", "单曲循环", "随机播放" };
+            var icons = new[]
+            {
+                // Sequential: three horizontal lines
+                "M4,6 H20 M4,12 H20 M4,18 H14",
+                // Loop All: circular arrows
+                "M17,2 L21,6 L17,10 V7 H7 C5.9,7 5,7.9 5,9 M7,22 L3,18 L7,14 V17 H17 C18.1,17 19,16.1 19,15",
+                // Loop One: circular arrow with center dot
+                "M17,2 L21,6 L17,10 V7 H7 C5.9,7 5,7.9 5,9 M7,22 L3,18 L7,14 V17 H17 C18.1,17 19,16.1 19,15 M12,11 V13",
+                // Shuffle: crossed arrows
+                "M16,3 L20,3 L20,7 M20,3 L4,21 M14,21 L20,21 L20,15 M4,3 L10,3 L4,9"
+            };
+
+            CenterCardPlaybackModeIcon.Data = Geometry.Parse(icons[_playbackModeIndex]);
+            CenterCardPlaybackModeButton.ToolTip = tooltips[_playbackModeIndex];
+        }
+
         private void CenterCardVolume_Click(object sender, RoutedEventArgs e)
         {
-            ShowHoverPopup(GetVolumePopupState(), RefreshVolumePanel);
+            _volumeControlAppPid = _mediaService?.GetMusicAppProcessId() ?? 0;
+            System.Diagnostics.Debug.WriteLine($"[Volume] CenterCardVolume_Click: PID={_volumeControlAppPid}");
+            UpdateCenterCardVolumeSlider();
+            CenterCardVolumePopup.IsOpen = !CenterCardVolumePopup.IsOpen;
+        }
+
+        private void UpdateCenterCardVolumeSlider()
+        {
+            int vol;
+            if (_volumeControlAppPid > 0)
+            {
+                vol = AudioService.GetAppVolume(_volumeControlAppPid);
+                if (vol < 0)
+                    vol = AudioService.GetVolume(); // Fallback to system volume
+            }
+            else
+            {
+                vol = AudioService.GetVolume();
+            }
+
+            _suppressVolumeEvent = true;
+            CenterCardVolumeSlider.Value = vol >= 0 ? vol : 0;
+            CenterCardVolumePercentText.Text = vol >= 0 ? $"{vol}%" : "N/A";
+            _suppressVolumeEvent = false;
+        }
+
+        private void CenterCardVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_suppressVolumeEvent || !_windowLoaded)
+                return;
+
+            var pct = (int)CenterCardVolumeSlider.Value;
+            CenterCardVolumePercentText.Text = $"{pct}%";
+
+            if (_volumeControlAppPid > 0)
+            {
+                if (!AudioService.SetAppVolume(_volumeControlAppPid, pct))
+                    AudioService.SetVolume(pct); // Fallback
+            }
+            else
+            {
+                AudioService.SetVolume(pct);
+            }
+        }
+
+        private void CenterCardVolumePopup_MouseEnter(object sender, MouseEventArgs e)
+        {
+            // Keep popup open while mouse is over it
+        }
+
+        private void CenterCardVolumePopup_MouseLeave(object sender, MouseEventArgs e)
+        {
+            CenterCardVolumePopup.IsOpen = false;
         }
 
         private static void SendMediaKey(byte virtualKey)
         {
             keybd_event(virtualKey, 0, 0, UIntPtr.Zero);
             keybd_event(virtualKey, 0, KeyEventKeyUp, UIntPtr.Zero);
+        }
+
+        private async void CenterCardProgress_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_mediaService == null || _mediaDuration.TotalMilliseconds <= 0)
+            {
+                return;
+            }
+
+            var progressBar = CenterCardProgressBar;
+            var clickPosition = e.GetPosition(progressBar).X;
+            var ratio = Math.Clamp(clickPosition / progressBar.ActualWidth, 0, 1);
+            var targetMs = (long)(ratio * _mediaDuration.TotalMilliseconds);
+
+            try
+            {
+                await _mediaService.SeekAsync(targetMs);
+                CenterCardProgressBar.Value = ratio * 100;
+                CenterCardCurrentTime.Text = FormatTime(TimeSpan.FromMilliseconds(targetMs));
+            }
+            catch { /* Ignore seek errors */ }
+        }
+
+        private static string FormatTime(TimeSpan time)
+        {
+            var totalMinutes = (int)time.TotalMinutes;
+            var seconds = time.Seconds;
+            return $"{totalMinutes}:{seconds:D2}";
         }
 
         private void CenterCardResizeHandle_DragDelta(object sender, DragDeltaEventArgs e)
@@ -2112,6 +2348,16 @@ namespace DynamicIslandBar
             SetSystemIconHighlight(AppsButton, AppsButton.IsMouseOver || AppsPanel.IsMouseOver);
             SetSystemIconHighlight(OverflowFolderButton, OverflowFolderButton.IsMouseOver || OverflowAppsPanel.IsMouseOver);
             ClearCenterCardAppSelectorHighlight();
+
+            // Clean up dynamic app volume panel
+            if (_appVolumePanel != null)
+            {
+                (VolumePanel.Child as Panel)?.Children.Remove(_appVolumePanel);
+                _appVolumePanel = null;
+                _appVolumeSlider = null;
+            }
+            _volumeControlAppPid = 0;
+
             _wifiRefreshVersion++;
             _volumeRefreshVersion++;
             UpdateRunningAppsRefreshInterval();
@@ -2411,6 +2657,89 @@ namespace DynamicIslandBar
         private void RefreshVolumePanelCore()
         {
             var refreshVersion = ++_volumeRefreshVersion;
+
+            // App volume section: show music app volume slider when triggered from center card
+            var mainStack = VolumePanel.Child as Panel;
+            if (mainStack != null)
+            {
+                // Remove previously added app volume elements
+                if (_appVolumePanel != null)
+                {
+                    mainStack.Children.Remove(_appVolumePanel);
+                    _appVolumePanel = null;
+                    _appVolumeSlider = null;
+                }
+
+                if (_volumeControlAppPid > 0)
+                {
+                    var appPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+                    appPanel.Children.Add(new TextBlock
+                    {
+                        Text = "音乐音量",
+                        Foreground = new SolidColorBrush(Color.FromArgb(200, 76, 217, 100)),
+                        FontSize = 12, FontWeight = FontWeights.SemiBold,
+                        Margin = new Thickness(0, 0, 0, 6)
+                    });
+
+                    var dock = new DockPanel { Margin = new Thickness(0, 0, 0, 0) };
+                    dock.Children.Add(new TextBlock
+                    {
+                        Text = "\uD83C\uDFB5",
+                        Foreground = Brushes.White, FontSize = 14,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 8, 0)
+                    });
+
+                    var appPctText = new TextBlock
+                    {
+                        Text = "--%",
+                        Foreground = new SolidColorBrush(Color.FromArgb(128, 255, 255, 255)),
+                        FontSize = 12, VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(8, 0, 0, 0)
+                    };
+                    DockPanel.SetDock(appPctText, Dock.Right);
+                    dock.Children.Add(appPctText);
+
+                    var appSlider = new Slider
+                    {
+                        Minimum = 0, Maximum = 100,
+                        Foreground = new SolidColorBrush(Color.FromArgb(255, 255, 93, 187)),
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                    var appVol = AudioService.GetAppVolume(_volumeControlAppPid);
+                    if (appVol >= 0)
+                    {
+                        appSlider.Value = appVol;
+                        appPctText.Text = $"{appVol}%";
+                    }
+                    else
+                    {
+                        appPctText.Text = "N/A";
+                    }
+
+                    appSlider.ValueChanged += AppVolumeSlider_ValueChanged;
+                    dock.Children.Add(appSlider);
+                    appPanel.Children.Add(dock);
+
+                    // Separator
+                    appPanel.Children.Add(new Border
+                    {
+                        Height = 1, Margin = new Thickness(0, 6, 0, 8),
+                        Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255))
+                    });
+
+                    // Insert after title (index 1)
+                    if (mainStack.Children.Count > 1)
+                        mainStack.Children.Insert(1, appPanel);
+                    else
+                        mainStack.Children.Add(appPanel);
+
+                    _appVolumePanel = appPanel;
+                    _appVolumeSlider = appSlider;
+                }
+            }
+
             var vol = AudioService.GetVolume();
             if (vol >= 0)
             {
@@ -2507,6 +2836,17 @@ namespace DynamicIslandBar
                 "声音控制权限",
                 "允许调整系统主音量。",
                 () => AudioService.SetVolume(pct));
+        }
+
+        private void AppVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_suppressVolumeEvent || !_windowLoaded || _volumeControlAppPid <= 0)
+            {
+                return;
+            }
+
+            var pct = (int)((Slider)sender).Value;
+            AudioService.SetAppVolume(_volumeControlAppPid, pct);
         }
 
         private void MuteBtn_Click(object sender, RoutedEventArgs e)
