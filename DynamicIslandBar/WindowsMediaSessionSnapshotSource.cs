@@ -50,14 +50,14 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
 
             var playbackInfo = session.GetPlaybackInfo();
             var isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            var lyric = title; // GSMTC doesn't provide actual lyrics; show title as marquee text
+            // lyrics will be populated later by LyricsService in MainWindow; keep empty here
 
             return new CenterCardMediaSnapshot(
                 IsMusicApp: true,
                 IsPlaying: isPlaying,
                 Title: string.IsNullOrWhiteSpace(title) ? "正在播放" : title,
                 Artist: artist,
-                Lyric: lyric,
+                Lyric: string.Empty,
                 SourceAppUserModelId: session.SourceAppUserModelId);
         }
         catch

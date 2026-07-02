@@ -1,0 +1,42 @@
+项目：Shuaige-Da/windows-taskbar
+
+目标：修复/实现中心卡片的音乐信息、进度条和歌词显示。
+
+实现思路：
+
+1. 不直接读取网易云、QQ 音乐等客户端窗口里的歌词控件。
+2. 使用 Windows 系统媒体会话 API：
+    GlobalSystemMediaTransportControlsSessionManager
+    获取当前正在播放的媒体信息：
+    * 歌名 Title
+    * 歌手 Artist
+    * 播放状态 IsPlaying
+    * 当前进度 Position
+    * 总时长 Duration
+    * 来源应用 SourceAppUserModelId
+3. 先实现中心卡片显示：
+    * 正在播放 / 已暂停
+    * 歌名 - 歌手
+    * 播放进度条
+4. 歌词不要从音乐软件直接拿，而是走 LRC 方案：
+    * 用 Title + Artist + Duration 搜索音乐平台接口
+    * 匹配最接近的歌曲
+    * 拿到歌曲 ID
+    * 请求歌词接口，获取 LRC 格式歌词文本
+    * 解析 [00:12.30]歌词内容 这种时间戳
+    * 根据 Windows 媒体会话的 Position 找到当前歌词行
+    * 显示到中心卡片
+5. 推荐开发顺序：
+    * 第一阶段：实现 MediaSessionService.cs，读取系统媒体会话，跑通歌名、歌手、播放状态、进度条。
+    * 第二阶段：实现 LrcParser.cs，解析 LRC 字符串。
+    * 第三阶段：实现 LyricsService.cs，根据歌名歌手搜索网易云歌曲并获取 LRC。
+    * 第四阶段：增加缓存，避免同一首歌重复请求。
+    * 第五阶段：增加 QQ 音乐、本地 LRC 文件和手动纠错功能。
+6. 注意事项：
+    * Windows 媒体会话通常不给歌词，只给媒体属性和时间线。
+    * 歌词匹配不能直接取搜索第一条，要根据标题相似度、歌手相似度和时长差综合打分。
+    * 匹配不到时显示“暂无歌词”或“歌词未匹配”。
+    * 中心卡片空间小，第一版只显示当前一句歌词即可，不需要逐字歌词。
+    * 进度条以 Windows 媒体会话为准，歌词根据 LRC 时间轴同步。
+
+用 Windows 的 GlobalSystemMediaTransportControlsSessionManager 读取系统媒体会话。这个 API 可以表示其他应用的播放会话，并提供媒体属性、播放状态、时间线和播放控制。 

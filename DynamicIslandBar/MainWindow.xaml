@@ -1,6 +1,7 @@
-﻿<Window x:Class="DynamicIslandBar.MainWindow"
+<Window x:Class="DynamicIslandBar.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:DynamicIslandBar"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -13,6 +14,7 @@
         Title="DynamicIslandBar">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <local:PercentToScaleConverter x:Key="PercentToScaleConverter"/>
         <LinearGradientBrush x:Key="CapsuleGlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
             <GradientStop Color="#58FFFFFF" Offset="0"/>
             <GradientStop Color="#16FFFFFF" Offset="0.34"/>
@@ -693,7 +695,7 @@
                                                                         HorizontalAlignment="Left"
                                                                         RenderTransformOrigin="0,0.5">
                                                                     <Border.RenderTransform>
-                                                                        <ScaleTransform ScaleX="{TemplateBinding Value}"/>
+                                                                        <ScaleTransform ScaleX="{TemplateBinding Value, Converter={StaticResource PercentToScaleConverter}}"/>
                                                                     </Border.RenderTransform>
                                                                 </Border>
                                                             </Grid>

@@ -132,12 +132,7 @@ public static class CenterCardMediaSnapshotProvider
             return null;
         }
 
-        return new CenterCardMediaSnapshot(
-            IsMusicApp: true,
-            IsPlaying: true,
-            Title: "像鱼",
-            Artist: "王贰浪",
-            Lyric: "我在黄昏里等风经过");
+        return null;
     }
 
     private static IEnumerable<string> BuildAppProbeParts(RunningAppEntry app)
