@@ -692,10 +692,9 @@
                                                                 <Border x:Name="PART_Indicator"
                                                                         CornerRadius="2"
                                                                         Background="{TemplateBinding Foreground}"
-                                                                        HorizontalAlignment="Left"
                                                                         RenderTransformOrigin="0,0.5">
                                                                     <Border.RenderTransform>
-                                                                        <ScaleTransform ScaleX="{TemplateBinding Value, Converter={StaticResource PercentToScaleConverter}}"/>
+                                                                        <ScaleTransform ScaleX="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Value, Converter={StaticResource PercentToScaleConverter}}"/>
                                                                     </Border.RenderTransform>
                                                                 </Border>
                                                             </Grid>

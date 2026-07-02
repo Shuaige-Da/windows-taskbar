@@ -21,8 +21,26 @@ public class LyricsService
     private string[] _plainLyricLines = Array.Empty<string>();
     private TimeSpan _songDuration = TimeSpan.Zero;
     private bool _fetching;
+    private LyricLanguage _preferredLanguage = LyricLanguage.Simplified;
+
+    // Cache original (Traditional) lyrics for language switching
+    private List<LyricLine> _parsedLyricsTraditional = new();
+    private string[] _plainLyricLinesTraditional = Array.Empty<string>();
 
     public bool HasLyrics => _parsedLyrics.Count > 0 || _plainLyricLines.Length > 0;
+
+    public LyricLanguage PreferredLanguage
+    {
+        get => _preferredLanguage;
+        set
+        {
+            if (_preferredLanguage != value)
+            {
+                _preferredLanguage = value;
+                ApplyLanguagePreference();
+            }
+        }
+    }
 
     /// <summary>
     /// Fetch lyrics for a song. Caches by title+artist, only re-fetches when song changes.
@@ -126,10 +144,16 @@ public class LyricsService
                     break;
             }
 
+            // Store original lyrics as Traditional (source from LRCLIB is typically Traditional)
+            _parsedLyricsTraditional.Clear();
+            _plainLyricLinesTraditional = Array.Empty<string>();
+
             // Parse synced lyrics if available
             if (!string.IsNullOrWhiteSpace(bestSyncedLrc))
             {
                 ParseLrc(bestSyncedLrc);
+                // Store as Traditional
+                _parsedLyricsTraditional = new List<LyricLine>(_parsedLyrics);
                 System.Diagnostics.Debug.WriteLine($"[Lyrics] Parsed {(_parsedLyrics.Count)} synced lyric lines");
             }
 
@@ -140,8 +164,13 @@ public class LyricsService
                     .Where(l => !string.IsNullOrWhiteSpace(l))
                     .Select(l => l.Trim())
                     .ToArray();
+                // Store as Traditional
+                _plainLyricLinesTraditional = (string[])_plainLyricLines.Clone();
                 System.Diagnostics.Debug.WriteLine($"[Lyrics] Using {(_plainLyricLines.Length)} plain lyric lines (no synced available)");
             }
+
+            // Apply language preference (convert to Simplified if needed)
+            ApplyLanguagePreference();
 
             _fetching = false;
             return HasLyrics;
@@ -241,9 +270,37 @@ public class LyricsService
     public void Clear()
     {
         _parsedLyrics.Clear();
+        _parsedLyricsTraditional.Clear();
         _plainLyricLines = Array.Empty<string>();
+        _plainLyricLinesTraditional = Array.Empty<string>();
         _lastTitle = string.Empty;
         _lastArtist = string.Empty;
         _songDuration = TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Apply language preference by converting lyrics to the desired script.
+    /// Traditional is the original from LRCLIB; Simplified is converted via LCMapString.
+    /// </summary>
+    private void ApplyLanguagePreference()
+    {
+        if (_preferredLanguage == LyricLanguage.Traditional)
+        {
+            // Use original Traditional lyrics
+            _parsedLyrics = new List<LyricLine>(_parsedLyricsTraditional);
+            _plainLyricLines = (string[])_plainLyricLinesTraditional.Clone();
+            return;
+        }
+
+        // Convert to Simplified Chinese
+        _parsedLyrics = _parsedLyricsTraditional
+            .Select(l => new LyricLine(l.Time, ChineseConverter.ToSimplified(l.Text)))
+            .ToList();
+
+        _plainLyricLines = _plainLyricLinesTraditional
+            .Select(l => ChineseConverter.ToSimplified(l))
+            .ToArray();
+
+        System.Diagnostics.Debug.WriteLine($"[Lyrics] Applied Simplified Chinese conversion: {_parsedLyrics.Count} synced, {_plainLyricLines.Length} plain");
     }
 }

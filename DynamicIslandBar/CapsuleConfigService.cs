@@ -35,6 +35,7 @@ public sealed class CapsuleConfig
     public int CapsuleLengthPercent { get; set; } = 100;
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
+    public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
 }
 
 public static class CapsuleConfigSerializer
@@ -136,6 +137,11 @@ public static class CapsuleConfigMutator
         config.CenterCardAppId = string.IsNullOrWhiteSpace(appId) ? null : appId;
     }
 
+    public static void SetLyricLanguage(CapsuleConfig config, LyricLanguage language)
+    {
+        config.LyricLanguage = language;
+    }
+
     private static int ClampPercent(int percent)
     {
         return Math.Clamp(percent, 0, 100);
@@ -198,6 +204,7 @@ internal sealed class CapsuleConfigStore
     public int CapsuleLengthPercent { get; set; } = 100;
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
+    public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
 
     public CapsuleConfig ToConfig()
     {
@@ -216,7 +223,8 @@ internal sealed class CapsuleConfigStore
             CapsuleThicknessPercent = ClampPercent(CapsuleThicknessPercent),
             CapsuleLengthPercent = ClampPercent(CapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(CenterCardWidthPercent),
-            CenterCardAppId = CenterCardAppId
+            CenterCardAppId = CenterCardAppId,
+            LyricLanguage = LyricLanguage
         };
 
         foreach (var appId in FavoriteApps)
@@ -257,7 +265,8 @@ internal sealed class CapsuleConfigStore
             CapsuleThicknessPercent = ClampPercent(config.CapsuleThicknessPercent),
             CapsuleLengthPercent = ClampPercent(config.CapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(config.CenterCardWidthPercent),
-            CenterCardAppId = config.CenterCardAppId
+            CenterCardAppId = config.CenterCardAppId,
+            LyricLanguage = config.LyricLanguage
         };
     }
 

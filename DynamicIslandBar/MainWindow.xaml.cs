@@ -117,6 +117,9 @@ namespace DynamicIslandBar
                 _capsuleConfig.BackgroundImagePath,
                 _capsuleConfig.BackgroundImageOpacity);
 
+            // Apply lyric language preference from config
+            _lyricsService.PreferredLanguage = _capsuleConfig.LyricLanguage;
+
             InitGlowAnimation();
             InitDockAnimations();
             HideDemoDockItems();
@@ -1941,6 +1944,42 @@ namespace DynamicIslandBar
             settingsMenu.Items.Add(themeMenu);
             settingsMenu.Items.Add(appearanceMenu);
             settingsMenu.Items.Add(glowMenu);
+
+            // Lyric language submenu
+            var lyricMenu = new MenuItem { Header = "歌词语言", Foreground = Brushes.White };
+            var simplifiedItem = new MenuItem
+            {
+                Header = "简体中文",
+                Foreground = Brushes.White,
+                IsCheckable = true,
+                IsChecked = _capsuleConfig.LyricLanguage == LyricLanguage.Simplified
+            };
+            simplifiedItem.Click += (_, _) =>
+            {
+                CapsuleConfigMutator.SetLyricLanguage(_capsuleConfig, LyricLanguage.Simplified);
+                CapsuleConfigService.Save(_capsuleConfig);
+                _lyricsService.PreferredLanguage = LyricLanguage.Simplified;
+                UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+            };
+
+            var traditionalItem = new MenuItem
+            {
+                Header = "繁體中文",
+                Foreground = Brushes.White,
+                IsCheckable = true,
+                IsChecked = _capsuleConfig.LyricLanguage == LyricLanguage.Traditional
+            };
+            traditionalItem.Click += (_, _) =>
+            {
+                CapsuleConfigMutator.SetLyricLanguage(_capsuleConfig, LyricLanguage.Traditional);
+                CapsuleConfigService.Save(_capsuleConfig);
+                _lyricsService.PreferredLanguage = LyricLanguage.Traditional;
+                UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+            };
+
+            lyricMenu.Items.Add(simplifiedItem);
+            lyricMenu.Items.Add(traditionalItem);
+            settingsMenu.Items.Add(lyricMenu);
 
             var hideTaskbar = new MenuItem { Header = "隐藏系统任务栏", Foreground = Brushes.White };
             hideTaskbar.Click += (_, _) => TaskbarManager.Hide();
