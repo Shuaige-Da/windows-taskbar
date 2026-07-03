@@ -247,7 +247,8 @@
                             Opacity="0.72"
                             IsHitTestVisible="False"/>
 
-                    <Grid Margin="14,0">
+                    <!-- <Grid Margin="14,0"> -->
+                    <Grid x:Name="CapsuleContentGrid" Margin="14,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -390,7 +391,7 @@
                                VerticalAlignment="Center"/>
 
                     <!-- ===== 右侧：系统信息区域 ===== -->
-                    <StackPanel Orientation="Horizontal" Grid.Column="3"
+                    <StackPanel x:Name="SystemIconsHost" Orientation="Horizontal" Grid.Column="3"
                                 VerticalAlignment="Center" Margin="0,0,4,0">
 
                         <!-- WiFi 图标 -->
@@ -521,16 +522,15 @@
                                     </StackPanel>
                                     <Grid x:Name="CenterCardLyricsViewport" ClipToBounds="True">
                                         <TextBlock x:Name="CenterCardLyricMarqueeText"
-                                                   Text=""
-                                                   Foreground="White"
-                                                   FontSize="14"
-                                                   FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"
-                                                   TextWrapping="NoWrap">
-                                            <TextBlock.RenderTransform>
-                                                <TranslateTransform x:Name="CenterCardLyricMarqueeTransform"/>
-                                            </TextBlock.RenderTransform>
-                                        </TextBlock>
+                                                    Text=""
+                                                    Foreground="White"
+                                                    FontSize="14"
+                                                    FontWeight="SemiBold"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="NoWrap"
+                                                    Visibility="Collapsed"/>
+                                        <Canvas x:Name="CenterCardLyricsDanmakuCanvas"
+                                                IsHitTestVisible="False"/>
                                     </Grid>
                                 </DockPanel>
                             </Grid>
@@ -716,8 +716,7 @@
                         </Grid>
                     </Border>
                     </Grid>
-
-                    </Grid>
+                </Grid>
                 </Grid>
             </Border>
 
@@ -998,6 +997,22 @@
                                    FontSize="14"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,10"/>
+                        <TextBox x:Name="OverflowAppsSearchBox"
+                                 Height="34"
+                                 Margin="0,0,0,8"
+                                 Padding="10,6"
+                                 Background="#22151818"
+                                 Foreground="White"
+                                 BorderBrush="#5076D964"
+                                 BorderThickness="1"
+                                 CaretBrush="White"
+                                 TextChanged="OverflowAppsSearchBox_TextChanged"
+                                 ToolTip="输入应用名称搜索本地已安装应用"/>
+                        <TextBlock x:Name="OverflowAppsEmptyStateText"
+                                   Foreground="#CCFFFFFF"
+                                   FontSize="11"
+                                   Margin="2,0,2,8"
+                                   Visibility="Collapsed"/>
                         <WrapPanel x:Name="OverflowAppsListPanel" ItemWidth="52"/>
                     </StackPanel>
                 </Border>

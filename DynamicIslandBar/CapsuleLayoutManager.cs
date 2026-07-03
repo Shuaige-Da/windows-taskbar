@@ -29,6 +29,11 @@ public static class CapsuleLayoutManager
                 CapsuleHeight: 72,
                 VisibleAppSlots: 3,
                 PopupDirection: PopupFlowDirection.Down),
+            CapsuleMode.LeftDock or CapsuleMode.RightDock => new LayoutMetrics(
+                CapsuleWidth: Math.Max(screenWidth * 0.08, 96),
+                CapsuleHeight: screenHeight * (2d / 3d),
+                VisibleAppSlots: 10,
+                PopupDirection: PopupFlowDirection.Up),
             _ => new LayoutMetrics(
                 CapsuleWidth: screenWidth,
                 CapsuleHeight: 80,
@@ -37,8 +42,23 @@ public static class CapsuleLayoutManager
         };
     }
 
-    public static CapsuleMode ResolveDropMode(double screenHeight, double topAfterDrag, CapsuleMode currentMode)
+    public static CapsuleMode ResolveDropMode(
+        double screenWidth,
+        double screenHeight,
+        double leftAfterDrag,
+        double topAfterDrag,
+        CapsuleMode currentMode)
     {
+        if (leftAfterDrag <= 72)
+        {
+            return CapsuleMode.LeftDock;
+        }
+
+        if (leftAfterDrag >= screenWidth - 72)
+        {
+            return CapsuleMode.RightDock;
+        }
+
         if (topAfterDrag <= 72)
         {
             return CapsuleMode.TopIsland;
@@ -54,12 +74,20 @@ public static class CapsuleLayoutManager
         double screenHeight)
     {
         var windowWidth = metrics.CapsuleWidth + 40;
-        const double windowHeight = 420;
+        var windowHeight = 420d;
         var left = (screenWidth - windowWidth) / 2;
         var capsuleBottomOffset = ((windowHeight - metrics.CapsuleHeight) / 2) + metrics.CapsuleHeight;
         var top = mode == CapsuleMode.TopIsland
             ? 0
             : Math.Max(screenHeight - capsuleBottomOffset, 0);
+
+        if (mode is CapsuleMode.LeftDock or CapsuleMode.RightDock)
+        {
+            windowWidth = metrics.CapsuleWidth + 24;
+            windowHeight = metrics.CapsuleHeight + 40;
+            left = mode == CapsuleMode.LeftDock ? 0 : Math.Max(screenWidth - windowWidth, 0);
+            top = Math.Max((screenHeight - windowHeight) / 2, 0);
+        }
 
         return new WindowFrame(left, top, windowWidth, windowHeight);
     }

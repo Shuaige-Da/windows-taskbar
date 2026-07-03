@@ -8,7 +8,9 @@ public class DragSnapLogicTests
     public void ResolveDropMode_ReturnsBottomWhenDroppedAwayFromTopThreshold()
     {
         var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
             screenHeight: 1080,
+            leftAfterDrag: 420,
             topAfterDrag: 820,
             currentMode: CapsuleMode.TopIsland);
 
