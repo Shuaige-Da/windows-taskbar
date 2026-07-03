@@ -50,19 +50,90 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
 
             var playbackInfo = session.GetPlaybackInfo();
             var isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            var lyric = string.IsNullOrWhiteSpace(artist) ? title : $"{title} - {artist}";
+            var timeline = session.GetTimelineProperties();
+            var duration = GetDuration(timeline.StartTime, timeline.EndTime);
+            var position = GetPosition(timeline.Position, timeline.StartTime, duration);
+            WriteDiagnostics(session.SourceAppUserModelId, title, artist, timeline.StartTime, timeline.EndTime, timeline.Position, position, duration);
 
             return new CenterCardMediaSnapshot(
                 IsMusicApp: true,
                 IsPlaying: isPlaying,
                 Title: string.IsNullOrWhiteSpace(title) ? "正在播放" : title,
                 Artist: artist,
-                Lyric: lyric,
-                SourceAppUserModelId: session.SourceAppUserModelId);
+                Lyric: string.Empty,
+                SourceAppUserModelId: session.SourceAppUserModelId,
+                Position: position,
+                Duration: duration);
         }
         catch
         {
             return null;
+        }
+    }
+
+    private static TimeSpan? GetDuration(TimeSpan startTime, TimeSpan endTime)
+    {
+        if (endTime <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var duration = endTime > startTime
+            ? endTime - startTime
+            : endTime;
+        return duration > TimeSpan.Zero ? duration : null;
+    }
+
+    private static TimeSpan? GetPosition(TimeSpan position, TimeSpan startTime, TimeSpan? duration)
+    {
+        if (duration is not { } validDuration || position < TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var relativePosition = startTime > TimeSpan.Zero && position >= startTime
+            ? position - startTime
+            : position;
+        return TimeSpan.FromMilliseconds(Math.Clamp(
+            relativePosition.TotalMilliseconds,
+            0,
+            validDuration.TotalMilliseconds));
+    }
+
+    private static void WriteDiagnostics(
+        string sourceAppUserModelId,
+        string title,
+        string artist,
+        TimeSpan startTime,
+        TimeSpan endTime,
+        TimeSpan rawPosition,
+        TimeSpan? position,
+        TimeSpan? duration)
+    {
+        var diagnosticsPath = Environment.GetEnvironmentVariable("DYNAMIC_ISLAND_MEDIA_DIAGNOSTICS");
+        if (string.IsNullOrWhiteSpace(diagnosticsPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var line = string.Join(
+                " | ",
+                DateTimeOffset.Now.ToString("O"),
+                sourceAppUserModelId,
+                title,
+                artist,
+                $"start={startTime}",
+                $"end={endTime}",
+                $"raw={rawPosition}",
+                $"position={position?.ToString() ?? "<null>"}",
+                $"duration={duration?.ToString() ?? "<null>"}");
+            System.IO.File.AppendAllText(diagnosticsPath, line + Environment.NewLine);
+        }
+        catch
+        {
+            // Diagnostics are best-effort only.
         }
     }
 }

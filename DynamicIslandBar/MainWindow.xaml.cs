@@ -34,6 +34,11 @@ namespace DynamicIslandBar
         private readonly DispatcherTimer _appsRefreshTimer;
         private readonly DispatcherTimer _centerCardMediaRefreshTimer;
         private readonly ICenterCardMediaSnapshotSource _centerCardMediaSource = new WindowsMediaSessionSnapshotSource();
+        private readonly LyricsService _lyricsService = new(new CompositeLyricsProvider(
+            new NetEaseLyricsProvider(),
+            new LrcLibLyricsProvider()),
+            negativeCacheDuration: TimeSpan.FromSeconds(3),
+            loadRetryCount: 1);
         private Storyboard? _glowSpinStoryboard;
         private Storyboard? _dockExpandStoryboard;
         private Storyboard? _dockCollapseStoryboard;
@@ -393,8 +398,51 @@ namespace DynamicIslandBar
                 return;
             }
 
+            if (snapshot != null)
+            {
+                snapshot = CenterCardMediaSnapshotProvider.PreserveResolvedFields(
+                    snapshot,
+                    _centerCardLiveMediaSnapshot);
+            }
+
             _centerCardLiveMediaSnapshot = snapshot;
             UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+            if (snapshot != null)
+            {
+                _ = RefreshCenterCardLyricsAsync(snapshot, refreshVersion, app);
+            }
+        }
+
+        private async Task RefreshCenterCardLyricsAsync(
+            CenterCardMediaSnapshot snapshot,
+            int refreshVersion,
+            RunningAppEntry app)
+        {
+            try
+            {
+                var resolvedSnapshot = await _lyricsService.ResolveCurrentLyricAsync(snapshot);
+                if (refreshVersion <= 0
+                    || !IsSameCenterCardMedia(_centerCardLiveMediaSnapshot, snapshot)
+                    || !string.Equals(GetPrimarySummaryApp()?.AppId, app.AppId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _centerCardLiveMediaSnapshot = resolvedSnapshot;
+                UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+            }
+            catch
+            {
+                // Lyrics are opportunistic; media title/progress must keep updating if the source is slow.
+            }
+        }
+
+        private static bool IsSameCenterCardMedia(CenterCardMediaSnapshot? current, CenterCardMediaSnapshot expected)
+        {
+            return current != null
+                && string.Equals(current.SourceAppUserModelId, expected.SourceAppUserModelId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(current.Title, expected.Title, StringComparison.Ordinal)
+                && string.Equals(current.Artist, expected.Artist, StringComparison.Ordinal);
         }
 
         private bool IsRunningAppsRefreshInteractive()
@@ -945,6 +993,9 @@ namespace DynamicIslandBar
                 ActiveAppSummaryTitle.Text = string.Empty;
                 ActiveAppSummarySubtitle.Text = string.Empty;
                 CenterCardLyricMarqueeText.Text = string.Empty;
+                CenterCardProgressText.Text = string.Empty;
+                CenterCardProgressBar.Visibility = Visibility.Collapsed;
+                CenterCardProgressText.Visibility = Visibility.Collapsed;
                 StopCenterCardLyricsMarquee();
                 return;
             }
@@ -963,6 +1014,7 @@ namespace DynamicIslandBar
             CenterCardTransportControls.Visibility = state.ShowTransportControls ? Visibility.Visible : Visibility.Collapsed;
             ApplyCenterCardTransportDensity();
             ApplyCenterCardLyricsLayout();
+            UpdateCenterCardProgress(state);
             UpdateCenterCardHoverVisual(state);
 
             if (state.ShowLyricsMarquee)
@@ -1022,6 +1074,17 @@ namespace DynamicIslandBar
             CenterCardLyricsLayer.Margin = new Thickness(layout.HorizontalMargin, 0, layout.HorizontalMargin, 0);
             CenterCardLeftWave.Visibility = layout.ShowLeftWave ? Visibility.Visible : Visibility.Collapsed;
             CenterCardRightWave.Visibility = layout.ShowRightWave ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void UpdateCenterCardProgress(CenterCardPresentation state)
+        {
+            var hasProgress = state.ShowTransportControls && !string.IsNullOrWhiteSpace(state.ProgressText);
+            CenterCardProgressBar.Visibility = hasProgress ? Visibility.Visible : Visibility.Collapsed;
+            CenterCardProgressText.Visibility = hasProgress ? Visibility.Visible : Visibility.Collapsed;
+            CenterCardProgressText.Text = hasProgress ? state.ProgressText : string.Empty;
+            CenterCardProgressScale.ScaleX = hasProgress
+                ? Math.Clamp(state.ProgressRatio, 0, 1)
+                : 0;
         }
 
         private void UpdateCenterCardHoverVisual(CenterCardPresentation state)

@@ -65,6 +65,31 @@ public class CenterCardPresentationPolicyTests
     }
 
     [Fact]
+    public void MediaSnapshot_CarriesTimelineForProgressAndLyricSync()
+    {
+        Assert.NotNull(typeof(CenterCardMediaSnapshot).GetProperty("Position"));
+        Assert.NotNull(typeof(CenterCardMediaSnapshot).GetProperty("Duration"));
+    }
+
+    [Fact]
+    public void Build_ReportsProgressForMusicDetailsWhenTimelineExists()
+    {
+        var app = CreateApp("cloudmusic", "网易云音乐");
+        var media = CreateMediaSnapshotWithTimeline(
+            title: "像鱼",
+            artist: "王贰浪",
+            lyric: "我在黄昏里等风经过",
+            position: TimeSpan.FromSeconds(75),
+            duration: TimeSpan.FromSeconds(300));
+
+        var state = CenterCardPresentationPolicy.Build(app, "当前窗口", media, isHovered: true);
+
+        var progressRatio = Assert.IsType<double>(GetRequiredProperty(state, "ProgressRatio"));
+        Assert.Equal(0.25d, progressRatio, precision: 3);
+        Assert.Equal("01:15 / 05:00", GetRequiredProperty(state, "ProgressText"));
+    }
+
+    [Fact]
     public void Build_AlwaysUsesAppDetailsForNonMusicApps()
     {
         var app = CreateApp("codex", "Codex");
@@ -110,7 +135,33 @@ public class CenterCardPresentationPolicyTests
     }
 
     [Fact]
-    public void Resolve_IgnoresLiveSnapshotFromAnotherApp()
+    public void PreserveResolvedFields_KeepsLyricAndEstimatedTimelineForSameSong()
+    {
+        var previous = new CenterCardMediaSnapshot(
+            IsMusicApp: true,
+            IsPlaying: true,
+            Title: "Beautiful Girls",
+            Artist: "A-Mac",
+            Lyric: "All the beautiful girls",
+            SourceAppUserModelId: "cloudmusic.exe",
+            Position: TimeSpan.FromSeconds(35),
+            Duration: TimeSpan.FromSeconds(180));
+        var fresh = previous with
+        {
+            Lyric = string.Empty,
+            Position = null,
+            Duration = null
+        };
+
+        var merged = CenterCardMediaSnapshotProvider.PreserveResolvedFields(fresh, previous);
+
+        Assert.Equal("All the beautiful girls", merged.Lyric);
+        Assert.Equal(TimeSpan.FromSeconds(35), merged.Position);
+        Assert.Equal(TimeSpan.FromSeconds(180), merged.Duration);
+    }
+
+    [Fact]
+    public void Resolve_IgnoresLiveSnapshotFromAnotherAppWithoutFakeFallback()
     {
         var app = CreateApp("d:\\qqmusic\\qqmusic.exe", "QQ音乐");
         var live = new CenterCardMediaSnapshot(
@@ -123,8 +174,7 @@ public class CenterCardPresentationPolicyTests
 
         var snapshot = CenterCardMediaSnapshotProvider.Resolve(app, live);
 
-        Assert.NotNull(snapshot);
-        Assert.NotEqual("浏览器声音", snapshot!.Title);
+        Assert.Null(snapshot);
     }
 
     [Fact]
@@ -137,6 +187,19 @@ public class CenterCardPresentationPolicyTests
         Assert.False(CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, "Chrome"));
     }
 
+    [Theory]
+    [InlineData(@"c:\apps\vlc\vlc.exe", "VLC media player")]
+    [InlineData(@"c:\apps\potplayer\potplayermini64.exe", "PotPlayer")]
+    [InlineData(@"c:\apps\foobar2000\foobar2000.exe", "foobar2000")]
+    [InlineData(@"c:\apps\aimp\aimp.exe", "AIMP")]
+    [InlineData(@"c:\program files\windows media player\wmplayer.exe", "Windows Media Player")]
+    public void IsLikelyMusicApp_RecognizesCommonPlayers(string appId, string displayName)
+    {
+        var app = CreateApp(appId, displayName);
+
+        Assert.True(CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app));
+    }
+
     private static RunningAppEntry CreateApp(string appId, string displayName)
     {
         return new RunningAppEntry(
@@ -147,5 +210,36 @@ public class CenterCardPresentationPolicyTests
             IsFavorite: false,
             IsHiddenInCapsule: false,
             RepresentativeWindowHandle: 1);
+    }
+
+    private static CenterCardMediaSnapshot CreateMediaSnapshotWithTimeline(
+        string title,
+        string artist,
+        string lyric,
+        TimeSpan position,
+        TimeSpan duration)
+    {
+        var constructor = typeof(CenterCardMediaSnapshot)
+            .GetConstructors()
+            .SingleOrDefault(candidate => candidate.GetParameters().Length == 8);
+        Assert.NotNull(constructor);
+
+        return (CenterCardMediaSnapshot)constructor!.Invoke([
+            true,
+            true,
+            title,
+            artist,
+            lyric,
+            "cloudmusic",
+            position,
+            duration
+        ]);
+    }
+
+    private static object? GetRequiredProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return property!.GetValue(instance);
     }
 }
