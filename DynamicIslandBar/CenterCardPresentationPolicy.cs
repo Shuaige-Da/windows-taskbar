@@ -83,17 +83,46 @@ public static class CenterCardMediaSnapshotProvider
 {
     private static readonly string[] MusicAppMarkers =
     [
+        // Core music keywords
         "music",
-        "cloudmusic",
-        "qqmusic",
-        "kugou",
-        "kuwo",
+        // Chinese music apps
+        "cloudmusic",      // NetEase Cloud Music
+        "qqmusic",         // QQ Music
+        "kugou",           // Kugou
+        "kuwo",            // Kuwo
+        "网易云",           // NetEase Cloud Music (Chinese)
+        "qq音乐",          // QQ Music (Chinese)
+        "酷狗",            // Kugou (Chinese)
+        "酷我",            // Kuwo (Chinese)
+        // International music apps
         "spotify",
+        "applemusic",      // Apple Music
+        "applemusicwin",   // Apple Music for Windows
+        "youtubemusic",    // YouTube Music
+        "amazonmusic",     // Amazon Music
+        "tidal",
+        "deezer",
+        "pandora",
+        "soundcloud",
+        "deezer",          // Deezer
+        "iheartradio",
+        "napster",
+        // Audio players
         "audacity",
-        "网易云",
-        "qq音乐",
-        "酷狗",
-        "酷我"
+        "aimp",
+        "foobar2000",
+        "musicbee",
+        "winamp",
+        "vlc",             // VLC (often used for music)
+        "potplayer",       // PotPlayer (media player)
+        "kmplayer",
+        "gomplayer",
+        "mediaplayer",
+        "audioplayer",
+        // Chinese names
+        "apple音乐",       // Apple Music (Chinese)
+        "youtube音乐",     // YouTube Music (Chinese)
+        "亚马逊音乐",      // Amazon Music (Chinese)
     ];
 
     public static CenterCardMediaSnapshot? Resolve(RunningAppEntry app, CenterCardMediaSnapshot? liveSnapshot)
@@ -122,7 +151,22 @@ public static class CenterCardMediaSnapshotProvider
     public static bool IsLikelyMusicApp(RunningAppEntry app)
     {
         var probe = NormalizeProbe($"{app.AppId} {app.DisplayName} {app.ExePath}");
-        return MusicAppMarkers.Any(marker => probe.Contains(NormalizeProbe(marker)));
+        if (MusicAppMarkers.Any(marker => probe.Contains(NormalizeProbe(marker))))
+            return true;
+
+        // Additional heuristic: check exe filename against known music player patterns
+        if (!string.IsNullOrWhiteSpace(app.ExePath))
+        {
+            var exeName = NormalizeProbe(Path.GetFileNameWithoutExtension(app.ExePath));
+            if (!string.IsNullOrWhiteSpace(exeName) && exeName.Length > 2)
+            {
+                // Check if the exe name contains any marker substring
+                if (MusicAppMarkers.Any(marker => exeName.Contains(NormalizeProbe(marker))))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     public static CenterCardMediaSnapshot? TryCreateFallbackSnapshot(RunningAppEntry app)

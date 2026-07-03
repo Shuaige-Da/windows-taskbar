@@ -1,4 +1,5 @@
 using Windows.Media.Control;
+using System.Diagnostics;
 
 namespace DynamicIslandBar;
 
@@ -14,29 +15,45 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
         try
         {
             if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
-            {
                 return null;
-            }
 
             var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             cancellationToken.ThrowIfCancellationRequested();
 
-            var session = manager.GetSessions()
-                .FirstOrDefault(candidate => CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, candidate.SourceAppUserModelId));
+            var sessions = manager.GetSessions();
 
-            session ??= CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)
-                ? manager.GetCurrentSession()
-                : null;
+            // Strict match: AUMID must contain app's exe name or app name
+            GlobalSystemMediaTransportControlsSession? session = null;
+            var exeName = !string.IsNullOrWhiteSpace(app.ExePath)
+                ? System.IO.Path.GetFileNameWithoutExtension(app.ExePath)?.ToLowerInvariant() ?? ""
+                : "";
+
+            foreach (var candidate in sessions)
+            {
+                try
+                {
+                    var aumid = candidate.SourceAppUserModelId?.ToLowerInvariant() ?? "";
+                    // Match if AUMID contains the exe name (e.g. "cloudmusic" in "CloudMusic!xxx")
+                    if (!string.IsNullOrWhiteSpace(exeName) && exeName.Length > 3 && aumid.Contains(exeName))
+                    {
+                        session = candidate;
+                        Debug.WriteLine($"[SnapshotSource] Matched by exe name: '{exeName}' in '{aumid}'");
+                        break;
+                    }
+                    // Match if AUMID equals app's AppId
+                    if (!string.IsNullOrWhiteSpace(app.AppId) &&
+                        string.Equals(aumid, app.AppId.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        session = candidate;
+                        Debug.WriteLine($"[SnapshotSource] Matched by AppId: '{app.AppId}'");
+                        break;
+                    }
+                }
+                catch { }
+            }
+
             if (session == null)
-            {
                 return null;
-            }
-
-            if (!CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, session.SourceAppUserModelId)
-                && !CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
-            {
-                return null;
-            }
 
             var properties = await session.TryGetMediaPropertiesAsync();
             cancellationToken.ThrowIfCancellationRequested();
@@ -44,13 +61,12 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
             var title = properties.Title?.Trim() ?? string.Empty;
             var artist = properties.Artist?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(artist))
-            {
                 return null;
-            }
 
             var playbackInfo = session.GetPlaybackInfo();
             var isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            // lyrics will be populated later by LyricsService in MainWindow; keep empty here
+
+            Debug.WriteLine($"[SnapshotSource] OK: Title='{title}', Artist='{artist}', Playing={isPlaying}, AUMID={session.SourceAppUserModelId}");
 
             return new CenterCardMediaSnapshot(
                 IsMusicApp: true,
@@ -60,8 +76,9 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
                 Lyric: string.Empty,
                 SourceAppUserModelId: session.SourceAppUserModelId);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[SnapshotSource] Error: {ex.Message}");
             return null;
         }
     }

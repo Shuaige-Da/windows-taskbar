@@ -34,6 +34,7 @@ namespace DynamicIslandBar
         private readonly DispatcherTimer _appsRefreshTimer;
         private readonly DispatcherTimer _centerCardMediaRefreshTimer;
         private readonly DispatcherTimer _progressTimer;
+        private readonly DispatcherTimer _lyricsFastTimer;
         private readonly ICenterCardMediaSnapshotSource _centerCardMediaSource = new WindowsMediaSessionSnapshotSource();
         private Storyboard? _glowSpinStoryboard;
         private Storyboard? _dockExpandStoryboard;
@@ -72,6 +73,7 @@ namespace DynamicIslandBar
         private int _volumeControlAppPid;
         private Slider? _appVolumeSlider;
         private Panel? _appVolumePanel;
+        private TimeSpan _cachedPositionForLyrics;
         private LyricsService _lyricsService = new();
         private int _playbackModeIndex;
 
@@ -89,10 +91,12 @@ namespace DynamicIslandBar
             _capsuleHoverCollapseTimer.Tick += CapsuleHoverCollapseTimer_Tick;
             _appsRefreshTimer = new DispatcherTimer { Interval = RunningAppsRefreshPolicy.GetInterval(false) };
             _appsRefreshTimer.Tick += AppsRefreshTimer_Tick;
-            _centerCardMediaRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _centerCardMediaRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _centerCardMediaRefreshTimer.Tick += CenterCardMediaRefreshTimer_Tick;
             _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             _progressTimer.Tick += ProgressTimer_Tick;
+            _lyricsFastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+            _lyricsFastTimer.Tick += LyricsFastTimer_Tick;
         }
 
         private sealed class PopupState
@@ -133,6 +137,7 @@ namespace DynamicIslandBar
             _appsRefreshTimer.Start();
             _centerCardMediaRefreshTimer.Start();
             _progressTimer.Start();
+            _lyricsFastTimer.Start();
             _ = InitMediaServiceAsync();
             _windowLoaded = true;
             Dispatcher.BeginInvoke(MaybeWriteLayoutDiagnostics, DispatcherPriority.Loaded);
@@ -425,6 +430,29 @@ namespace DynamicIslandBar
             CenterCardCurrentTime.Text = FormatTime(interpolatedPosition);
         }
 
+        private void LyricsFastTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_mediaService == null || !_isMusicPlaying || !_mediaService.HasSeenSongChange)
+                return;
+
+            var snapshot = _centerCardLiveMediaSnapshot;
+            if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.Title))
+                return;
+
+            var position = _mediaService.GetCurrentPosition();
+            if (position <= TimeSpan.Zero)
+                return;
+
+            var currentLyric = _lyricsService.GetCurrentLyric(position);
+            if (!string.IsNullOrWhiteSpace(currentLyric) && currentLyric != snapshot.Lyric)
+            {
+                _centerCardLiveMediaSnapshot = snapshot with { Lyric = currentLyric };
+                var app = GetPrimarySummaryApp();
+                if (app != null)
+                    UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+            }
+        }
+
         private async Task RefreshCenterCardMediaSnapshotAsync()
         {
             var app = GetPrimarySummaryApp();
@@ -441,8 +469,22 @@ namespace DynamicIslandBar
                 return;
             }
 
+            // Preserve lyric from previous snapshot if same song
+            var prevLyric = _centerCardLiveMediaSnapshot?.Lyric;
+            if (!string.IsNullOrWhiteSpace(prevLyric)
+                && snapshot != null
+                && snapshot.Title == _centerCardLiveMediaSnapshot?.Title
+                && snapshot.Artist == _centerCardLiveMediaSnapshot?.Artist)
+            {
+                snapshot = snapshot with { Lyric = prevLyric };
+            }
             _centerCardLiveMediaSnapshot = snapshot;
             UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+
+            if (snapshot == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MediaRefresh] No snapshot for '{app.DisplayName}' (AUMID={app.AppId})");
+            }
 
             // Update progress bar from MediaService timeline
             if (_mediaService != null)
@@ -482,23 +524,26 @@ namespace DynamicIslandBar
                             ? "M6,4 L6,20 L10,20 L10,4 Z M14,4 L14,20 L18,20 L18,4 Z"
                             : "M8,5 L8,19 L19,12 Z");
 
-                    // Fetch and update real lyrics from LRCLIB
-                    if (snapshot != null && !string.IsNullOrWhiteSpace(info.Title) && info.Duration.TotalSeconds > 0)
+                    // Fetch lyrics (slow: network call) - display update handled by LyricsFastTimer
+                    if (snapshot != null && !string.IsNullOrWhiteSpace(info.Title))
                     {
-                        var lyricsFound = await _lyricsService.EnsureLyricsAsync(
+                        await _lyricsService.EnsureLyricsAsync(
                             info.Title ?? string.Empty,
                             info.Artist ?? string.Empty,
                             info.Duration);
-                        System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Lyrics: found={lyricsFound}, hasLyrics={_lyricsService.HasLyrics}");
 
-                        var currentLyric = _lyricsService.GetCurrentLyric(info.Position);
-                        System.Diagnostics.Debug.WriteLine($"[MediaRefresh] CurrentLyric at {info.Position}: {(currentLyric != null ? (currentLyric.Length > 40 ? currentLyric[..40] : currentLyric) : "null")}");
-
-                        if (!string.IsNullOrWhiteSpace(currentLyric) && currentLyric != snapshot.Lyric)
-                        {
-                            _centerCardLiveMediaSnapshot = snapshot with { Lyric = currentLyric };
-                            UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
-                        }
+                        // Pass real duration from lyrics API to MediaService
+                        if (_lyricsService.RealDuration > TimeSpan.Zero)
+                            _mediaService.SetRealDuration(_lyricsService.RealDuration);
+                    }
+                    else
+                    {
+                        if (snapshot == null)
+                            System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Skipping lyrics: no snapshot");
+                        else if (string.IsNullOrWhiteSpace(info.Title))
+                            System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Skipping lyrics: no title");
+                        else if (info.Duration.TotalSeconds <= 0)
+                            System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Skipping lyrics: duration={info.Duration}");
                     }
 
                     // Sync playback mode from session
@@ -509,7 +554,6 @@ namespace DynamicIslandBar
                     // Re-update progress panel visibility now that media state is fresh
                     var showProgress = _isCenterCardHovered && _isMusicPlaying && _mediaDuration.TotalSeconds > 0;
                     CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
-                    // Re-apply hover height if needed (expanded height differs with/without progress)
                     if (_isCenterCardHovered)
                     {
                         UpdateCenterCardHoverVisual(new CenterCardPresentation(
@@ -517,7 +561,10 @@ namespace DynamicIslandBar
                             false, true, false));
                     }
                 }
-                catch { /* Ignore timeline errors */ }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Error: {ex.GetType().Name}: {ex.Message}");
+                }
             }
         }
 

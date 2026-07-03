@@ -14,6 +14,33 @@ namespace DynamicIslandBar
         private GlobalSystemMediaTransportControlsSessionManager? _manager;
         private string? _targetSessionAumid;
 
+        // Timer-based position estimation for apps that don't report position via SMTC
+        private string? _estimatedTitle;
+        private string? _estimatedArtist;
+        private readonly System.Diagnostics.Stopwatch _songTimer = new();
+        private bool _wasPlaying;
+        private bool _firstSongSeen;
+
+        /// <summary>
+        /// Whether at least one song change has been detected via SMTC events.
+        /// Lyrics are only synced after the first song change (timer starts at 0 for new songs).
+        /// </summary>
+        public bool HasSeenSongChange => _firstSongSeen;
+        private TimeSpan _realDuration = TimeSpan.Zero;
+
+        // SMTC event-based position tracking
+        private TimeSpan _lastSmtcPosition = TimeSpan.Zero;
+        private readonly System.Diagnostics.Stopwatch _smtcTimer = new();
+        private GlobalSystemMediaTransportControlsSession? _subscribedSession;
+
+        /// <summary>
+        /// Set the real duration from external source (e.g. lyrics API) for better position estimation.
+        /// </summary>
+        public void SetRealDuration(TimeSpan duration)
+        {
+            _realDuration = duration;
+        }
+
         public async Task InitializeAsync()
         {
             _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
@@ -28,7 +55,7 @@ namespace DynamicIslandBar
         {
             if (_manager == null) return null;
 
-            // 1. Try to find by target AUMID (set from snapshot)
+            // Try to find by target AUMID (set from snapshot)
             if (!string.IsNullOrWhiteSpace(_targetSessionAumid))
             {
                 var sessions = _manager.GetSessions();
@@ -39,44 +66,126 @@ namespace DynamicIslandBar
                         if (string.Equals(s.SourceAppUserModelId, _targetSessionAumid,
                             StringComparison.OrdinalIgnoreCase))
                         {
-                            System.Diagnostics.Debug.WriteLine($"[MediaService] GetSession: found by AUMID match: {_targetSessionAumid}");
                             return s;
                         }
                     }
                     catch { }
                 }
-                System.Diagnostics.Debug.WriteLine($"[MediaService] GetSession: AUMID match failed for {_targetSessionAumid}, falling back");
             }
 
-            // 2. Try GetCurrentSession
+            // Fallback: return current session or first playing session
             var current = _manager.GetCurrentSession();
-            if (current != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"[MediaService] GetSession: using GetCurrentSession, AUMID={current.SourceAppUserModelId}");
-                return current;
-            }
+            if (current != null) return current;
 
-            // 3. Fallback: enumerate and find first session that's playing
             try
             {
-                var allSessions = _manager.GetSessions();
-                System.Diagnostics.Debug.WriteLine($"[MediaService] GetSession: total sessions={allSessions.Count}");
-                foreach (var s in allSessions)
+                foreach (var s in _manager.GetSessions())
                 {
                     try
                     {
-                        var info = s.GetPlaybackInfo();
-                        if (info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[MediaService] GetSession: found playing session, AUMID={s.SourceAppUserModelId}");
+                        if (s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
                             return s;
-                        }
                     }
                     catch { }
                 }
-                return allSessions.Count > 0 ? allSessions[0] : null;
+                var all = _manager.GetSessions();
+                return all.Count > 0 ? all[0] : null;
             }
             catch { return null; }
+        }
+
+        private void SubscribeToSessionEvents(GlobalSystemMediaTransportControlsSession session)
+        {
+            if (_subscribedSession == session) return;
+            try
+            {
+                if (_subscribedSession != null)
+                {
+                    _subscribedSession.TimelinePropertiesChanged -= OnTimelineChanged;
+                    _subscribedSession.PlaybackInfoChanged -= OnPlaybackInfoChanged;
+                    _subscribedSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
+                }
+
+                _subscribedSession = session;
+                session.TimelinePropertiesChanged += OnTimelineChanged;
+                session.PlaybackInfoChanged += OnPlaybackInfoChanged;
+                session.MediaPropertiesChanged += OnMediaPropertiesChanged;
+            }
+            catch { }
+        }
+
+        private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+        {
+            try
+            {
+                var props = sender.TryGetMediaPropertiesAsync().AsTask().Result;
+                var newTitle = props?.Title;
+                var newArtist = props?.Artist;
+                if (newTitle != _estimatedTitle || newArtist != _estimatedArtist)
+                {
+                    _estimatedTitle = newTitle;
+                    _estimatedArtist = newArtist;
+                    _songTimer.Restart();
+                    _firstSongSeen = true;
+                    _wasPlaying = true;
+                }
+            }
+            catch { }
+        }
+
+        private void OnTimelineChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+        {
+            try
+            {
+                var pos = sender.GetTimelineProperties()?.Position ?? TimeSpan.Zero;
+                if (pos > TimeSpan.Zero)
+                {
+                    _lastSmtcPosition = pos;
+                    _smtcTimer.Restart();
+                }
+            }
+            catch { }
+        }
+
+        private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+        {
+            try
+            {
+                var status = sender.GetPlaybackInfo()?.PlaybackStatus;
+                if (status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                {
+                    var props = sender.TryGetMediaPropertiesAsync().AsTask().Result;
+                    if (props?.Title != _estimatedTitle || props?.Artist != _estimatedArtist)
+                    {
+                        _estimatedTitle = props?.Title;
+                        _estimatedArtist = props?.Artist;
+                        _songTimer.Restart();
+                        _firstSongSeen = true;
+                        _wasPlaying = true;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Fast position-only read (no SMTC calls). Returns the Stopwatch-estimated position.
+        /// Use for high-frequency lyrics updates.
+        /// </summary>
+        public TimeSpan GetCurrentPosition()
+        {
+            if (_lastSmtcPosition > TimeSpan.Zero && _smtcTimer.IsRunning)
+                return _lastSmtcPosition + _smtcTimer.Elapsed;
+            if (_firstSongSeen)
+            {
+                // Use Elapsed even when timer is stopped (retains last value after pause)
+                var pos = _songTimer.Elapsed;
+                var maxDur = _realDuration > TimeSpan.Zero ? _realDuration : TimeSpan.Zero;
+                if (maxDur > TimeSpan.Zero && pos > maxDur)
+                    return maxDur;
+                return pos;
+            }
+            return TimeSpan.Zero;
         }
 
         public async Task<(string? Title, string? Artist, bool IsPlaying, TimeSpan Position, TimeSpan Duration)> GetMediaInfoAsync()
@@ -85,19 +194,72 @@ namespace DynamicIslandBar
             if (session == null)
                 return (null, null, false, TimeSpan.Zero, TimeSpan.Zero);
 
+            // Subscribe to SMTC events for position tracking
+            SubscribeToSessionEvents(session);
+
             try
             {
                 var props = await session.TryGetMediaPropertiesAsync();
                 var info = session.GetPlaybackInfo();
                 var timeline = session.GetTimelineProperties();
 
-                return (
-                    props?.Title,
-                    props?.Artist,
-                    info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
-                    timeline?.Position ?? TimeSpan.Zero,
-                    timeline?.EndTime ?? TimeSpan.Zero
-                );
+                var position = timeline?.Position ?? TimeSpan.Zero;
+                var endTime = timeline?.EndTime ?? TimeSpan.Zero;
+                var isPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+
+                var duration = endTime;
+
+                // If SMTC timeline position is 0, check if we got position from events
+                if (position == TimeSpan.Zero && _lastSmtcPosition > TimeSpan.Zero && _smtcTimer.IsRunning)
+                {
+                    position = _lastSmtcPosition + _smtcTimer.Elapsed;
+                }
+
+                // Timer-based position estimation for apps that don't report position via SMTC
+                var title = props?.Title;
+                var artist = props?.Artist;
+                if (isPlaying && position == TimeSpan.Zero && !string.IsNullOrWhiteSpace(title))
+                {
+                    if (title != _estimatedTitle || artist != _estimatedArtist)
+                    {
+                        // Song changed - start fresh timer from 0
+                        _estimatedTitle = title;
+                        _estimatedArtist = artist;
+                        _songTimer.Restart();
+                        _wasPlaying = true;
+                        _firstSongSeen = true;
+                    }
+                    else if (!_wasPlaying)
+                    {
+                        _songTimer.Restart();
+                        _wasPlaying = true;
+                    }
+                    else if (_firstSongSeen)
+                    {
+                        position = _songTimer.Elapsed;
+                        var maxDuration = _realDuration > TimeSpan.Zero ? _realDuration : duration;
+                        if (maxDuration > TimeSpan.Zero && position > maxDuration)
+                            position = maxDuration;
+                    }
+                }
+                else if (!isPlaying)
+                {
+                    _wasPlaying = false;
+                    _songTimer.Stop();
+                }
+                else if (isPlaying && position > TimeSpan.Zero)
+                {
+                    // SMTC is reporting position - sync timer
+                    _songTimer.Restart();
+                    _songTimer.Stop();
+                    // Set the stopwatch elapsed by restarting and immediately stopping won't work
+                    // Instead, track the offset
+                    _estimatedTitle = title;
+                    _estimatedArtist = artist;
+                    _wasPlaying = true;
+                }
+
+                return (title, artist, isPlaying, position, duration);
             }
             catch
             {
@@ -166,27 +328,15 @@ namespace DynamicIslandBar
             try
             {
                 var session = GetSession();
-                if (session == null)
-                {
-                    System.Diagnostics.Debug.WriteLine("[MediaService] GetMusicAppProcessId: no session");
-                    return 0;
-                }
+                if (session == null) return 0;
 
                 var aumid = session.SourceAppUserModelId;
-                System.Diagnostics.Debug.WriteLine($"[MediaService] GetMusicAppProcessId: AUMID={aumid}");
                 if (string.IsNullOrWhiteSpace(aumid)) return 0;
 
-                // Parse AUMID: typically "AppName!UniqueId" or "C:\path\to\exe.exe"
-                var appPart = aumid.Contains('!')
-                    ? aumid[..aumid.IndexOf('!')]
-                    : aumid;
-
-                // Try matching by process name
+                var appPart = aumid.Contains('!') ? aumid[..aumid.IndexOf('!')] : aumid;
                 var searchNames = new List<string>();
                 var fileName = Path.GetFileNameWithoutExtension(appPart);
-                if (!string.IsNullOrWhiteSpace(fileName))
-                    searchNames.Add(fileName);
-                // Also try the full AUMID as-is for some apps
+                if (!string.IsNullOrWhiteSpace(fileName)) searchNames.Add(fileName);
                 var aumidFileName = Path.GetFileNameWithoutExtension(aumid);
                 if (!string.IsNullOrWhiteSpace(aumidFileName) && !searchNames.Contains(aumidFileName))
                     searchNames.Add(aumidFileName);
@@ -194,14 +344,9 @@ namespace DynamicIslandBar
                 foreach (var name in searchNames)
                 {
                     var procs = Process.GetProcessesByName(name);
-                    if (procs.Length > 0)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[MediaService] PID found by process name '{name}': {procs[0].Id}");
-                        return procs[0].Id;
-                    }
+                    if (procs.Length > 0) return procs[0].Id;
                 }
 
-                // Fallback: match any process whose ProcessName partially matches the AUMID
                 var aumidLower = aumid.ToLowerInvariant();
                 foreach (var proc in Process.GetProcesses())
                 {
@@ -209,30 +354,19 @@ namespace DynamicIslandBar
                     {
                         var procName = proc.ProcessName.ToLowerInvariant();
                         if (aumidLower.Contains(procName) && procName.Length > 2)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[MediaService] PID found by AUMID partial match '{procName}': {proc.Id}");
                             return proc.Id;
-                        }
                     }
-                    catch { /* Some processes deny access */ }
+                    catch { }
                 }
 
-                // Fallback 2: try common music app process names
                 var musicProcessNames = new[] { "cloudmusic", "qqmusic", "kugou", "kuwo", "spotify", "foobar2000", "MusicBee" };
                 foreach (var name in musicProcessNames)
                 {
                     var procs = Process.GetProcessesByName(name);
-                    if (procs.Length > 0)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[MediaService] PID found by music app name '{name}': {procs[0].Id}");
-                        return procs[0].Id;
-                    }
+                    if (procs.Length > 0) return procs[0].Id;
                 }
 
-                // Fallback 3: use WASAPI active audio session
-                var wasapiPid = AudioService.GetActiveAudioSessionPid();
-                System.Diagnostics.Debug.WriteLine($"[MediaService] WASAPI fallback PID: {wasapiPid}");
-                return wasapiPid;
+                return AudioService.GetActiveAudioSessionPid();
             }
             catch { }
             return 0;
