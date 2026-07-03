@@ -195,19 +195,11 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"CenterCardLeftWave\"", xaml);
         Assert.Contains("x:Name=\"CenterCardRightWave\"", xaml);
         Assert.Contains("x:Name=\"CenterCardTransportControls\"", xaml);
-        Assert.Contains("x:Name=\"CenterCardProgressBar\"", xaml);
-        Assert.Contains("x:Name=\"CenterCardProgressFill\"", xaml);
-        Assert.Contains("x:Name=\"CenterCardProgressText\"", xaml);
-        Assert.Contains("x:Name=\"CenterCardPlaybackModeIcon\"", xaml);
-        Assert.Contains("x:Name=\"CenterCardPlayPauseIcon\"", xaml);
         Assert.Contains("x:Name=\"CenterCardPlayPauseButton\"", xaml);
-        Assert.Contains("<Path Fill=\"White\" Stretch=\"Uniform\" Width=\"12\" Height=\"12\"", xaml);
         Assert.Contains("Click=\"CenterCardPlayPause_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardPrevious_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardNext_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardVolume_Click\"", xaml);
-        Assert.DoesNotContain("Content=\"Vol\"", xaml);
-        Assert.DoesNotContain("Content=\"Ⅱ\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppSelectorButton\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppsPopup\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppsListPanel\"", xaml);
@@ -242,12 +234,6 @@ public class VisualLayerContractTests
         Assert.Contains("SetCenterCardWidthPercent", code);
         Assert.Contains("SetCenterCardApp", code);
         Assert.Contains("CenterCardPresentationPolicy.Build", code);
-        Assert.Contains("UpdateCenterCardProgress(state)", code);
-        Assert.Contains("RefreshCenterCardLyricsAsync(snapshot, refreshVersion, app)", code);
-        Assert.DoesNotContain("snapshot = await _lyricsService.ResolveCurrentLyricAsync(snapshot)", code);
-        Assert.Contains("new CompositeLyricsProvider(", code);
-        Assert.Contains("new LrcLibLyricsProvider()", code);
-        Assert.Contains("new NetEaseLyricsProvider()", code);
         Assert.Contains("WindowsMediaSessionSnapshotSource", code);
         Assert.Contains("_centerCardMediaRefreshTimer", code);
         Assert.Contains("CenterCardMediaSnapshotProvider.Resolve", code);
@@ -255,18 +241,6 @@ public class VisualLayerContractTests
         Assert.Contains("FindVisualChildren<Rectangle>(CenterCardRightWave)", code);
         Assert.Contains("ApplyCenterCardLyricsLayout", code);
         Assert.Contains("CenterCardLayoutPolicy.GetLyricsLayout", code);
-    }
-
-    [Fact]
-    public void WindowsMediaSessionSnapshotSource_MapsTimelineIntoCenterCardSnapshot()
-    {
-        var code = ReadProjectFile("DynamicIslandBar", "WindowsMediaSessionSnapshotSource.cs");
-
-        Assert.Contains("GetTimelineProperties()", code);
-        Assert.Contains("Position:", code);
-        Assert.Contains("Duration:", code);
-        Assert.Contains("Lyric: string.Empty", code);
-        Assert.DoesNotContain("var lyric = string.IsNullOrWhiteSpace(artist) ? title : $\"{title} - {artist}\"", code);
     }
 
     private static string ReadMainWindowXaml()

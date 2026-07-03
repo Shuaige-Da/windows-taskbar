@@ -1,6 +1,7 @@
-﻿<Window x:Class="DynamicIslandBar.MainWindow"
+<Window x:Class="DynamicIslandBar.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:DynamicIslandBar"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -13,6 +14,7 @@
         Title="DynamicIslandBar">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <local:PercentToScaleConverter x:Key="PercentToScaleConverter"/>
         <LinearGradientBrush x:Key="CapsuleGlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
             <GradientStop Color="#58FFFFFF" Offset="0"/>
             <GradientStop Color="#16FFFFFF" Offset="0.34"/>
@@ -587,29 +589,6 @@
                                                FontSize="11"
                                                Margin="0,2,0,0"
                                                TextTrimming="CharacterEllipsis"/>
-                                    <Grid x:Name="CenterCardProgressBar"
-                                          Height="3"
-                                          Margin="0,5,0,0"
-                                          Background="#24FFFFFF"
-                                          ClipToBounds="True"
-                                          Visibility="Collapsed">
-                                        <Border x:Name="CenterCardProgressFill"
-                                                HorizontalAlignment="Stretch"
-                                                Background="#4CD964"
-                                                CornerRadius="1.5"
-                                                RenderTransformOrigin="0,0.5">
-                                            <Border.RenderTransform>
-                                                <ScaleTransform x:Name="CenterCardProgressScale" ScaleX="0"/>
-                                            </Border.RenderTransform>
-                                        </Border>
-                                    </Grid>
-                                    <TextBlock x:Name="CenterCardProgressText"
-                                               Text=""
-                                               Foreground="#70FFFFFF"
-                                               FontSize="9"
-                                               Margin="0,2,0,0"
-                                               TextTrimming="CharacterEllipsis"
-                                               Visibility="Collapsed"/>
                                 </StackPanel>
 
                                 <StackPanel x:Name="CenterCardTransportControls"
@@ -618,7 +597,7 @@
                                             VerticalAlignment="Center"
                                             Margin="0,0,12,0"
                                             Visibility="Collapsed">
-                                    <Button x:Name="CenterCardPlaybackModeButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放顺序">
+                                    <Button x:Name="CenterCardPlaybackModeButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="顺序播放" Click="CenterCardPlaybackMode_Click">
                                         <Path x:Name="CenterCardPlaybackModeIcon" Fill="White" Stretch="Uniform" Width="12" Height="12"
                                               Data="M4,6 H20 M4,12 H20 M4,18 H14"/>
                                     </Button>
@@ -674,6 +653,66 @@
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
+
+                            <!-- 音乐进度条（悬浮+播放中显示） -->
+                            <StackPanel x:Name="CenterCardProgressPanel"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Bottom"
+                                        Height="18"
+                                        Margin="42,0,42,2"
+                                        Visibility="Collapsed">
+                                <TextBlock x:Name="CenterCardCurrentTime"
+                                           Text="0:00"
+                                           Foreground="#70FFFFFF"
+                                           FontSize="9"
+                                           FontFamily="Consolas"
+                                           VerticalAlignment="Center"
+                                           Width="30"
+                                           TextAlignment="Right"/>
+                                <ProgressBar x:Name="CenterCardProgressBar"
+                                             Height="4"
+                                             Minimum="0"
+                                             Maximum="100"
+                                             Value="0"
+                                             Foreground="#FF2D55"
+                                             Background="#25FFFFFF"
+                                             BorderThickness="0"
+                                             Margin="6,0"
+                                             VerticalAlignment="Center"
+                                             MouseLeftButtonDown="CenterCardProgress_Click"
+                                             Cursor="Hand">
+                                    <ProgressBar.Resources>
+                                        <Style TargetType="ProgressBar">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ProgressBar">
+                                                        <Border CornerRadius="2" Background="{TemplateBinding Background}">
+                                                            <Grid>
+                                                                <Border x:Name="PART_Track"/>
+                                                                <Border x:Name="PART_Indicator"
+                                                                        CornerRadius="2"
+                                                                        Background="{TemplateBinding Foreground}"
+                                                                        RenderTransformOrigin="0,0.5">
+                                                                    <Border.RenderTransform>
+                                                                        <ScaleTransform ScaleX="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Value, Converter={StaticResource PercentToScaleConverter}}"/>
+                                                                    </Border.RenderTransform>
+                                                                </Border>
+                                                            </Grid>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ProgressBar.Resources>
+                                </ProgressBar>
+                                <TextBlock x:Name="CenterCardTotalTime"
+                                           Text="0:00"
+                                           Foreground="#70FFFFFF"
+                                           FontSize="9"
+                                           FontFamily="Consolas"
+                                           VerticalAlignment="Center"
+                                           Width="30"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
                     </Grid>
@@ -868,6 +907,36 @@
                                 Margin="0,10,0,0"
                                 Padding="0"
                                 Click="VolumeMoreSettings_Click"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- ===== 中心卡片音量弹窗（紧贴音量按钮） ===== -->
+            <Popup x:Name="CenterCardVolumePopup"
+                   PlacementTarget="{Binding ElementName=CenterCardVolumeButton}"
+                   Placement="Top"
+                   HorizontalOffset="-65"
+                   VerticalOffset="-8"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="False">
+                <Border CornerRadius="10" Padding="8,6" Width="180"
+                        BorderBrush="#4046E0FF" BorderThickness="1"
+                        MouseEnter="CenterCardVolumePopup_MouseEnter"
+                        MouseLeave="CenterCardVolumePopup_MouseLeave">
+                    <Border.Background>
+                        <SolidColorBrush Color="#222222" Opacity="0.95"/>
+                    </Border.Background>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="🎵" Foreground="#FF5DBB" FontSize="12"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <Slider x:Name="CenterCardVolumeSlider" Minimum="0" Maximum="100"
+                                Width="100" VerticalAlignment="Center"
+                                Foreground="#FF5DBB"
+                                ValueChanged="CenterCardVolumeSlider_ValueChanged"/>
+                        <TextBlock x:Name="CenterCardVolumePercentText" Text="--%"
+                                   Foreground="#80FFFFFF" FontSize="10"
+                                   VerticalAlignment="Center" Margin="6,0,0,0" Width="30"/>
                     </StackPanel>
                 </Border>
             </Popup>

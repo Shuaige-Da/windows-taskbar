@@ -1,4 +1,5 @@
 using Windows.Media.Control;
+using System.Diagnostics;
 
 namespace DynamicIslandBar;
 
@@ -14,29 +15,45 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
         try
         {
             if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
-            {
                 return null;
-            }
 
             var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             cancellationToken.ThrowIfCancellationRequested();
 
-            var session = manager.GetSessions()
-                .FirstOrDefault(candidate => CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, candidate.SourceAppUserModelId));
+            var sessions = manager.GetSessions();
 
-            session ??= CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)
-                ? manager.GetCurrentSession()
-                : null;
+            // Strict match: AUMID must contain app's exe name or app name
+            GlobalSystemMediaTransportControlsSession? session = null;
+            var exeName = !string.IsNullOrWhiteSpace(app.ExePath)
+                ? System.IO.Path.GetFileNameWithoutExtension(app.ExePath)?.ToLowerInvariant() ?? ""
+                : "";
+
+            foreach (var candidate in sessions)
+            {
+                try
+                {
+                    var aumid = candidate.SourceAppUserModelId?.ToLowerInvariant() ?? "";
+                    // Match if AUMID contains the exe name (e.g. "cloudmusic" in "CloudMusic!xxx")
+                    if (!string.IsNullOrWhiteSpace(exeName) && exeName.Length > 3 && aumid.Contains(exeName))
+                    {
+                        session = candidate;
+                        Debug.WriteLine($"[SnapshotSource] Matched by exe name: '{exeName}' in '{aumid}'");
+                        break;
+                    }
+                    // Match if AUMID equals app's AppId
+                    if (!string.IsNullOrWhiteSpace(app.AppId) &&
+                        string.Equals(aumid, app.AppId.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        session = candidate;
+                        Debug.WriteLine($"[SnapshotSource] Matched by AppId: '{app.AppId}'");
+                        break;
+                    }
+                }
+                catch { }
+            }
+
             if (session == null)
-            {
                 return null;
-            }
-
-            if (!CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, session.SourceAppUserModelId)
-                && !CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
-            {
-                return null;
-            }
 
             var properties = await session.TryGetMediaPropertiesAsync();
             cancellationToken.ThrowIfCancellationRequested();
@@ -44,16 +61,12 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
             var title = properties.Title?.Trim() ?? string.Empty;
             var artist = properties.Artist?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(artist))
-            {
                 return null;
-            }
 
             var playbackInfo = session.GetPlaybackInfo();
             var isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            var timeline = session.GetTimelineProperties();
-            var duration = GetDuration(timeline.StartTime, timeline.EndTime);
-            var position = GetPosition(timeline.Position, timeline.StartTime, duration);
-            WriteDiagnostics(session.SourceAppUserModelId, title, artist, timeline.StartTime, timeline.EndTime, timeline.Position, position, duration);
+
+            Debug.WriteLine($"[SnapshotSource] OK: Title='{title}', Artist='{artist}', Playing={isPlaying}, AUMID={session.SourceAppUserModelId}");
 
             return new CenterCardMediaSnapshot(
                 IsMusicApp: true,
@@ -61,79 +74,12 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
                 Title: string.IsNullOrWhiteSpace(title) ? "正在播放" : title,
                 Artist: artist,
                 Lyric: string.Empty,
-                SourceAppUserModelId: session.SourceAppUserModelId,
-                Position: position,
-                Duration: duration);
+                SourceAppUserModelId: session.SourceAppUserModelId);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[SnapshotSource] Error: {ex.Message}");
             return null;
-        }
-    }
-
-    private static TimeSpan? GetDuration(TimeSpan startTime, TimeSpan endTime)
-    {
-        if (endTime <= TimeSpan.Zero)
-        {
-            return null;
-        }
-
-        var duration = endTime > startTime
-            ? endTime - startTime
-            : endTime;
-        return duration > TimeSpan.Zero ? duration : null;
-    }
-
-    private static TimeSpan? GetPosition(TimeSpan position, TimeSpan startTime, TimeSpan? duration)
-    {
-        if (duration is not { } validDuration || position < TimeSpan.Zero)
-        {
-            return null;
-        }
-
-        var relativePosition = startTime > TimeSpan.Zero && position >= startTime
-            ? position - startTime
-            : position;
-        return TimeSpan.FromMilliseconds(Math.Clamp(
-            relativePosition.TotalMilliseconds,
-            0,
-            validDuration.TotalMilliseconds));
-    }
-
-    private static void WriteDiagnostics(
-        string sourceAppUserModelId,
-        string title,
-        string artist,
-        TimeSpan startTime,
-        TimeSpan endTime,
-        TimeSpan rawPosition,
-        TimeSpan? position,
-        TimeSpan? duration)
-    {
-        var diagnosticsPath = Environment.GetEnvironmentVariable("DYNAMIC_ISLAND_MEDIA_DIAGNOSTICS");
-        if (string.IsNullOrWhiteSpace(diagnosticsPath))
-        {
-            return;
-        }
-
-        try
-        {
-            var line = string.Join(
-                " | ",
-                DateTimeOffset.Now.ToString("O"),
-                sourceAppUserModelId,
-                title,
-                artist,
-                $"start={startTime}",
-                $"end={endTime}",
-                $"raw={rawPosition}",
-                $"position={position?.ToString() ?? "<null>"}",
-                $"duration={duration?.ToString() ?? "<null>"}");
-            System.IO.File.AppendAllText(diagnosticsPath, line + Environment.NewLine);
-        }
-        catch
-        {
-            // Diagnostics are best-effort only.
         }
     }
 }

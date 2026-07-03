@@ -16,9 +16,7 @@ public sealed record CenterCardMediaSnapshot(
     string Title,
     string Artist,
     string Lyric,
-    string? SourceAppUserModelId = null,
-    TimeSpan? Position = null,
-    TimeSpan? Duration = null);
+    string? SourceAppUserModelId = null);
 
 public sealed record CenterCardPresentation(
     CenterCardDisplayMode Mode,
@@ -26,9 +24,7 @@ public sealed record CenterCardPresentation(
     string SecondaryText,
     bool ShowLyricsMarquee,
     bool ShowTransportControls,
-    bool ShowAppActions,
-    double ProgressRatio = 0,
-    string ProgressText = "");
+    bool ShowAppActions);
 
 public static class CenterCardPresentationPolicy
 {
@@ -51,8 +47,6 @@ public static class CenterCardPresentationPolicy
 
         if (media is { IsMusicApp: true })
         {
-            var (progressRatio, progressText) = BuildProgress(media);
-
             if (!isHovered && media.IsPlaying)
             {
                 return new CenterCardPresentation(
@@ -70,11 +64,9 @@ public static class CenterCardPresentationPolicy
                 media.IsPlaying
                     ? (string.IsNullOrWhiteSpace(media.Lyric) ? "正在播放" : $"歌词：{media.Lyric}")
                     : "已暂停",
-                    ShowLyricsMarquee: false,
-                    ShowTransportControls: true,
-                    ShowAppActions: false,
-                    ProgressRatio: progressRatio,
-                    ProgressText: progressText);
+                ShowLyricsMarquee: false,
+                ShowTransportControls: true,
+                ShowAppActions: false);
         }
 
         return new CenterCardPresentation(
@@ -85,54 +77,52 @@ public static class CenterCardPresentationPolicy
             ShowTransportControls: false,
             ShowAppActions: true);
     }
-
-    private static (double Ratio, string Text) BuildProgress(CenterCardMediaSnapshot media)
-    {
-        if (media.Position is not { } position || media.Duration is not { } duration || duration <= TimeSpan.Zero)
-        {
-            return (0, string.Empty);
-        }
-
-        var clampedPosition = TimeSpan.FromMilliseconds(Math.Clamp(
-            position.TotalMilliseconds,
-            0,
-            duration.TotalMilliseconds));
-        var ratio = clampedPosition.TotalMilliseconds / duration.TotalMilliseconds;
-        return (ratio, $"{FormatTime(clampedPosition)} / {FormatTime(duration)}");
-    }
-
-    private static string FormatTime(TimeSpan value)
-    {
-        var totalSeconds = Math.Max(0, (int)Math.Floor(value.TotalSeconds));
-        var minutes = totalSeconds / 60;
-        var seconds = totalSeconds % 60;
-        return $"{minutes:00}:{seconds:00}";
-    }
 }
 
 public static class CenterCardMediaSnapshotProvider
 {
     private static readonly string[] MusicAppMarkers =
     [
+        // Core music keywords
         "music",
-        "cloudmusic",
-        "qqmusic",
-        "kugou",
-        "kuwo",
+        // Chinese music apps
+        "cloudmusic",      // NetEase Cloud Music
+        "qqmusic",         // QQ Music
+        "kugou",           // Kugou
+        "kuwo",            // Kuwo
+        "网易云",           // NetEase Cloud Music (Chinese)
+        "qq音乐",          // QQ Music (Chinese)
+        "酷狗",            // Kugou (Chinese)
+        "酷我",            // Kuwo (Chinese)
+        // International music apps
         "spotify",
+        "applemusic",      // Apple Music
+        "applemusicwin",   // Apple Music for Windows
+        "youtubemusic",    // YouTube Music
+        "amazonmusic",     // Amazon Music
+        "tidal",
+        "deezer",
+        "pandora",
+        "soundcloud",
+        "deezer",          // Deezer
+        "iheartradio",
+        "napster",
+        // Audio players
         "audacity",
-        "vlc",
-        "potplayer",
-        "foobar2000",
         "aimp",
-        "wmplayer",
+        "foobar2000",
+        "musicbee",
+        "winamp",
+        "vlc",             // VLC (often used for music)
+        "potplayer",       // PotPlayer (media player)
+        "kmplayer",
+        "gomplayer",
         "mediaplayer",
-        "zunemusic",
-        "media",
-        "网易云",
-        "qq音乐",
-        "酷狗",
-        "酷我"
+        "audioplayer",
+        // Chinese names
+        "apple音乐",       // Apple Music (Chinese)
+        "youtube音乐",     // YouTube Music (Chinese)
+        "亚马逊音乐",      // Amazon Music (Chinese)
     ];
 
     public static CenterCardMediaSnapshot? Resolve(RunningAppEntry app, CenterCardMediaSnapshot? liveSnapshot)
@@ -145,25 +135,6 @@ public static class CenterCardMediaSnapshotProvider
         }
 
         return TryCreateFallbackSnapshot(app);
-    }
-
-    public static CenterCardMediaSnapshot PreserveResolvedFields(
-        CenterCardMediaSnapshot freshSnapshot,
-        CenterCardMediaSnapshot? previousSnapshot)
-    {
-        if (!IsSameSong(freshSnapshot, previousSnapshot))
-        {
-            return freshSnapshot;
-        }
-
-        return freshSnapshot with
-        {
-            Lyric = string.IsNullOrWhiteSpace(freshSnapshot.Lyric)
-                ? previousSnapshot!.Lyric
-                : freshSnapshot.Lyric,
-            Position = freshSnapshot.Position ?? previousSnapshot!.Position,
-            Duration = freshSnapshot.Duration ?? previousSnapshot!.Duration
-        };
     }
 
     public static bool SourceLooksLikeApp(RunningAppEntry app, string? sourceAppUserModelId)
@@ -180,20 +151,32 @@ public static class CenterCardMediaSnapshotProvider
     public static bool IsLikelyMusicApp(RunningAppEntry app)
     {
         var probe = NormalizeProbe($"{app.AppId} {app.DisplayName} {app.ExePath}");
-        return MusicAppMarkers.Any(marker => probe.Contains(NormalizeProbe(marker)));
+        if (MusicAppMarkers.Any(marker => probe.Contains(NormalizeProbe(marker))))
+            return true;
+
+        // Additional heuristic: check exe filename against known music player patterns
+        if (!string.IsNullOrWhiteSpace(app.ExePath))
+        {
+            var exeName = NormalizeProbe(Path.GetFileNameWithoutExtension(app.ExePath));
+            if (!string.IsNullOrWhiteSpace(exeName) && exeName.Length > 2)
+            {
+                // Check if the exe name contains any marker substring
+                if (MusicAppMarkers.Any(marker => exeName.Contains(NormalizeProbe(marker))))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     public static CenterCardMediaSnapshot? TryCreateFallbackSnapshot(RunningAppEntry app)
     {
-        return null;
-    }
+        if (!IsLikelyMusicApp(app))
+        {
+            return null;
+        }
 
-    private static bool IsSameSong(CenterCardMediaSnapshot snapshot, CenterCardMediaSnapshot? previous)
-    {
-        return previous != null
-            && string.Equals(snapshot.SourceAppUserModelId, previous.SourceAppUserModelId, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(snapshot.Title, previous.Title, StringComparison.Ordinal)
-            && string.Equals(snapshot.Artist, previous.Artist, StringComparison.Ordinal);
+        return null;
     }
 
     private static IEnumerable<string> BuildAppProbeParts(RunningAppEntry app)

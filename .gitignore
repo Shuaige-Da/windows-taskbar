@@ -1,5 +1,7 @@
 .vs/
 .worktrees/
+.codex-backups/
+.tmp-audio-debug/
 
 # Build artifacts
 **/obj/

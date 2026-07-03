@@ -160,6 +160,213 @@ namespace DynamicIslandBar
 
         #endregion
 
+        #region AppVolumeInterop
+
+        [ComImport]
+        [Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionManager2
+        {
+            int GetAudioSessionControl(ref Guid audioSessionGuid, int streamFlags, out IntPtr sessionControl);
+            int GetSimpleAudioVolume(ref Guid audioSessionGuid, int streamFlags, out IntPtr audioVolume);
+            int GetSessionEnumerator(out IAudioSessionEnumerator sessionEnum);
+            int RegisterSessionNotification(IntPtr sessionNotification);
+            int UnregisterSessionNotification(IntPtr sessionNotification);
+            int RegisterDuckNotification([MarshalAs(UnmanagedType.LPWStr)] string streamId, IntPtr duckNotification);
+            int UnregisterDuckNotification(IntPtr duckNotification);
+        }
+
+        [ComImport]
+        [Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionEnumerator
+        {
+            int GetCount(out int sessionCount);
+            int GetSession(int sessionCount, out IAudioSessionControl2 session);
+        }
+
+        [ComImport]
+        [Guid("B27DD860-5B5E-4B82-9FAA-6D5B6C5F0A14")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionControl2
+        {
+            // IAudioSessionControl methods
+            int GetState(out int state);
+            int GetDisplayName([MarshalAs(UnmanagedType.LPWStr)] out string displayName);
+            int SetDisplayName([MarshalAs(UnmanagedType.LPWStr)] string displayName, ref Guid eventContext);
+            int GetIconPath([MarshalAs(UnmanagedType.LPWStr)] out string iconPath);
+            int SetIconPath([MarshalAs(UnmanagedType.LPWStr)] string iconPath, ref Guid eventContext);
+            int GetGroupingParam(out Guid param);
+            int SetGroupingParam(ref Guid grouping, ref Guid eventContext);
+            int RegisterAudioSessionNotification(IntPtr notification);
+            int UnregisterAudioSessionNotification(IntPtr notification);
+            // IAudioSessionControl2 methods
+            int GetSessionIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string id);
+            int GetSessionInstanceIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string id);
+            int GetProcessId(out int processId);
+            int IsSystemSoundsSession();
+            int SetDuckingPreference([MarshalAs(UnmanagedType.Bool)] bool optOut);
+        }
+
+        [ComImport]
+        [Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface ISimpleAudioVolume
+        {
+            int SetMasterVolume(float level, ref Guid eventContext);
+            int GetMasterVolume(out float level);
+            int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid eventContext);
+            int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+        }
+
+        private static readonly Guid AudioSessionManager2Guid = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+
+        private static ISimpleAudioVolume? GetAppVolumeInterface(int processId)
+        {
+            IMMDeviceEnumerator? enumerator = null;
+            IMMDevice? device = null;
+            IAudioSessionManager2? sessionManager = null;
+            IAudioSessionEnumerator? sessionEnum = null;
+
+            try
+            {
+                enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+                enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Multimedia, out device);
+                device.Activate(AudioSessionManager2Guid, ClsCtxAll, IntPtr.Zero, out var mgrObj);
+                sessionManager = (IAudioSessionManager2)mgrObj;
+                sessionManager.GetSessionEnumerator(out sessionEnum);
+                sessionEnum.GetCount(out var count);
+
+                for (int i = 0; i < count; i++)
+                {
+                    IAudioSessionControl2? session = null;
+                    try
+                    {
+                        sessionEnum.GetSession(i, out session);
+                        if (session == null) continue;
+                        session.GetProcessId(out var pid);
+                        if (pid == processId)
+                        {
+                            var iid = typeof(ISimpleAudioVolume).GUID;
+                            var hr = Marshal.QueryInterface(
+                                Marshal.GetIUnknownForObject(session), ref iid, out var volumePtr);
+                            if (hr == 0 && volumePtr != IntPtr.Zero)
+                            {
+                                var volume = (ISimpleAudioVolume)Marshal.GetObjectForIUnknown(volumePtr);
+                                Marshal.Release(volumePtr);
+                                return volume;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        ReleaseComObject(session);
+                    }
+                }
+
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                ReleaseComObject(sessionEnum);
+                ReleaseComObject(sessionManager);
+                ReleaseComObject(device);
+                ReleaseComObject(enumerator);
+            }
+        }
+
+        public static int GetAppVolume(int processId)
+        {
+            var volume = GetAppVolumeInterface(processId);
+            if (volume != null)
+            {
+                try
+                {
+                    volume.GetMasterVolume(out var level);
+                    return (int)Math.Round(level * 100, MidpointRounding.AwayFromZero);
+                }
+                catch { }
+                finally { ReleaseComObject(volume); }
+            }
+            return -1;
+        }
+
+        public static bool SetAppVolume(int processId, int percent)
+        {
+            var volume = GetAppVolumeInterface(processId);
+            if (volume != null)
+            {
+                try
+                {
+                    var eventContext = Guid.Empty;
+                    volume.SetMasterVolume(Math.Clamp(percent, 0, 100) / 100f, ref eventContext);
+                    return true;
+                }
+                catch { }
+                finally { ReleaseComObject(volume); }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Find the process ID of the first active non-system audio session.
+        /// Used as a reliable fallback for finding the music app's PID.
+        /// </summary>
+        public static int GetActiveAudioSessionPid()
+        {
+            IMMDeviceEnumerator? enumerator = null;
+            IMMDevice? device = null;
+            IAudioSessionManager2? sessionManager = null;
+            IAudioSessionEnumerator? sessionEnum = null;
+
+            try
+            {
+                enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+                enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Multimedia, out device);
+                device.Activate(AudioSessionManager2Guid, ClsCtxAll, IntPtr.Zero, out var mgrObj);
+                sessionManager = (IAudioSessionManager2)mgrObj;
+                sessionManager.GetSessionEnumerator(out sessionEnum);
+                sessionEnum.GetCount(out var count);
+
+                for (int i = 0; i < count; i++)
+                {
+                    IAudioSessionControl2? session = null;
+                    try
+                    {
+                        sessionEnum.GetSession(i, out session);
+                        if (session == null) continue;
+
+                        // Skip system sounds session (returns S_OK=0 if it IS system sounds)
+                        var sysResult = session.IsSystemSoundsSession();
+                        if (sysResult == 0) continue;
+
+                        session.GetProcessId(out var pid);
+                        if (pid > 0)
+                            return pid;
+                    }
+                    finally
+                    {
+                        ReleaseComObject(session);
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                ReleaseComObject(sessionEnum);
+                ReleaseComObject(sessionManager);
+                ReleaseComObject(device);
+                ReleaseComObject(enumerator);
+            }
+            return 0;
+        }
+
+        #endregion
+
         private static readonly PropertyKey DeviceFriendlyNameKey = new()
         {
             fmtid = new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"),
