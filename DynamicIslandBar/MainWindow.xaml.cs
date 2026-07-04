@@ -249,7 +249,9 @@ namespace DynamicIslandBar
                 _capsuleConfig.Mode,
                 _currentLayoutMetrics,
                 screenWidth,
-                screenHeight);
+                screenHeight,
+                _capsuleConfig.FloatingLeft,
+                _capsuleConfig.FloatingTop);
 
             Width = frame.Width;
             Height = frame.Height;
@@ -264,6 +266,7 @@ namespace DynamicIslandBar
             CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
             CapsuleBorder.Height = capsuleHeight;
             UpdateCapsuleCornerRadius(capsuleHeight);
+            ApplyCapsuleRotation();
             ApplyDockModeLayout();
             ApplyCenterCardWidth();
             CapsuleBorder.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
@@ -294,7 +297,8 @@ namespace DynamicIslandBar
 
         private void ApplyDockModeLayout()
         {
-            var isSideDock = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;
+            const bool useLegacySideDockLayout = false;
+            var isSideDock = useLegacySideDockLayout && _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;
 
             DockItems.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;
             AppIconsHost.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;
@@ -369,8 +373,19 @@ namespace DynamicIslandBar
             return metrics with
             {
                 CapsuleWidth = capsuleWidth,
-                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, metrics.CapsuleWidth, capsuleWidth)
+                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, metrics.CapsuleWidth, capsuleWidth),
+                PopupDirection = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                    ? PopupFlowDirection.Down
+                    : PopupFlowDirection.Up
             };
+        }
+
+        private void ApplyCapsuleRotation()
+        {
+            CapsuleBorder.RenderTransformOrigin = new Point(0.5, 0.5);
+            CapsuleBorder.RenderTransform = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock
+                ? new RotateTransform(90)
+                : Transform.Identity;
         }
 
         private (double Width, double Height) GetPrimaryScreenSizeInDips()
@@ -380,8 +395,9 @@ namespace DynamicIslandBar
 
         private static int MapVisibleAppSlots(CapsuleMode mode, double baseWidth, double capsuleWidth)
         {
-            var maxSlots = mode == CapsuleMode.TopIsland ? 3 : 8;
-            var minSlots = mode == CapsuleMode.TopIsland ? 2 : 3;
+            var usesCompactSlotRange = mode is CapsuleMode.TopIsland or CapsuleMode.LeftDock or CapsuleMode.RightDock;
+            var maxSlots = usesCompactSlotRange ? 3 : 8;
+            var minSlots = usesCompactSlotRange ? 2 : 3;
             if (baseWidth <= 0)
             {
                 return minSlots;
@@ -2856,22 +2872,59 @@ namespace DynamicIslandBar
                 return;
             }
 
+            var activePreview = _activeSnapPreview;
             _isDraggingCapsule = false;
             Mouse.Capture(null);
             CaptureFloatingPosition();
             ClearSnapPreview();
             e.Handled = true;
 
-            var resolvedMode = CapsuleLayoutManager.ResolveDropMode(
-                GetPrimaryScreenSizeInDips().Width,
-                GetPrimaryScreenSizeInDips().Height,
+            var (screenWidth, screenHeight) = GetPrimaryScreenSizeInDips();
+            var currentFrame = new WindowFrame(Left, Top, Width, Height);
+            var resolvedMode = activePreview?.Mode ?? CapsuleLayoutManager.ResolveDropMode(
+                screenWidth,
+                screenHeight,
                 Left,
-                Top,
-                _capsuleConfig.Mode);
+                Top);
+            var configChanged = false;
+
+            if (resolvedMode == CapsuleMode.Floating)
+            {
+                var currentRenderedCapsuleWidth = CapsuleBorder.ActualWidth > 0
+                    ? CapsuleBorder.ActualWidth
+                    : _currentLayoutMetrics.CapsuleWidth;
+                var currentRenderedCapsuleHeight = CapsuleBorder.ActualHeight > 0
+                    ? CapsuleBorder.ActualHeight
+                    : CapsuleAppearanceMapper.MapCapsuleHeight(
+                        _currentLayoutMetrics.CapsuleHeight,
+                        _capsuleConfig.CapsuleThicknessPercent);
+                var currentCapsuleBounds = CapsuleLayoutManager.GetCapsuleBounds(
+                    _capsuleConfig.Mode,
+                    currentFrame,
+                    currentRenderedCapsuleWidth,
+                    currentRenderedCapsuleHeight);
+                var floatingMetrics = BuildLayoutMetricsForMode(CapsuleMode.Floating, screenWidth, screenHeight);
+                var floatingRenderedCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                    floatingMetrics.CapsuleHeight,
+                    _capsuleConfig.CapsuleThicknessPercent);
+                var floatingOrigin = CapsuleLayoutManager.GetFloatingWindowOriginForVisibleCapsule(
+                    floatingMetrics.CapsuleWidth,
+                    floatingRenderedCapsuleHeight,
+                    currentCapsuleBounds.Left,
+                    currentCapsuleBounds.Top);
+                _capsuleConfig.FloatingLeft = floatingOrigin.X;
+                _capsuleConfig.FloatingTop = floatingOrigin.Y;
+                configChanged = true;
+            }
 
             if (resolvedMode != _capsuleConfig.Mode)
             {
                 CapsuleConfigMutator.SetMode(_capsuleConfig, resolvedMode);
+                configChanged = true;
+            }
+
+            if (configChanged)
+            {
                 CapsuleConfigService.Save(_capsuleConfig);
             }
 
@@ -2957,6 +3010,24 @@ namespace DynamicIslandBar
 
             _floatingDragLeft = Left;
             _floatingDragTop = Top;
+        }
+
+        private LayoutMetrics BuildLayoutMetricsForMode(CapsuleMode mode, double screenWidth, double screenHeight)
+        {
+            var metrics = CapsuleLayoutManager.GetMetrics(mode, screenWidth, screenHeight);
+            var capsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
+                mode,
+                metrics.CapsuleWidth,
+                _capsuleConfig.CapsuleLengthPercent);
+
+            return metrics with
+            {
+                CapsuleWidth = capsuleWidth,
+                VisibleAppSlots = MapVisibleAppSlots(mode, metrics.CapsuleWidth, capsuleWidth),
+                PopupDirection = mode == CapsuleMode.TopIsland
+                    ? PopupFlowDirection.Down
+                    : PopupFlowDirection.Up
+            };
         }
 
         private static SnapEdge ResolvePreviewEdge(Point cursorScreenPoint, double screenWidth, double screenHeight)

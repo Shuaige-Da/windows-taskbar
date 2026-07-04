@@ -11,8 +11,7 @@ public class DragSnapLogicTests
             screenWidth: 1920,
             screenHeight: 1080,
             leftAfterDrag: 420,
-            topAfterDrag: 820,
-            currentMode: CapsuleMode.TopIsland);
+            topAfterDrag: 820);
 
         Assert.Equal(CapsuleMode.Floating, mode);
     }
@@ -24,10 +23,57 @@ public class DragSnapLogicTests
             screenWidth: 1920,
             screenHeight: 1080,
             leftAfterDrag: 420,
-            topAfterDrag: 1020,
-            currentMode: CapsuleMode.TopIsland);
+            topAfterDrag: 1020);
 
         Assert.Equal(CapsuleMode.BottomTaskbar, mode);
+    }
+
+    [Fact]
+    public void ResolveDropMode_ReturnsFloating_WhenLeavingLeftEdgeDuringDrag()
+    {
+        var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
+            screenHeight: 1080,
+            leftAfterDrag: 220,
+            topAfterDrag: 400);
+
+        Assert.Equal(CapsuleMode.Floating, mode);
+    }
+
+    [Fact]
+    public void ResolveDropMode_ReturnsTopIsland_WhenLeavingLeftEdgeButReenteringTopThreshold()
+    {
+        var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
+            screenHeight: 1080,
+            leftAfterDrag: 220,
+            topAfterDrag: 20);
+
+        Assert.Equal(CapsuleMode.TopIsland, mode);
+    }
+
+    [Fact]
+    public void ResolveDropMode_ReturnsBottomTaskbar_WhenLeavingRightEdgeButReenteringBottomThreshold()
+    {
+        var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
+            screenHeight: 1080,
+            leftAfterDrag: 1680,
+            topAfterDrag: 1040);
+
+        Assert.Equal(CapsuleMode.BottomTaskbar, mode);
+    }
+
+    [Fact]
+    public void ResolveDropMode_ReturnsRightDock_WhenWithinRightThreshold()
+    {
+        var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
+            screenHeight: 1080,
+            leftAfterDrag: 1855,
+            topAfterDrag: 320);
+
+        Assert.Equal(CapsuleMode.RightDock, mode);
     }
 
     [Fact]
