@@ -221,6 +221,21 @@
         <Grid x:Name="CapsuleGrid" HorizontalAlignment="Center" VerticalAlignment="Bottom"
               Width="540" Height="400">
 
+            <Canvas x:Name="CapsuleSnapPreviewLayer"
+                    Width="{Binding ElementName=CapsuleGrid, Path=Width}"
+                    Height="{Binding ElementName=CapsuleGrid, Path=Height}"
+                    IsHitTestVisible="False"
+                    Panel.ZIndex="4">
+                <Border x:Name="CapsuleSnapPreviewOutline"
+                        Width="500"
+                        Height="80"
+                        Visibility="Collapsed"
+                        BorderThickness="2"
+                        CornerRadius="40"
+                        BorderBrush="#8046E0FF"
+                        Background="#12000000"/>
+            </Canvas>
+
             <!-- ===== 主胶囊背景 ===== -->
             <Border x:Name="CapsuleBorder"
                     Height="80" Width="500"

@@ -243,6 +243,35 @@ public class VisualLayerContractTests
         Assert.Contains("CenterCardLayoutPolicy.GetLyricsLayout", code);
     }
 
+    [Fact]
+    public void MainWindow_DeclaresSnapPreviewLayer()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("x:Name=\"CapsuleSnapPreviewLayer\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleSnapPreviewOutline\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CodeBehind_TracksFloatingAndPreviewState()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("_activeSnapPreview", code);
+        Assert.Contains("_floatingDragLeft", code);
+        Assert.Contains("_floatingDragTop", code);
+        Assert.Contains("UpdateSnapPreview(", code);
+        Assert.Contains("ApplySnapPreview(", code);
+        Assert.Contains("ClearSnapPreview()", code);
+        Assert.Contains("CaptureFloatingPosition()", code);
+        Assert.Contains("CapsuleLayoutManager.BuildSnapPreview(", code);
+        Assert.Contains("CapsuleSnapPreviewGeometry.ComputeOutlineOrigin(", code);
+        Assert.Contains("CapsuleGrid.PointFromScreen(", code);
+        Assert.Contains("if (_activeSnapPreview != null)", code);
+        Assert.DoesNotContain("preview.Frame.Left - Left - 10", code);
+        Assert.DoesNotContain("preview.Frame.Top - Top - 10", code);
+    }
+
     private static string ReadMainWindowXaml()
     {
         return ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");

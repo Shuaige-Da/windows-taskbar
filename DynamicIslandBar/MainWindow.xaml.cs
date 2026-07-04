@@ -66,6 +66,9 @@ namespace DynamicIslandBar
         private Point _dragStartPoint;
         private double _dragStartLeft;
         private double _dragStartTop;
+        private CapsuleSnapPreview? _activeSnapPreview;
+        private double _floatingDragLeft;
+        private double _floatingDragTop;
         private string? _lastPrimaryActivatedAppId;
         private DateTime _lastPrimaryActivatedAtUtc;
         private RunningAppEntry? _hoveredApp;
@@ -286,6 +289,7 @@ namespace DynamicIslandBar
             ConfigurePopup(AppsPopup, _currentLayoutMetrics.PopupDirection, -142);
             ConfigurePopup(OverflowAppsPopup, _currentLayoutMetrics.PopupDirection, 0);
             ConfigurePopup(CenterCardAppsPopup, _currentLayoutMetrics.PopupDirection, -120);
+            ClearSnapPreview();
         }
 
         private void ApplyDockModeLayout()
@@ -2825,6 +2829,8 @@ namespace DynamicIslandBar
             _dragStartPoint = PointToScreen(e.GetPosition(this));
             _dragStartLeft = Left;
             _dragStartTop = Top;
+            CaptureFloatingPosition();
+            ClearSnapPreview();
             Mouse.Capture(CapsuleBorder, CaptureMode.SubTree);
             e.Handled = true;
         }
@@ -2839,6 +2845,8 @@ namespace DynamicIslandBar
             var currentPoint = PointToScreen(e.GetPosition(this));
             Left = _dragStartLeft + (currentPoint.X - _dragStartPoint.X);
             Top = _dragStartTop + (currentPoint.Y - _dragStartPoint.Y);
+            UpdateSnapPreview(currentPoint);
+            CaptureFloatingPosition();
         }
 
         private void Capsule_DragEnd(object sender, MouseButtonEventArgs e)
@@ -2850,6 +2858,8 @@ namespace DynamicIslandBar
 
             _isDraggingCapsule = false;
             Mouse.Capture(null);
+            CaptureFloatingPosition();
+            ClearSnapPreview();
             e.Handled = true;
 
             var resolvedMode = CapsuleLayoutManager.ResolveDropMode(
@@ -2867,6 +2877,113 @@ namespace DynamicIslandBar
 
             ApplyLayout();
             RefreshRunningAppsBarCore();
+        }
+
+        private void UpdateSnapPreview(Point cursorScreenPoint)
+        {
+            var (screenWidth, screenHeight) = GetPrimaryScreenSizeInDips();
+            var previewEdge = ResolvePreviewEdge(cursorScreenPoint, screenWidth, screenHeight);
+            if (previewEdge == SnapEdge.None)
+            {
+                ClearSnapPreview();
+                return;
+            }
+
+            var topMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, screenWidth, screenHeight);
+            var bottomMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.BottomTaskbar, screenWidth, screenHeight);
+            var topCapsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
+                CapsuleMode.TopIsland,
+                topMetrics.CapsuleWidth,
+                _capsuleConfig.CapsuleLengthPercent);
+            var topCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                topMetrics.CapsuleHeight,
+                _capsuleConfig.CapsuleThicknessPercent);
+            var bottomCapsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
+                CapsuleMode.BottomTaskbar,
+                bottomMetrics.CapsuleWidth,
+                _capsuleConfig.CapsuleLengthPercent);
+            var bottomCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                bottomMetrics.CapsuleHeight,
+                _capsuleConfig.CapsuleThicknessPercent);
+
+            var preview = CapsuleLayoutManager.BuildSnapPreview(
+                previewEdge,
+                screenWidth,
+                screenHeight,
+                topCapsuleWidth,
+                topCapsuleHeight,
+                bottomCapsuleWidth,
+                bottomCapsuleHeight);
+
+            ApplySnapPreview(preview);
+        }
+
+        private void ApplySnapPreview(CapsuleSnapPreview preview)
+        {
+            _activeSnapPreview = preview;
+            CapsuleSnapPreviewOutline.Width = preview.CapsuleWidth;
+            CapsuleSnapPreviewOutline.Height = preview.CapsuleHeight;
+            CapsuleSnapPreviewOutline.CornerRadius = new CornerRadius(preview.CapsuleHeight / 2);
+            var screenOrigin = CapsuleSnapPreviewGeometry.ComputeOutlineOrigin(
+                preview.Frame,
+                preview.CapsuleWidth,
+                preview.CapsuleHeight,
+                preview.RotationDegrees);
+            var previewOrigin = CapsuleGrid.PointFromScreen(screenOrigin);
+            Canvas.SetLeft(CapsuleSnapPreviewOutline, previewOrigin.X);
+            Canvas.SetTop(CapsuleSnapPreviewOutline, previewOrigin.Y);
+            CapsuleSnapPreviewOutline.RenderTransformOrigin = new Point(0.5, 0.5);
+            CapsuleSnapPreviewOutline.RenderTransform = preview.RotationDegrees == 0
+                ? Transform.Identity
+                : new RotateTransform(preview.RotationDegrees);
+            CapsuleSnapPreviewOutline.Visibility = Visibility.Visible;
+        }
+
+        private void ClearSnapPreview()
+        {
+            _activeSnapPreview = null;
+            CapsuleSnapPreviewOutline.Visibility = Visibility.Collapsed;
+            Canvas.SetLeft(CapsuleSnapPreviewOutline, 0);
+            Canvas.SetTop(CapsuleSnapPreviewOutline, 0);
+            CapsuleSnapPreviewOutline.RenderTransform = Transform.Identity;
+        }
+
+        private void CaptureFloatingPosition()
+        {
+            if (_activeSnapPreview != null)
+            {
+                return;
+            }
+
+            _floatingDragLeft = Left;
+            _floatingDragTop = Top;
+        }
+
+        private static SnapEdge ResolvePreviewEdge(Point cursorScreenPoint, double screenWidth, double screenHeight)
+        {
+            const double snapPreviewThreshold = 72;
+
+            if (cursorScreenPoint.X <= snapPreviewThreshold)
+            {
+                return SnapEdge.Left;
+            }
+
+            if (cursorScreenPoint.X >= screenWidth - snapPreviewThreshold)
+            {
+                return SnapEdge.Right;
+            }
+
+            if (cursorScreenPoint.Y <= snapPreviewThreshold)
+            {
+                return SnapEdge.Top;
+            }
+
+            if (cursorScreenPoint.Y >= screenHeight - snapPreviewThreshold)
+            {
+                return SnapEdge.Bottom;
+            }
+
+            return SnapEdge.None;
         }
 
         private bool ShouldSuppressDragStart(DependencyObject? source)
@@ -3431,6 +3548,59 @@ namespace DynamicIslandBar
             SetSystemIconHighlight(OverflowFolderButton, false);
             ClearCenterCardAppSelectorHighlight();
             UpdateRunningAppsRefreshInterval();
+        }
+    }
+
+    public static class CapsuleSnapPreviewGeometry
+    {
+        public static Point ComputeOutlineOrigin(
+            WindowFrame frame,
+            double capsuleWidth,
+            double capsuleHeight,
+            double rotationDegrees)
+        {
+            var renderedBounds = ComputeRenderedBounds(
+                new Point(0, 0),
+                capsuleWidth,
+                capsuleHeight,
+                rotationDegrees);
+            var renderedLeft = frame.Left + ((frame.Width - renderedBounds.Width) / 2);
+            var renderedTop = frame.Top + ((frame.Height - renderedBounds.Height) / 2);
+
+            if (IsQuarterTurn(rotationDegrees))
+            {
+                var halfDelta = (capsuleWidth - capsuleHeight) / 2;
+                return new Point(
+                    renderedLeft - halfDelta,
+                    renderedTop + halfDelta);
+            }
+
+            return new Point(renderedLeft, renderedTop);
+        }
+
+        public static Rect ComputeRenderedBounds(
+            Point origin,
+            double capsuleWidth,
+            double capsuleHeight,
+            double rotationDegrees)
+        {
+            if (IsQuarterTurn(rotationDegrees))
+            {
+                var halfDelta = (capsuleWidth - capsuleHeight) / 2;
+                return new Rect(
+                    origin.X + halfDelta,
+                    origin.Y - halfDelta,
+                    capsuleHeight,
+                    capsuleWidth);
+            }
+
+            return new Rect(origin.X, origin.Y, capsuleWidth, capsuleHeight);
+        }
+
+        private static bool IsQuarterTurn(double rotationDegrees)
+        {
+            var normalized = ((rotationDegrees % 180) + 180) % 180;
+            return Math.Abs(normalized - 90) < 0.001;
         }
     }
 }

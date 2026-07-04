@@ -197,11 +197,13 @@ git add DynamicIslandBar/CapsuleSnapPreview.cs DynamicIslandBar/CapsuleLayoutMan
 git commit -m "feat: add capsule snap preview model"
 ```
 
-### Task 3: MainWindow Preview Layer And Drag State Machine
+### Task 3: MainWindow Preview Layer And Drag State Skeleton
 
 **Files:**
 - Modify: `DynamicIslandBar/MainWindow.xaml`
 - Modify: `DynamicIslandBar/MainWindow.xaml.cs`
+- Modify: `DynamicIslandBar.Tests/VisualLayerContractTests.cs`
+- Create: `DynamicIslandBar.Tests/CapsuleSnapPreviewGeometryTests.cs` (only if a pure geometry helper is introduced to make preview positioning testable)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -257,6 +259,11 @@ private double _floatingDragTop;
 - `ApplySnapPreview(CapsuleSnapPreview preview)`
 - `ClearSnapPreview()`
 - `CaptureFloatingPosition()`
+- 允许 `UpdateSnapPreview(...)` 在拖拽过程中做“最小可工作的预览刷新”：
+  - 根据当前光标是否接近边缘决定显示或隐藏预览
+  - 使用现有 `CapsuleLayoutManager.BuildSnapPreview(...)` 构造预览数据
+  - 只更新预览层的显示，不做最终落位、不写配置、不切换最终模式
+- 如果预览定位需要额外的纯几何计算 helper，可以在 `MainWindow.xaml.cs` 中新增一个小而纯的 helper，并用独立单测覆盖它
 
 - [ ] **Step 4: Run tests to verify they pass**
 
