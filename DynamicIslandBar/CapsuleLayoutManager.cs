@@ -5,7 +5,9 @@ namespace DynamicIslandBar;
 public enum PopupFlowDirection
 {
     Up,
-    Down
+    Down,
+    Left,
+    Right
 }
 
 public readonly record struct LayoutMetrics(
@@ -72,7 +74,7 @@ public static class CapsuleLayoutManager
                 CapsuleWidth: 760,
                 CapsuleHeight: 72,
                 VisibleAppSlots: 3,
-                PopupDirection: PopupFlowDirection.Up),
+                PopupDirection: mode == CapsuleMode.LeftDock ? PopupFlowDirection.Right : PopupFlowDirection.Left),
             _ => new LayoutMetrics(
                 CapsuleWidth: screenWidth,
                 CapsuleHeight: 80,
@@ -176,8 +178,8 @@ public static class CapsuleLayoutManager
             return new Rect(
                 frame.Left + SideDockHorizontalPadding,
                 frame.Top + SideDockVerticalPadding,
-                renderedCapsuleHeight,
-                renderedCapsuleWidth);
+                renderedCapsuleWidth,
+                renderedCapsuleHeight);
         }
 
         if (mode == CapsuleMode.TopIsland)
@@ -205,5 +207,43 @@ public static class CapsuleLayoutManager
         return new Point(
             visibleCapsuleLeft - FloatingWindowHorizontalPadding,
             visibleCapsuleTop - ((FloatingWindowHeight - renderedFloatingCapsuleHeight) / 2));
+    }
+
+    public static Point ClampWindowOriginToVisibleBounds(
+        CapsuleMode mode,
+        double desiredLeft,
+        double desiredTop,
+        double frameWidth,
+        double frameHeight,
+        double screenWidth,
+        double screenHeight,
+        double renderedCapsuleWidth,
+        double renderedCapsuleHeight)
+    {
+        var desiredFrame = new WindowFrame(desiredLeft, desiredTop, frameWidth, frameHeight);
+        var bounds = GetCapsuleBounds(mode, desiredFrame, renderedCapsuleWidth, renderedCapsuleHeight);
+
+        var clampedLeft = desiredLeft;
+        var clampedTop = desiredTop;
+
+        if (bounds.Left < 0)
+        {
+            clampedLeft -= bounds.Left;
+        }
+        else if (bounds.Right > screenWidth)
+        {
+            clampedLeft -= bounds.Right - screenWidth;
+        }
+
+        if (bounds.Top < 0)
+        {
+            clampedTop -= bounds.Top;
+        }
+        else if (bounds.Bottom > screenHeight)
+        {
+            clampedTop -= bounds.Bottom - screenHeight;
+        }
+
+        return new Point(clampedLeft, clampedTop);
     }
 }

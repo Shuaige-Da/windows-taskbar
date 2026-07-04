@@ -86,4 +86,19 @@ public static class CenterCardLayoutPolicy
             _ => new CenterCardLyricsLayout(42, true, true)
         };
     }
+
+    public static double MapSideDockExtent(double mappedTopLength, double availableHeight)
+    {
+        if (availableHeight <= 0)
+        {
+            return 96d;
+        }
+
+        if (availableHeight <= 96d)
+        {
+            return availableHeight;
+        }
+
+        return Math.Clamp(mappedTopLength, 96d, availableHeight);
+    }
 }

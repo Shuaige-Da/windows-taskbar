@@ -43,8 +43,21 @@ public class CapsuleLayoutManagerTests
         Assert.Equal(top.CapsuleHeight, right.CapsuleHeight);
         Assert.Equal(top.VisibleAppSlots, right.VisibleAppSlots);
         Assert.Equal(left.CapsuleWidth, right.CapsuleWidth);
-        Assert.Equal(PopupFlowDirection.Up, left.PopupDirection);
-        Assert.Equal(PopupFlowDirection.Up, right.PopupDirection);
+        Assert.Equal(PopupFlowDirection.Right, left.PopupDirection);
+        Assert.Equal(PopupFlowDirection.Left, right.PopupDirection);
+    }
+
+    [Fact]
+    public void GetMetrics_UsesTopPopupDefaultsForSideDockModes()
+    {
+        var left = CapsuleLayoutManager.GetMetrics(CapsuleMode.LeftDock, 1920, 1080);
+        var right = CapsuleLayoutManager.GetMetrics(CapsuleMode.RightDock, 1920, 1080);
+        var top = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
+
+        Assert.Equal(top.CapsuleWidth, left.CapsuleWidth);
+        Assert.Equal(top.CapsuleHeight, left.CapsuleHeight);
+        Assert.Equal(PopupFlowDirection.Right, left.PopupDirection);
+        Assert.Equal(PopupFlowDirection.Left, right.PopupDirection);
     }
 
     [Fact]
@@ -252,6 +265,28 @@ public class CapsuleLayoutManagerTests
     }
 
     [Fact]
+    public void GetCapsuleBounds_UsesUprightSideDockBounds_ForRealCapsule()
+    {
+        var sideMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.LeftDock, 1920, 1080);
+        var frame = CapsuleLayoutManager.GetWindowFrame(
+            CapsuleMode.LeftDock,
+            sideMetrics,
+            screenWidth: 1920,
+            screenHeight: 1080);
+
+        var visibleBounds = CapsuleLayoutManager.GetCapsuleBounds(
+            CapsuleMode.LeftDock,
+            frame,
+            renderedCapsuleWidth: 72,
+            renderedCapsuleHeight: 760);
+
+        Assert.Equal(frame.Left + 12, visibleBounds.Left, precision: 1);
+        Assert.Equal(frame.Top + 20, visibleBounds.Top, precision: 1);
+        Assert.Equal(72, visibleBounds.Width, precision: 1);
+        Assert.Equal(760, visibleBounds.Height, precision: 1);
+    }
+
+    [Fact]
     public void GetFloatingWindowOriginForVisibleCapsule_PreservesTopIslandVisiblePosition_WithMappedRenderedHeight()
     {
         var topMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
@@ -293,5 +328,41 @@ public class CapsuleLayoutManagerTests
         Assert.Equal(sourceVisibleBounds.Top, visibleBounds.Top, precision: 1);
         Assert.Equal(topRenderedHeight, sourceVisibleBounds.Height, precision: 1);
         Assert.NotEqual(floatingMetrics.CapsuleHeight, floatingRenderedHeight, precision: 1);
+    }
+
+    [Fact]
+    public void ClampWindowOriginToVisibleBounds_KeepsSideDockCapsuleFullyRecoverable()
+    {
+        var clamped = CapsuleLayoutManager.ClampWindowOriginToVisibleBounds(
+            CapsuleMode.LeftDock,
+            desiredLeft: -120,
+            desiredTop: -80,
+            frameWidth: 96,
+            frameHeight: 800,
+            screenWidth: 1920,
+            screenHeight: 1080,
+            renderedCapsuleWidth: 72,
+            renderedCapsuleHeight: 760);
+
+        Assert.Equal(-12, clamped.X, precision: 1);
+        Assert.Equal(-20, clamped.Y, precision: 1);
+    }
+
+    [Fact]
+    public void ClampWindowOriginToVisibleBounds_PullsFloatingCapsuleBackInsideScreen()
+    {
+        var clamped = CapsuleLayoutManager.ClampWindowOriginToVisibleBounds(
+            CapsuleMode.Floating,
+            desiredLeft: 400,
+            desiredTop: 900,
+            frameWidth: 1960,
+            frameHeight: 420,
+            screenWidth: 1920,
+            screenHeight: 1080,
+            renderedCapsuleWidth: 1920,
+            renderedCapsuleHeight: 80);
+
+        Assert.Equal(-20, clamped.X, precision: 1);
+        Assert.Equal(830, clamped.Y, precision: 1);
     }
 }
