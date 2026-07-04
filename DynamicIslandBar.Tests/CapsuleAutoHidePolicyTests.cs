@@ -68,4 +68,30 @@ public class CapsuleAutoHidePolicyTests
 
         Assert.False(shouldReveal);
     }
+
+    [Fact]
+    public void IsPointerInRevealZone_ReturnsTrue_ForFloatingModeNearStoredCapsuleArea()
+    {
+        var shouldReveal = CapsuleAutoHidePolicy.IsPointerInRevealZone(
+            CapsuleMode.Floating,
+            new Point(438, 312),
+            screenWidth: 1920,
+            screenHeight: 1080,
+            floatingRevealBounds: new Rect(400, 280, 240, 48));
+
+        Assert.True(shouldReveal);
+    }
+
+    [Fact]
+    public void IsPointerInRevealZone_ReturnsFalse_ForFloatingModeAwayFromStoredCapsuleArea()
+    {
+        var shouldReveal = CapsuleAutoHidePolicy.IsPointerInRevealZone(
+            CapsuleMode.Floating,
+            new Point(960, 980),
+            screenWidth: 1920,
+            screenHeight: 1080,
+            floatingRevealBounds: new Rect(400, 280, 240, 48));
+
+        Assert.False(shouldReveal);
+    }
 }

@@ -265,6 +265,10 @@ namespace DynamicIslandBar
                 _capsuleConfig.CapsuleThicknessPercent);
             CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
             CapsuleBorder.Height = capsuleHeight;
+            if (_capsuleConfig.Mode == CapsuleMode.BottomTaskbar)
+            {
+                PersistLastBottomCapsuleMetrics(_currentLayoutMetrics.CapsuleWidth, capsuleHeight);
+            }
             UpdateCapsuleCornerRadius(capsuleHeight);
             ApplyCapsuleRotation();
             ApplyDockModeLayout();
@@ -876,7 +880,8 @@ namespace DynamicIslandBar
                     _capsuleConfig.Mode,
                     cursorPosition,
                     screenWidth,
-                    screenHeight))
+                    screenHeight,
+                    GetFloatingRevealBounds(screenWidth, screenHeight)))
             {
                 return;
             }
@@ -2873,6 +2878,7 @@ namespace DynamicIslandBar
             }
 
             var activePreview = _activeSnapPreview;
+            var releaseCursorPoint = PointToScreen(e.GetPosition(this));
             _isDraggingCapsule = false;
             Mouse.Capture(null);
             CaptureFloatingPosition();
@@ -2884,8 +2890,7 @@ namespace DynamicIslandBar
             var resolvedMode = activePreview?.Mode ?? CapsuleLayoutManager.ResolveDropMode(
                 screenWidth,
                 screenHeight,
-                Left,
-                Top);
+                releaseCursorPoint);
             var configChanged = false;
 
             if (resolvedMode == CapsuleMode.Floating)
@@ -2958,6 +2963,11 @@ namespace DynamicIslandBar
             var bottomCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
                 bottomMetrics.CapsuleHeight,
                 _capsuleConfig.CapsuleThicknessPercent);
+            var bottomPreviewSize = CapsuleLayoutManager.ResolveBottomPreviewCapsuleSize(
+                bottomCapsuleWidth,
+                bottomCapsuleHeight,
+                _capsuleConfig.LastBottomCapsuleWidth,
+                _capsuleConfig.LastBottomCapsuleHeight);
 
             var preview = CapsuleLayoutManager.BuildSnapPreview(
                 previewEdge,
@@ -2965,8 +2975,8 @@ namespace DynamicIslandBar
                 screenHeight,
                 topCapsuleWidth,
                 topCapsuleHeight,
-                bottomCapsuleWidth,
-                bottomCapsuleHeight);
+                bottomPreviewSize.Width,
+                bottomPreviewSize.Height);
 
             ApplySnapPreview(preview);
         }
@@ -3010,6 +3020,50 @@ namespace DynamicIslandBar
 
             _floatingDragLeft = Left;
             _floatingDragTop = Top;
+        }
+
+        private void PersistLastBottomCapsuleMetrics(double width, double height)
+        {
+            if (Math.Abs(_capsuleConfig.LastBottomCapsuleWidth - width) < 0.01
+                && Math.Abs(_capsuleConfig.LastBottomCapsuleHeight - height) < 0.01)
+            {
+                return;
+            }
+
+            _capsuleConfig.LastBottomCapsuleWidth = width;
+            _capsuleConfig.LastBottomCapsuleHeight = height;
+            CapsuleConfigService.Save(_capsuleConfig);
+        }
+
+        private Rect? GetFloatingRevealBounds(double screenWidth, double screenHeight)
+        {
+            if (_capsuleConfig.Mode != CapsuleMode.Floating)
+            {
+                return null;
+            }
+
+            var floatingMetrics = BuildLayoutMetricsForMode(CapsuleMode.Floating, screenWidth, screenHeight);
+            var renderedCapsuleWidth = CapsuleBorder.ActualWidth > 0
+                ? CapsuleBorder.ActualWidth
+                : floatingMetrics.CapsuleWidth;
+            var renderedCapsuleHeight = CapsuleBorder.ActualHeight > 0
+                ? CapsuleBorder.ActualHeight
+                : CapsuleAppearanceMapper.MapCapsuleHeight(
+                    floatingMetrics.CapsuleHeight,
+                    _capsuleConfig.CapsuleThicknessPercent);
+            var frame = CapsuleLayoutManager.GetWindowFrame(
+                CapsuleMode.Floating,
+                floatingMetrics,
+                screenWidth,
+                screenHeight,
+                _capsuleConfig.FloatingLeft,
+                _capsuleConfig.FloatingTop);
+
+            return CapsuleLayoutManager.GetCapsuleBounds(
+                CapsuleMode.Floating,
+                frame,
+                renderedCapsuleWidth,
+                renderedCapsuleHeight);
         }
 
         private LayoutMetrics BuildLayoutMetricsForMode(CapsuleMode mode, double screenWidth, double screenHeight)

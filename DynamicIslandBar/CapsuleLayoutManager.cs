@@ -87,27 +87,49 @@ public static class CapsuleLayoutManager
         double leftAfterDrag,
         double topAfterDrag)
     {
-        if (leftAfterDrag <= DropSnapThreshold)
+        return ResolveDropMode(screenWidth, screenHeight, new Point(leftAfterDrag, topAfterDrag));
+    }
+
+    public static CapsuleMode ResolveDropMode(
+        double screenWidth,
+        double screenHeight,
+        Point cursorScreenPoint)
+    {
+        if (cursorScreenPoint.X <= DropSnapThreshold)
         {
             return CapsuleMode.LeftDock;
         }
 
-        if (leftAfterDrag >= screenWidth - DropSnapThreshold)
+        if (cursorScreenPoint.X >= screenWidth - DropSnapThreshold)
         {
             return CapsuleMode.RightDock;
         }
 
-        if (topAfterDrag <= DropSnapThreshold)
+        if (cursorScreenPoint.Y <= DropSnapThreshold)
         {
             return CapsuleMode.TopIsland;
         }
 
-        if (topAfterDrag >= screenHeight - DropSnapThreshold)
+        if (cursorScreenPoint.Y >= screenHeight - DropSnapThreshold)
         {
             return CapsuleMode.BottomTaskbar;
         }
 
         return CapsuleMode.Floating;
+    }
+
+    public static Size ResolveBottomPreviewCapsuleSize(
+        double fallbackWidth,
+        double fallbackHeight,
+        double lastBottomCapsuleWidth,
+        double lastBottomCapsuleHeight)
+    {
+        if (lastBottomCapsuleWidth > 0 && lastBottomCapsuleHeight > 0)
+        {
+            return new Size(lastBottomCapsuleWidth, lastBottomCapsuleHeight);
+        }
+
+        return new Size(fallbackWidth, fallbackHeight);
     }
 
     public static WindowFrame GetWindowFrame(

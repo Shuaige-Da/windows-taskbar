@@ -198,6 +198,38 @@ public class CapsuleLayoutManagerTests
     }
 
     [Fact]
+    public void ResolveBottomPreviewCapsuleSize_UsesLastSavedBottomMetrics_WhenAvailable()
+    {
+        var size = CapsuleLayoutManager.ResolveBottomPreviewCapsuleSize(
+            fallbackWidth: 1440,
+            fallbackHeight: 80,
+            lastBottomCapsuleWidth: 1180,
+            lastBottomCapsuleHeight: 64);
+
+        Assert.Equal(1180, size.Width);
+        Assert.Equal(64, size.Height);
+    }
+
+    [Theory]
+    [InlineData(0, 64)]
+    [InlineData(1180, 0)]
+    [InlineData(-1, 64)]
+    [InlineData(1180, -1)]
+    public void ResolveBottomPreviewCapsuleSize_FallsBack_WhenSavedMetricsAreMissing(
+        double lastBottomCapsuleWidth,
+        double lastBottomCapsuleHeight)
+    {
+        var size = CapsuleLayoutManager.ResolveBottomPreviewCapsuleSize(
+            fallbackWidth: 1440,
+            fallbackHeight: 80,
+            lastBottomCapsuleWidth,
+            lastBottomCapsuleHeight);
+
+        Assert.Equal(1440, size.Width);
+        Assert.Equal(80, size.Height);
+    }
+
+    [Fact]
     public void GetCapsuleBounds_UsesTopAlignedOrigin_ForTopIsland()
     {
         var topMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);

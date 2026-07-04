@@ -1,4 +1,5 @@
 using DynamicIslandBar;
+using System.IO;
 
 namespace DynamicIslandBar.Tests;
 
@@ -83,5 +84,14 @@ public class DragSnapLogicTests
         var bottom = CapsuleLayoutManager.GetMetrics(CapsuleMode.BottomTaskbar, 1920, 1080);
 
         Assert.True(top.CapsuleHeight <= bottom.CapsuleHeight);
+    }
+
+    [Fact]
+    public void DragEndFallback_UsesReleaseCursorCoordinates_WhenNoPreviewIsActive()
+    {
+        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "DynamicIslandBar", "MainWindow.xaml.cs"));
+
+        Assert.Contains("var releaseCursorPoint = PointToScreen(e.GetPosition(this));", source);
+        Assert.Contains("releaseCursorPoint);", source);
     }
 }
