@@ -64,7 +64,12 @@ public static class CapsuleLayoutManager
             return CapsuleMode.TopIsland;
         }
 
-        return CapsuleMode.BottomTaskbar;
+        if (topAfterDrag >= screenHeight - 72)
+        {
+            return CapsuleMode.BottomTaskbar;
+        }
+
+        return CapsuleMode.Floating;
     }
 
     public static WindowFrame GetWindowFrame(

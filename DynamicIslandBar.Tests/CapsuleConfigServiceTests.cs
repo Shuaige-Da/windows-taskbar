@@ -59,4 +59,37 @@ public class CapsuleConfigServiceTests
         Assert.Equal("cloudmusic", restored.CenterCardAppId);
         Assert.Equal(100, restored.CenterCardWidthPercent);
     }
+
+    [Fact]
+    public void Serialize_RoundTripsFloatingPlacement()
+    {
+        var config = new CapsuleConfig
+        {
+            Mode = CapsuleMode.Floating,
+            FloatingLeft = 312.5,
+            FloatingTop = 228.25,
+            LastBottomCapsuleWidth = 1280,
+            LastBottomCapsuleHeight = 80
+        };
+
+        var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
+
+        Assert.Equal(CapsuleMode.Floating, restored.Mode);
+        Assert.Equal(312.5, restored.FloatingLeft, 2);
+        Assert.Equal(228.25, restored.FloatingTop, 2);
+        Assert.Equal(1280, restored.LastBottomCapsuleWidth, 2);
+        Assert.Equal(80, restored.LastBottomCapsuleHeight, 2);
+    }
+
+    [Fact]
+    public void Deserialize_PreservesLegacyNumericModeValues()
+    {
+        var config = CapsuleConfigSerializer.Deserialize("""
+            {
+              "Mode": 0
+            }
+            """);
+
+        Assert.Equal(CapsuleMode.BottomTaskbar, config.Mode);
+    }
 }

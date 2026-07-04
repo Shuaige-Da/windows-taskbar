@@ -40,6 +40,18 @@ public class CapsuleLayoutManagerTests
     }
 
     [Fact]
+    public void GetMetrics_UsesBottomMetricsForFloatingMode()
+    {
+        var floating = CapsuleLayoutManager.GetMetrics(CapsuleMode.Floating, 1920, 1080);
+        var bottom = CapsuleLayoutManager.GetMetrics(CapsuleMode.BottomTaskbar, 1920, 1080);
+
+        Assert.Equal(bottom.CapsuleWidth, floating.CapsuleWidth);
+        Assert.Equal(bottom.CapsuleHeight, floating.CapsuleHeight);
+        Assert.Equal(bottom.VisibleAppSlots, floating.VisibleAppSlots);
+        Assert.Equal(bottom.PopupDirection, floating.PopupDirection);
+    }
+
+    [Fact]
     public void ResolveDropMode_SnapsToTopWhenCloseToTopThreshold()
     {
         var mode = CapsuleLayoutManager.ResolveDropMode(
@@ -65,6 +77,32 @@ public class CapsuleLayoutManagerTests
             currentMode: CapsuleMode.BottomTaskbar);
 
         Assert.Equal(expectedMode, mode);
+    }
+
+    [Fact]
+    public void ResolveDropMode_ReturnsFloating_WhenDroppedAwayFromAllEdges()
+    {
+        var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
+            screenHeight: 1080,
+            leftAfterDrag: 640,
+            topAfterDrag: 420,
+            currentMode: CapsuleMode.TopIsland);
+
+        Assert.Equal(CapsuleMode.Floating, mode);
+    }
+
+    [Fact]
+    public void ResolveDropMode_ReturnsBottomTaskbar_WhenDroppedNearBottomEdge()
+    {
+        var mode = CapsuleLayoutManager.ResolveDropMode(
+            screenWidth: 1920,
+            screenHeight: 1080,
+            leftAfterDrag: 640,
+            topAfterDrag: 1040,
+            currentMode: CapsuleMode.TopIsland);
+
+        Assert.Equal(CapsuleMode.BottomTaskbar, mode);
     }
 
     [Fact]

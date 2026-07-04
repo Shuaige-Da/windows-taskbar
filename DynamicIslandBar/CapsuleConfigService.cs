@@ -5,10 +5,11 @@ namespace DynamicIslandBar;
 
 public enum CapsuleMode
 {
-    BottomTaskbar,
-    TopIsland,
-    LeftDock,
-    RightDock
+    BottomTaskbar = 0,
+    TopIsland = 1,
+    LeftDock = 2,
+    RightDock = 3,
+    Floating = 4
 }
 
 public enum CapsuleThemePreset
@@ -21,6 +22,10 @@ public enum CapsuleThemePreset
 public sealed class CapsuleConfig
 {
     public CapsuleMode Mode { get; set; } = CapsuleMode.BottomTaskbar;
+    public double FloatingLeft { get; set; }
+    public double FloatingTop { get; set; }
+    public double LastBottomCapsuleWidth { get; set; }
+    public double LastBottomCapsuleHeight { get; set; } = 80;
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
     public HashSet<string> FavoriteApps { get; } = [];
     public HashSet<string> HiddenApps { get; } = [];
@@ -190,6 +195,10 @@ public static class CapsuleConfigService
 internal sealed class CapsuleConfigStore
 {
     public CapsuleMode Mode { get; set; } = CapsuleMode.BottomTaskbar;
+    public double FloatingLeft { get; set; }
+    public double FloatingTop { get; set; }
+    public double LastBottomCapsuleWidth { get; set; }
+    public double LastBottomCapsuleHeight { get; set; } = 80;
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
     public List<string> FavoriteApps { get; set; } = [];
     public List<string> HiddenApps { get; set; } = [];
@@ -213,6 +222,10 @@ internal sealed class CapsuleConfigStore
         var config = new CapsuleConfig
         {
             Mode = Mode,
+            FloatingLeft = FloatingLeft,
+            FloatingTop = FloatingTop,
+            LastBottomCapsuleWidth = LastBottomCapsuleWidth,
+            LastBottomCapsuleHeight = LastBottomCapsuleHeight,
             ThemePreset = ThemePreset,
             BackgroundImagePath = BackgroundImagePath,
             BackgroundImageOpacity = BackgroundImageOpacity,
@@ -252,6 +265,10 @@ internal sealed class CapsuleConfigStore
         return new CapsuleConfigStore
         {
             Mode = config.Mode,
+            FloatingLeft = config.FloatingLeft,
+            FloatingTop = config.FloatingTop,
+            LastBottomCapsuleWidth = config.LastBottomCapsuleWidth,
+            LastBottomCapsuleHeight = config.LastBottomCapsuleHeight,
             ThemePreset = config.ThemePreset,
             FavoriteApps = [.. config.FavoriteApps.Order(StringComparer.OrdinalIgnoreCase)],
             HiddenApps = [.. config.HiddenApps.Order(StringComparer.OrdinalIgnoreCase)],
