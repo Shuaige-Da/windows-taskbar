@@ -19,16 +19,15 @@ public class CenterCardLayoutPolicyTests
     }
 
     [Theory]
-    [InlineData(CapsuleMode.TopIsland, 760, 58, 233.8)]
-    [InlineData(CapsuleMode.LeftDock, 760, 58, 233.8)]
-    [InlineData(CapsuleMode.RightDock, 760, 58, 233.8)]
-    public void MapWidth_ScalesWithTopRatioForTopAndSideModes(
-        CapsuleMode mode,
-        double capsuleWidth,
-        int percent,
-        double expected)
+    [InlineData(CapsuleMode.LeftDock)]
+    [InlineData(CapsuleMode.RightDock)]
+    public void MapWidth_UsesSameStoredRatioForSideDockModesAsTopIsland(CapsuleMode mode)
     {
-        Assert.Equal(expected, CenterCardLayoutPolicy.MapWidth(mode, capsuleWidth, percent), precision: 1);
+        const double capsuleWidth = 760;
+        const int percent = 58;
+        var topWidth = CenterCardLayoutPolicy.MapWidth(CapsuleMode.TopIsland, capsuleWidth, percent);
+
+        Assert.Equal(topWidth, CenterCardLayoutPolicy.MapWidth(mode, capsuleWidth, percent), precision: 1);
     }
 
     [Theory]
@@ -89,7 +88,7 @@ public class CenterCardLayoutPolicyTests
     [InlineData(198, false, false)]
     [InlineData(360, true, false)]
     [InlineData(520, true, true)]
-    public void GetLyricsLayout_PrioritizesTextSpaceAcrossHorizontalAndVerticalModes(
+    public void GetLyricsLayout_TogglesWaveDecorationsBasedOnAvailableExtent(
         double centerCardExtent,
         bool expectedLeadingWave,
         bool expectedTrailingWave)

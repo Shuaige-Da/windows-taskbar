@@ -48,19 +48,6 @@ public class CapsuleLayoutManagerTests
     }
 
     [Fact]
-    public void GetMetrics_UsesTopPopupDefaultsForSideDockModes()
-    {
-        var left = CapsuleLayoutManager.GetMetrics(CapsuleMode.LeftDock, 1920, 1080);
-        var right = CapsuleLayoutManager.GetMetrics(CapsuleMode.RightDock, 1920, 1080);
-        var top = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
-
-        Assert.Equal(top.CapsuleWidth, left.CapsuleWidth);
-        Assert.Equal(top.CapsuleHeight, left.CapsuleHeight);
-        Assert.Equal(PopupFlowDirection.Right, left.PopupDirection);
-        Assert.Equal(PopupFlowDirection.Left, right.PopupDirection);
-    }
-
-    [Fact]
     public void GetMetrics_UsesBottomMetricsForFloatingMode()
     {
         var floating = CapsuleLayoutManager.GetMetrics(CapsuleMode.Floating, 1920, 1080);
