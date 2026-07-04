@@ -20,6 +20,42 @@ public readonly record struct WindowFrame(
 
 public static class CapsuleLayoutManager
 {
+    public static CapsuleSnapPreview BuildSnapPreview(
+        SnapEdge edge,
+        double screenWidth,
+        double screenHeight,
+        double topCapsuleWidth,
+        double topCapsuleHeight,
+        double bottomCapsuleWidth,
+        double bottomCapsuleHeight)
+    {
+        var (mode, capsuleWidth, capsuleHeight, rotationDegrees) = edge switch
+        {
+            SnapEdge.Top => (CapsuleMode.TopIsland, topCapsuleWidth, topCapsuleHeight, 0d),
+            SnapEdge.Left => (CapsuleMode.LeftDock, topCapsuleWidth, topCapsuleHeight, 90d),
+            SnapEdge.Right => (CapsuleMode.RightDock, topCapsuleWidth, topCapsuleHeight, 90d),
+            SnapEdge.Bottom => (CapsuleMode.BottomTaskbar, bottomCapsuleWidth, bottomCapsuleHeight, 0d),
+            _ => (CapsuleMode.Floating, 0d, 0d, 0d)
+        };
+
+        var frame = edge switch
+        {
+            SnapEdge.Left or SnapEdge.Right => GetWindowFrame(
+                mode,
+                new LayoutMetrics(capsuleHeight, capsuleWidth, VisibleAppSlots: 0, PopupFlowDirection.Up),
+                screenWidth,
+                screenHeight),
+            SnapEdge.None => default,
+            _ => GetWindowFrame(
+                mode,
+                new LayoutMetrics(capsuleWidth, capsuleHeight, VisibleAppSlots: 0, PopupFlowDirection.Up),
+                screenWidth,
+                screenHeight)
+        };
+
+        return new CapsuleSnapPreview(edge, mode, capsuleWidth, capsuleHeight, rotationDegrees, frame);
+    }
+
     public static LayoutMetrics GetMetrics(CapsuleMode mode, double screenWidth, double screenHeight)
     {
         return mode switch
