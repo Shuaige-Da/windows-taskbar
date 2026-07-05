@@ -262,8 +262,6 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("_activeSnapPreview", code);
-        Assert.Contains("_floatingDragLeft", code);
-        Assert.Contains("_floatingDragTop", code);
         Assert.Contains("UpdateSnapPreview(", code);
         Assert.Contains("ApplySnapPreview(", code);
         Assert.Contains("ClearSnapPreview()", code);

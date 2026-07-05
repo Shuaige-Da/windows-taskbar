@@ -25,19 +25,9 @@ public static class AppHoverOverlayLayoutPolicy
         };
         var top = iconTop + ((iconHeight - overlayHeight) / 2);
 
-        left = Clamp(left, EdgePadding, Math.Max(EdgePadding, layerWidth - overlayWidth - EdgePadding));
-        top = Clamp(top, EdgePadding, Math.Max(EdgePadding, layerHeight - overlayHeight - EdgePadding));
+        left = Math.Clamp(left, EdgePadding, Math.Max(EdgePadding, layerWidth - overlayWidth - EdgePadding));
+        top = Math.Clamp(top, EdgePadding, Math.Max(EdgePadding, layerHeight - overlayHeight - EdgePadding));
 
         return new AppHoverOverlayFrame(left, top);
-    }
-
-    private static double Clamp(double value, double min, double max)
-    {
-        if (value < min)
-        {
-            return min;
-        }
-
-        return value > max ? max : value;
     }
 }

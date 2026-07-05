@@ -1,5 +1,6 @@
-using Windows.Media.Control;
 using System.Diagnostics;
+using System.IO;
+using Windows.Media.Control;
 
 namespace DynamicIslandBar;
 
@@ -25,7 +26,7 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
             // Strict match: AUMID must contain app's exe name or app name
             GlobalSystemMediaTransportControlsSession? session = null;
             var exeName = !string.IsNullOrWhiteSpace(app.ExePath)
-                ? System.IO.Path.GetFileNameWithoutExtension(app.ExePath)?.ToLowerInvariant() ?? ""
+                ? Path.GetFileNameWithoutExtension(app.ExePath)?.ToLowerInvariant() ?? ""
                 : "";
 
             foreach (var candidate in sessions)

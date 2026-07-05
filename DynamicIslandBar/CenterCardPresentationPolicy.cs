@@ -111,7 +111,6 @@ public static class CenterCardMediaSnapshotProvider
         "deezer",
         "pandora",
         "soundcloud",
-        "deezer",          // Deezer
         "iheartradio",
         "napster",
         // Audio players

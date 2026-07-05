@@ -11,7 +11,6 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Text;
-using System.Globalization;
 using System.Runtime.InteropServices;
 using Icon = System.Drawing.Icon;
 
@@ -68,8 +67,6 @@ namespace DynamicIslandBar
         private double _dragStartLeft;
         private double _dragStartTop;
         private CapsuleSnapPreview? _activeSnapPreview;
-        private double _floatingDragLeft;
-        private double _floatingDragTop;
         private string? _lastPrimaryActivatedAppId;
         private DateTime _lastPrimaryActivatedAtUtc;
         private RunningAppEntry? _hoveredApp;
@@ -3661,8 +3658,6 @@ namespace DynamicIslandBar
                 return;
             }
 
-            _floatingDragLeft = Left;
-            _floatingDragTop = Top;
         }
 
         private void PersistLastBottomCapsuleMetrics(double width, double height)
