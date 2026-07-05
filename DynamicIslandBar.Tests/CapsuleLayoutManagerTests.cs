@@ -37,10 +37,10 @@ public class CapsuleLayoutManagerTests
         var top = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
 
         Assert.Equal(top.CapsuleWidth, left.CapsuleWidth);
-        Assert.Equal(top.CapsuleHeight, left.CapsuleHeight);
+        Assert.Equal(92, left.CapsuleHeight);
         Assert.Equal(top.VisibleAppSlots, left.VisibleAppSlots);
         Assert.Equal(top.CapsuleWidth, right.CapsuleWidth);
-        Assert.Equal(top.CapsuleHeight, right.CapsuleHeight);
+        Assert.Equal(92, right.CapsuleHeight);
         Assert.Equal(top.VisibleAppSlots, right.VisibleAppSlots);
         Assert.Equal(left.CapsuleWidth, right.CapsuleWidth);
         Assert.Equal(PopupFlowDirection.Right, left.PopupDirection);
@@ -150,11 +150,17 @@ public class CapsuleLayoutManagerTests
             metrics,
             screenWidth: 1920,
             screenHeight: 1080);
+        var visibleBounds = CapsuleLayoutManager.GetCapsuleBounds(
+            CapsuleMode.LeftDock,
+            frame,
+            renderedCapsuleWidth: metrics.CapsuleHeight,
+            renderedCapsuleHeight: metrics.CapsuleWidth);
 
         Assert.Equal(0, frame.Left);
+        Assert.Equal(0, visibleBounds.Left, precision: 1);
         Assert.True(frame.Height > frame.Width);
         Assert.InRange(frame.Top, 120, 280);
-        Assert.Equal(metrics.CapsuleHeight + 24, frame.Width, precision: 1);
+        Assert.Equal(metrics.CapsuleHeight + 12, frame.Width, precision: 1);
         Assert.Equal(metrics.CapsuleWidth + 40, frame.Height, precision: 1);
     }
 
@@ -168,11 +174,17 @@ public class CapsuleLayoutManagerTests
             metrics,
             screenWidth: 1920,
             screenHeight: 1080);
+        var visibleBounds = CapsuleLayoutManager.GetCapsuleBounds(
+            CapsuleMode.RightDock,
+            frame,
+            renderedCapsuleWidth: metrics.CapsuleHeight,
+            renderedCapsuleHeight: metrics.CapsuleWidth);
 
         Assert.Equal(1920 - frame.Width, frame.Left);
+        Assert.Equal(1920, visibleBounds.Right, precision: 1);
         Assert.True(frame.Height > frame.Width);
         Assert.InRange(frame.Top, 120, 280);
-        Assert.Equal(metrics.CapsuleHeight + 24, frame.Width, precision: 1);
+        Assert.Equal(metrics.CapsuleHeight + 12, frame.Width, precision: 1);
         Assert.Equal(metrics.CapsuleWidth + 40, frame.Height, precision: 1);
     }
 
@@ -207,7 +219,7 @@ public class CapsuleLayoutManagerTests
 
         Assert.Equal(CapsuleMode.LeftDock, preview.Mode);
         Assert.Equal(90, preview.RotationDegrees, precision: 1);
-        Assert.Equal(72 + 24, preview.Frame.Width, precision: 1);
+        Assert.Equal(72 + 12, preview.Frame.Width, precision: 1);
         Assert.Equal(760 + 40, preview.Frame.Height, precision: 1);
     }
 
@@ -281,7 +293,7 @@ public class CapsuleLayoutManagerTests
             renderedCapsuleWidth: 72,
             renderedCapsuleHeight: 760);
 
-        Assert.Equal(frame.Left + 12, visibleBounds.Left, precision: 1);
+        Assert.Equal(frame.Left, visibleBounds.Left, precision: 1);
         Assert.Equal(frame.Top + 20, visibleBounds.Top, precision: 1);
         Assert.Equal(72, visibleBounds.Width, precision: 1);
         Assert.Equal(760, visibleBounds.Height, precision: 1);
@@ -345,7 +357,7 @@ public class CapsuleLayoutManagerTests
             renderedCapsuleWidth: 72,
             renderedCapsuleHeight: 760);
 
-        Assert.Equal(-12, clamped.X, precision: 1);
+        Assert.Equal(0, clamped.X, precision: 1);
         Assert.Equal(-20, clamped.Y, precision: 1);
     }
 

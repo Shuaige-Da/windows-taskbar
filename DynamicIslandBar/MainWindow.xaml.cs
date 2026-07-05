@@ -287,6 +287,7 @@ namespace DynamicIslandBar
             CapsuleGrid.Width = Width - 20;
             CapsuleGrid.Height = Height - 20;
             var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                _capsuleConfig.Mode,
                 _currentLayoutMetrics.CapsuleHeight,
                 _capsuleConfig.CapsuleThicknessPercent);
             ApplyCapsuleSize(_currentLayoutMetrics.CapsuleWidth, capsuleHeight);
@@ -579,7 +580,10 @@ namespace DynamicIslandBar
             return metrics with
             {
                 CapsuleWidth = capsuleWidth,
-                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, capsuleLengthCapacity, capsuleWidth),
+                VisibleAppSlots = MapVisibleAppSlots(
+                    _capsuleConfig.Mode,
+                    capsuleWidth,
+                    _capsuleConfig.CenterCardWidthPercent),
                 PopupDirection = ResolveSideDockPopupDirection(_capsuleConfig.Mode)
             };
         }
@@ -682,18 +686,13 @@ namespace DynamicIslandBar
             return DisplayBoundsProvider.GetPrimaryScreenSize();
         }
 
-        private static int MapVisibleAppSlots(CapsuleMode mode, double baseWidth, double capsuleWidth)
+        private static int MapVisibleAppSlots(CapsuleMode mode, double capsuleWidth, int centerCardWidthPercent)
         {
-            var usesCompactSlotRange = mode is CapsuleMode.TopIsland or CapsuleMode.LeftDock or CapsuleMode.RightDock;
-            var maxSlots = usesCompactSlotRange ? 3 : 8;
-            var minSlots = usesCompactSlotRange ? 2 : 3;
-            if (baseWidth <= 0)
-            {
-                return minSlots;
-            }
-
-            var ratio = Math.Clamp(capsuleWidth / baseWidth, 0, 1);
-            return Math.Clamp((int)Math.Round(maxSlots * ratio), minSlots, maxSlots);
+            var centerCardExtent = CenterCardLayoutPolicy.MapWidth(
+                mode,
+                capsuleWidth,
+                centerCardWidthPercent);
+            return RunningAppSlotPolicy.GetVisibleSlots(mode, capsuleWidth, centerCardExtent);
         }
 
         private void ApplySystemTaskbarVisibility()
@@ -879,11 +878,9 @@ namespace DynamicIslandBar
             }
 
             var baseHeight = _currentLayoutMetrics.CapsuleHeight;
-            var minimumHeight = baseHeight / 3d;
-            var zeroPercentHeight = CapsuleAppearanceMapper.MapCapsuleHeight(baseHeight, 0);
+            var zeroPercentHeight = CapsuleAppearanceMapper.MapCapsuleHeight(_capsuleConfig.Mode, baseHeight, 0);
             var clampedThickness = Math.Clamp(targetThickness, zeroPercentHeight, baseHeight);
-            var ratio = (clampedThickness - minimumHeight) / (baseHeight - minimumHeight);
-            var displayRatio = (ratio - 0.5) / 0.5;
+            var displayRatio = (clampedThickness - zeroPercentHeight) / (baseHeight - zeroPercentHeight);
             return Math.Clamp((int)Math.Round(displayRatio * 100), 0, 100);
         }
 
@@ -989,6 +986,7 @@ namespace DynamicIslandBar
             }
 
             var height = CapsuleAppearanceMapper.MapCapsuleHeight(
+                _capsuleConfig.Mode,
                 _currentLayoutMetrics.CapsuleHeight,
                 _capsuleConfig.CapsuleThicknessPercent);
             ApplyCapsuleSize(_currentLayoutMetrics.CapsuleWidth, height);
@@ -1355,7 +1353,10 @@ namespace DynamicIslandBar
         private double GetBaseCapsuleHeight()
         {
             return _currentLayoutMetrics.CapsuleHeight > 0
-                ? CapsuleAppearanceMapper.MapCapsuleHeight(_currentLayoutMetrics.CapsuleHeight, _capsuleConfig.CapsuleThicknessPercent)
+                ? CapsuleAppearanceMapper.MapCapsuleHeight(
+                    _capsuleConfig.Mode,
+                    _currentLayoutMetrics.CapsuleHeight,
+                    _capsuleConfig.CapsuleThicknessPercent)
                 : Math.Min(CapsuleBorder.Width, CapsuleBorder.Height);
         }
 
@@ -3977,6 +3978,7 @@ namespace DynamicIslandBar
                 var currentRenderedCapsuleHeight = CapsuleBorder.ActualHeight > 0
                     ? CapsuleBorder.ActualHeight
                     : CapsuleAppearanceMapper.MapCapsuleHeight(
+                        _capsuleConfig.Mode,
                         _currentLayoutMetrics.CapsuleHeight,
                         _capsuleConfig.CapsuleThicknessPercent);
                 var currentCapsuleBounds = CapsuleLayoutManager.GetCapsuleBounds(
@@ -3986,6 +3988,7 @@ namespace DynamicIslandBar
                     currentRenderedCapsuleHeight);
                 var floatingMetrics = BuildLayoutMetricsForMode(CapsuleMode.Floating, screenWidth, screenHeight);
                 var floatingRenderedCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                    CapsuleMode.Floating,
                     floatingMetrics.CapsuleHeight,
                     _capsuleConfig.CapsuleThicknessPercent);
                 var floatingOrigin = CapsuleLayoutManager.GetFloatingWindowOriginForVisibleCapsule(
@@ -4041,6 +4044,7 @@ namespace DynamicIslandBar
                 SnapEdge.Right => CapsuleMode.RightDock,
                 _ => CapsuleMode.TopIsland
             };
+            var topDockPreviewMetrics = CapsuleLayoutManager.GetMetrics(topDockPreviewMode, screenWidth, screenHeight);
             var topDockPreviewCapsuleLengthCapacity = CapsuleLayoutManager.GetCapsuleLengthCapacity(
                 topDockPreviewMode,
                 screenWidth,
@@ -4050,13 +4054,15 @@ namespace DynamicIslandBar
                 topDockPreviewCapsuleLengthCapacity,
                 _capsuleConfig.TopDockCapsuleLengthPercent);
             var topCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
-                topMetrics.CapsuleHeight,
+                topDockPreviewMode,
+                topDockPreviewMetrics.CapsuleHeight,
                 _capsuleConfig.CapsuleThicknessPercent);
             var bottomCapsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
                 CapsuleMode.BottomTaskbar,
                 bottomMetrics.CapsuleWidth,
                 _capsuleConfig.CapsuleLengthPercent);
             var bottomCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                CapsuleMode.BottomTaskbar,
                 bottomMetrics.CapsuleHeight,
                 _capsuleConfig.CapsuleThicknessPercent);
             var bottomPreviewSize = CapsuleLayoutManager.ResolveBottomPreviewCapsuleSize(
@@ -4229,6 +4235,7 @@ namespace DynamicIslandBar
             var renderedCapsuleHeight = CapsuleBorder.ActualHeight > 0
                 ? CapsuleBorder.ActualHeight
                 : CapsuleAppearanceMapper.MapCapsuleHeight(
+                    CapsuleMode.Floating,
                     floatingMetrics.CapsuleHeight,
                     _capsuleConfig.CapsuleThicknessPercent);
             var frame = CapsuleLayoutManager.GetWindowFrame(
@@ -4258,7 +4265,10 @@ namespace DynamicIslandBar
             return metrics with
             {
                 CapsuleWidth = capsuleWidth,
-                VisibleAppSlots = MapVisibleAppSlots(mode, capsuleLengthCapacity, capsuleWidth),
+                VisibleAppSlots = MapVisibleAppSlots(
+                    mode,
+                    capsuleWidth,
+                    _capsuleConfig.CenterCardWidthPercent),
                 PopupDirection = ResolveSideDockPopupDirection(mode)
             };
         }

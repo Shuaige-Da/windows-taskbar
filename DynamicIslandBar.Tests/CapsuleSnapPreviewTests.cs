@@ -31,7 +31,7 @@ public class CapsuleSnapPreviewTests
 
     [Theory]
     [InlineData(SnapEdge.Left, 0)]
-    [InlineData(SnapEdge.Right, 1920 - 96)]
+    [InlineData(SnapEdge.Right, 1920 - 84)]
     public void BuildSnapPreview_UsesVerticalFrame_ForSideDockPreviews(
         SnapEdge edge,
         double expectedLeft)
@@ -47,7 +47,7 @@ public class CapsuleSnapPreviewTests
 
         Assert.Equal(expectedLeft, preview.Frame.Left, precision: 1);
         Assert.Equal(140, preview.Frame.Top, precision: 1);
-        Assert.Equal(96, preview.Frame.Width, precision: 1);
+        Assert.Equal(84, preview.Frame.Width, precision: 1);
         Assert.Equal(800, preview.Frame.Height, precision: 1);
         Assert.True(preview.Frame.Height > preview.Frame.Width);
     }

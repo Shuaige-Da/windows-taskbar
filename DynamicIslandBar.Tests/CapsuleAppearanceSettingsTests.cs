@@ -158,6 +158,18 @@ public class CapsuleAppearanceSettingsTests
         Assert.Equal(expected, CapsuleAppearanceMapper.MapCapsuleHeight(baseHeight, percent), precision: 1);
     }
 
+    [Fact]
+    public void MapCapsuleHeight_ForSideDockKeepsMinimumWideEnoughForVerticalContent()
+    {
+        var sideDockMinimum = CapsuleAppearanceMapper.MapCapsuleHeight(CapsuleMode.LeftDock, 92, 0);
+        var sideDockMaximum = CapsuleAppearanceMapper.MapCapsuleHeight(CapsuleMode.LeftDock, 92, 100);
+        var topIslandMinimum = CapsuleAppearanceMapper.MapCapsuleHeight(CapsuleMode.TopIsland, 72, 0);
+
+        Assert.True(sideDockMinimum >= 63);
+        Assert.True(sideDockMaximum - sideDockMinimum >= 18);
+        Assert.Equal(48, topIslandMinimum, precision: 1);
+    }
+
     [Theory]
     [InlineData(CapsuleMode.BottomTaskbar, 1920, 0, 760)]
     [InlineData(CapsuleMode.BottomTaskbar, 1920, 50, 1340)]

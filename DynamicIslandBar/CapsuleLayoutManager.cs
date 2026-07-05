@@ -72,7 +72,7 @@ public static class CapsuleLayoutManager
                 PopupDirection: PopupFlowDirection.Down),
             CapsuleMode.LeftDock or CapsuleMode.RightDock => new LayoutMetrics(
                 CapsuleWidth: 760,
-                CapsuleHeight: 72,
+                CapsuleHeight: 92,
                 VisibleAppSlots: 3,
                 PopupDirection: mode == CapsuleMode.LeftDock ? PopupFlowDirection.Right : PopupFlowDirection.Left),
             _ => new LayoutMetrics(
@@ -167,7 +167,7 @@ public static class CapsuleLayoutManager
 
         if (mode is CapsuleMode.LeftDock or CapsuleMode.RightDock)
         {
-            windowWidth = metrics.CapsuleHeight + (SideDockHorizontalPadding * 2);
+            windowWidth = metrics.CapsuleHeight + SideDockHorizontalPadding;
             windowHeight = metrics.CapsuleWidth + (SideDockVerticalPadding * 2);
             left = mode == CapsuleMode.LeftDock ? 0 : Math.Max(screenWidth - windowWidth, 0);
             top = Math.Max((screenHeight - windowHeight) / 2, 0);
@@ -184,8 +184,11 @@ public static class CapsuleLayoutManager
     {
         if (mode is CapsuleMode.LeftDock or CapsuleMode.RightDock)
         {
+            var left = mode == CapsuleMode.LeftDock
+                ? frame.Left
+                : frame.Left + SideDockHorizontalPadding;
             return new Rect(
-                frame.Left + SideDockHorizontalPadding,
+                left,
                 frame.Top + SideDockVerticalPadding,
                 renderedCapsuleWidth,
                 renderedCapsuleHeight);

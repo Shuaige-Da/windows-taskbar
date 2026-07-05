@@ -1,6 +1,6 @@
 # 胶囊任务栏功能参数与实现档案
 
-最后更新：`2026-06-30`
+最后更新：`2026-07-05`
 
 ## 目的
 
@@ -90,6 +90,8 @@
 
 - `CapsuleThicknessPercent = 0%` 时，实际高度约等于基础高度的 `66.7%`
 - `CapsuleThicknessPercent = 100%` 时，实际高度等于基础高度的 `100%`
+- 左右吸附模式下，基础粗细提升为 `92px`；`CapsuleThicknessPercent = 0%` 使用约 `76%` 的安全阈值，形成约 `70px - 92px` 的可调区间，避免竖向图标、中心卡片文字和时间区被挤压裁切
+- 左右吸附模式的窗口只在屏幕内侧保留弹层安全空间，胶囊外侧边缘会紧贴屏幕边缘
 - 当前公式保留一个最小安全高度，避免应用图标和中心卡片内容被压扁
 
 调节入口：
@@ -171,10 +173,14 @@
 
 ### 7. 主栏应用槽位规则
 
-定义位置：[MainWindow.xaml.cs](D:/UI-win/DynamicIslandBar/MainWindow.xaml.cs)
+定义位置：
 
-- 顶部模式：实际主栏应用槽位动态范围 `2 - 3`
+- [RunningAppSlotPolicy.cs](D:/UI-win/DynamicIslandBar/RunningAppSlotPolicy.cs)
+- [MainWindow.xaml.cs](D:/UI-win/DynamicIslandBar/MainWindow.xaml.cs)
+
+- 顶部 / 左右吸附模式：默认短胶囊保持紧凑，拉长后会按胶囊主轴剩余空间增加应用槽位，动态范围 `2 - 8`
 - 底部模式：实际主栏应用槽位动态范围 `3 - 8`
+- 计算槽位时会预留中心卡片宽度、系统状态区宽度、胶囊内边距，并保证应用区域和中心卡片至少隔开 `2` 个图标宽度
 - 超出的应用进入收纳夹和管理面板
 
 ### 8. 刷新频率
