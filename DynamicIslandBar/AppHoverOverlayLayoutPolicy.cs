@@ -8,6 +8,7 @@ public static class AppHoverOverlayLayoutPolicy
     private const double EdgePadding = 8;
 
     public static AppHoverOverlayFrame GetOverlayFrame(
+        PopupFlowDirection direction,
         double iconLeft,
         double iconTop,
         double iconWidth,
@@ -17,7 +18,11 @@ public static class AppHoverOverlayLayoutPolicy
         double layerWidth,
         double layerHeight)
     {
-        var left = iconLeft + iconWidth + Gap;
+        var left = direction switch
+        {
+            PopupFlowDirection.Left => iconLeft - overlayWidth - Gap,
+            _ => iconLeft + iconWidth + Gap
+        };
         var top = iconTop + ((iconHeight - overlayHeight) / 2);
 
         left = Clamp(left, EdgePadding, Math.Max(EdgePadding, layerWidth - overlayWidth - EdgePadding));

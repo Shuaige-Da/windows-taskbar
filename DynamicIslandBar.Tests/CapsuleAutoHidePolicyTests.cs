@@ -58,6 +58,30 @@ public class CapsuleAutoHidePolicyTests
     }
 
     [Fact]
+    public void IsPointerInRevealZone_ReturnsTrue_ForLeftDockNearLeftEdge()
+    {
+        var shouldReveal = CapsuleAutoHidePolicy.IsPointerInRevealZone(
+            CapsuleMode.LeftDock,
+            new Point(18, 540),
+            screenWidth: 1920,
+            screenHeight: 1080);
+
+        Assert.True(shouldReveal);
+    }
+
+    [Fact]
+    public void IsPointerInRevealZone_ReturnsTrue_ForRightDockNearRightEdge()
+    {
+        var shouldReveal = CapsuleAutoHidePolicy.IsPointerInRevealZone(
+            CapsuleMode.RightDock,
+            new Point(1902, 540),
+            screenWidth: 1920,
+            screenHeight: 1080);
+
+        Assert.True(shouldReveal);
+    }
+
+    [Fact]
     public void IsPointerInRevealZone_ReturnsFalse_WhenPointerIsAwayFromRelevantEdge()
     {
         var shouldReveal = CapsuleAutoHidePolicy.IsPointerInRevealZone(

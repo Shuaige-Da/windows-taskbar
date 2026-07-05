@@ -39,13 +39,50 @@ public class CenterCardPresentationPolicyTests
 
         Assert.Equal(CenterCardDisplayMode.MusicDetails, state.Mode);
         Assert.Equal("像鱼 - 王贰浪", state.PrimaryText);
-        Assert.Equal("歌词：我在黄昏里等风经过", state.SecondaryText);
+        Assert.Equal("王贰浪", state.SecondaryText);
         Assert.True(state.ShowTransportControls);
         Assert.False(state.ShowLyricsMarquee);
     }
 
     [Fact]
-    public void Build_UsesMusicDetailsForPausedMusicWhenHovered()
+    public void Build_UsesSongAndArtistAsPrimaryTextForHoveredMusicDetails()
+    {
+        var app = CreateApp("cloudmusic", "网易云音乐");
+        var media = new CenterCardMediaSnapshot(
+            IsMusicApp: true,
+            IsPlaying: true,
+            Title: "Life's A Struggle",
+            Artist: "宋岳庭",
+            Lyric: "妈妈给我生命 现在让我自生自灭");
+
+        var state = CenterCardPresentationPolicy.Build(app, "当前窗口", media, isHovered: true);
+
+        Assert.Equal(CenterCardDisplayMode.MusicDetails, state.Mode);
+        Assert.Equal("Life's A Struggle - 宋岳庭", state.PrimaryText);
+        Assert.Equal("宋岳庭", state.SecondaryText);
+        Assert.True(state.ShowTransportControls);
+    }
+
+    [Fact]
+    public void Build_UsesLyricsMarqueeWhenLyricExistsEvenIfPlaybackFlagLags()
+    {
+        var app = CreateApp("cloudmusic", "网易云音乐");
+        var media = new CenterCardMediaSnapshot(
+            IsMusicApp: true,
+            IsPlaying: false,
+            Title: "Life's A Struggle",
+            Artist: "宋岳庭",
+            Lyric: "妈妈给我生命 现在让我自生自灭");
+
+        var state = CenterCardPresentationPolicy.Build(app, "当前窗口", media, isHovered: false);
+
+        Assert.Equal(CenterCardDisplayMode.MusicLyricsMarquee, state.Mode);
+        Assert.Equal("妈妈给我生命 现在让我自生自灭", state.PrimaryText);
+        Assert.True(state.ShowLyricsMarquee);
+    }
+
+    [Fact]
+    public void Build_UsesLyricsAsSecondaryTextForPausedHoveredMusicDetails()
     {
         var app = CreateApp("cloudmusic", "网易云音乐");
         var media = new CenterCardMediaSnapshot(
@@ -59,9 +96,8 @@ public class CenterCardPresentationPolicyTests
 
         Assert.Equal(CenterCardDisplayMode.MusicDetails, state.Mode);
         Assert.Equal("Take Me Hand - DAISHI DANCE", state.PrimaryText);
-        Assert.Equal("已暂停", state.SecondaryText);
+        Assert.Equal("DAISHI DANCE", state.SecondaryText);
         Assert.True(state.ShowTransportControls);
-        Assert.False(state.ShowLyricsMarquee);
     }
 
     [Fact]

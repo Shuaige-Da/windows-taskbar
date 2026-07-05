@@ -47,23 +47,30 @@ public static class CenterCardPresentationPolicy
 
         if (media is { IsMusicApp: true })
         {
-            if (!isHovered && media.IsPlaying)
+            var hasLyric = !string.IsNullOrWhiteSpace(media.Lyric);
+            var titleArtist = string.IsNullOrWhiteSpace(media.Artist)
+                ? media.Title
+                : $"{media.Title} - {media.Artist}";
+
+            if (!isHovered && (media.IsPlaying || hasLyric))
             {
                 return new CenterCardPresentation(
                     CenterCardDisplayMode.MusicLyricsMarquee,
-                    string.IsNullOrWhiteSpace(media.Lyric) ? $"{media.Title} - {media.Artist}" : media.Lyric,
+                    hasLyric ? media.Lyric : titleArtist,
                     string.Empty,
                     ShowLyricsMarquee: true,
                     ShowTransportControls: false,
                     ShowAppActions: false);
             }
 
+            var secondaryText = !string.IsNullOrWhiteSpace(media.Artist)
+                ? media.Artist
+                : (media.IsPlaying ? "正在播放" : "已暂停");
+
             return new CenterCardPresentation(
                 CenterCardDisplayMode.MusicDetails,
-                $"{media.Title} - {media.Artist}",
-                media.IsPlaying
-                    ? (string.IsNullOrWhiteSpace(media.Lyric) ? "正在播放" : $"歌词：{media.Lyric}")
-                    : "已暂停",
+                titleArtist,
+                secondaryText,
                 ShowLyricsMarquee: false,
                 ShowTransportControls: true,
                 ShowAppActions: false);
@@ -176,7 +183,17 @@ public static class CenterCardMediaSnapshotProvider
             return null;
         }
 
-        return null;
+        var title = string.IsNullOrWhiteSpace(app.DisplayName)
+            ? Path.GetFileNameWithoutExtension(app.ExePath) ?? "音乐"
+            : app.DisplayName;
+
+        return new CenterCardMediaSnapshot(
+            IsMusicApp: true,
+            IsPlaying: false,
+            Title: title,
+            Artist: string.Empty,
+            Lyric: string.Empty,
+            SourceAppUserModelId: app.AppId);
     }
 
     private static IEnumerable<string> BuildAppProbeParts(RunningAppEntry app)

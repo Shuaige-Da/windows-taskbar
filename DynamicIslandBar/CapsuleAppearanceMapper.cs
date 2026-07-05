@@ -57,6 +57,23 @@ public static class CapsuleAppearanceMapper
         };
     }
 
+    public static DropShadowEffect? BuildShadowEffect(CapsuleMode mode, int shadowPercent)
+    {
+        var effect = BuildShadowEffect(shadowPercent);
+        if (effect == null)
+        {
+            return null;
+        }
+
+        if (mode is CapsuleMode.LeftDock or CapsuleMode.RightDock)
+        {
+            effect.ShadowDepth = 0;
+            effect.Opacity *= 0.58;
+        }
+
+        return effect;
+    }
+
     public static DropShadowEffect? BuildPanelShadowEffect(int shadowPercent)
     {
         var percent = Math.Clamp(shadowPercent, 0, 100);

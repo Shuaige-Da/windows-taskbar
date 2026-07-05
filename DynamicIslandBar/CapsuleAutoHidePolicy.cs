@@ -21,6 +21,8 @@ public static class CapsuleAutoHidePolicy
         return mode switch
         {
             CapsuleMode.TopIsland => pointerPosition.Y <= edgeThreshold,
+            CapsuleMode.LeftDock => pointerPosition.X <= edgeThreshold,
+            CapsuleMode.RightDock => pointerPosition.X >= Math.Max(screenWidth - edgeThreshold, 0),
             CapsuleMode.Floating when floatingRevealBounds is Rect bounds => IsPointerWithinFloatingRevealBounds(
                 pointerPosition,
                 bounds,

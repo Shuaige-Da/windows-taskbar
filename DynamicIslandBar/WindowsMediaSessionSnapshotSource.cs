@@ -53,6 +53,27 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
             }
 
             if (session == null)
+            {
+                session = manager.GetCurrentSession();
+                if (session == null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
+                {
+                    foreach (var candidate in sessions)
+                    {
+                        try
+                        {
+                            if (candidate.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                            {
+                                session = candidate;
+                                Debug.WriteLine($"[SnapshotSource] Fallback matched playing media session: {candidate.SourceAppUserModelId}");
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            if (session == null)
                 return null;
 
             var properties = await session.TryGetMediaPropertiesAsync();

@@ -108,6 +108,16 @@ public class CapsuleAppearanceSettingsTests
     }
 
     [Fact]
+    public void BuildShadowEffect_ForSideDockRemovesDirectionalOffsetStrip()
+    {
+        var effect = CapsuleAppearanceMapper.BuildShadowEffect(CapsuleMode.LeftDock, 100);
+
+        Assert.NotNull(effect);
+        Assert.Equal(0, effect!.ShadowDepth, precision: 1);
+        Assert.Equal(32, effect.BlurRadius, precision: 1);
+    }
+
+    [Fact]
     public void BuildGlowBrush_UsesMarqueeBandAndIntensity()
     {
         var brush = CapsuleAppearanceMapper.BuildGlowBrush(80);
