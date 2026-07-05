@@ -347,6 +347,67 @@ public class LyricsService
         return null;
     }
 
+    /// <summary>
+    /// Get multiple nearby lyric lines around the current playback position for danmaku display.
+    /// Returns up to <paramref name="count"/> lines, centered around the current lyric.
+    /// </summary>
+    public List<string> GetNearbyLyrics(TimeSpan position, int count)
+    {
+        if (count <= 0)
+        {
+            return [];
+        }
+
+        if (_parsedLyrics.Count > 0)
+        {
+            var currentIndex = 0;
+            for (var i = 0; i < _parsedLyrics.Count; i++)
+            {
+                if (_parsedLyrics[i].Time <= position)
+                {
+                    currentIndex = i;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            var startIndex = Math.Max(0, currentIndex - count / 2);
+            var endIndex = Math.Min(_parsedLyrics.Count, startIndex + count);
+            startIndex = Math.Max(0, endIndex - count);
+
+            return _parsedLyrics
+                .Skip(startIndex)
+                .Take(endIndex - startIndex)
+                .Select(l => l.Text)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+        }
+
+        if (_plainLyricLines.Length > 0)
+        {
+            var index = 0;
+            if (_songDuration.TotalSeconds > 0 && position > TimeSpan.Zero)
+            {
+                var ratio = Math.Clamp(position.TotalSeconds / _songDuration.TotalSeconds, 0, 0.99);
+                index = (int)(ratio * _plainLyricLines.Length);
+            }
+
+            var startIndex = Math.Max(0, index - count / 2);
+            var endIndex = Math.Min(_plainLyricLines.Length, startIndex + count);
+            startIndex = Math.Max(0, endIndex - count);
+
+            return _plainLyricLines
+                .Skip(startIndex)
+                .Take(endIndex - startIndex)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+        }
+
+        return [];
+    }
+
     private static string CleanTitle(string title)
     {
         if (string.IsNullOrWhiteSpace(title))

@@ -133,6 +133,14 @@ public static class CapsuleAppearanceMapper
             return Math.Min(TopIslandDefaultWidth, baseWidth);
         }
 
+        // 侧边模式：baseWidth 是屏幕高度，映射到竖向胶囊长度
+        if (mode is CapsuleMode.LeftDock or CapsuleMode.RightDock)
+        {
+            var sideRatio = Math.Clamp(capsuleLengthPercent, 0, 100) / 100.0;
+            var sideMin = Math.Min(baseWidth * 2.0 / 3.0, baseWidth);
+            return sideMin + ((baseWidth - sideMin) * sideRatio);
+        }
+
         var ratio = Math.Clamp(capsuleLengthPercent, 0, 100) / 100.0;
         var minWidth = TopIslandDefaultWidth;
         minWidth = Math.Min(minWidth, baseWidth);

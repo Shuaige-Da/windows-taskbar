@@ -59,7 +59,7 @@ public class CenterCardPresentationPolicyTests
 
         Assert.Equal(CenterCardDisplayMode.MusicDetails, state.Mode);
         Assert.Equal("Take Me Hand - DAISHI DANCE", state.PrimaryText);
-        Assert.Equal("已暂停", state.SecondaryText);
+        Assert.Equal("歌词：Take Me Hand - DAISHI DANCE", state.SecondaryText);
         Assert.True(state.ShowTransportControls);
         Assert.False(state.ShowLyricsMarquee);
     }
@@ -78,6 +78,43 @@ public class CenterCardPresentationPolicyTests
         Assert.Equal("当前窗口 · 单击激活 / 再次单击最小化", normal.SecondaryText);
         Assert.True(normal.ShowAppActions);
         Assert.True(hovered.ShowAppActions);
+    }
+
+    [Fact]
+    public void Build_UsesSongAndArtistAsPrimaryTextForHoveredMusicDetails()
+    {
+        var app = CreateApp("cloudmusic", "网易云音乐");
+        var media = new CenterCardMediaSnapshot(
+            IsMusicApp: true,
+            IsPlaying: true,
+            Title: "Life's A Struggle",
+            Artist: "宋岳庭",
+            Lyric: "妈妈给我生命 现在让我自生自灭");
+
+        var state = CenterCardPresentationPolicy.Build(app, "当前窗口", media, isHovered: true);
+
+        Assert.Equal(CenterCardDisplayMode.MusicDetails, state.Mode);
+        Assert.Equal("Life's A Struggle - 宋岳庭", state.PrimaryText);
+        Assert.Equal("歌词：妈妈给我生命 现在让我自生自灭", state.SecondaryText);
+        Assert.True(state.ShowTransportControls);
+    }
+
+    [Fact]
+    public void Build_UsesLyricsMarqueeWhenLyricExistsEvenIfPlaybackFlagLags()
+    {
+        var app = CreateApp("cloudmusic", "网易云音乐");
+        var media = new CenterCardMediaSnapshot(
+            IsMusicApp: true,
+            IsPlaying: false,
+            Title: "Life's A Struggle",
+            Artist: "宋岳庭",
+            Lyric: "妈妈给我生命 现在让我自生自灭");
+
+        var state = CenterCardPresentationPolicy.Build(app, "当前窗口", media, isHovered: false);
+
+        Assert.Equal(CenterCardDisplayMode.MusicLyricsMarquee, state.Mode);
+        Assert.Equal("妈妈给我生命 现在让我自生自灭", state.PrimaryText);
+        Assert.True(state.ShowLyricsMarquee);
     }
 
     [Fact]

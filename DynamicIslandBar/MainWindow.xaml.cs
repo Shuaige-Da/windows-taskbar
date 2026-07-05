@@ -35,6 +35,9 @@ namespace DynamicIslandBar
         private readonly DispatcherTimer _centerCardMediaRefreshTimer;
         private readonly DispatcherTimer _progressTimer;
         private readonly DispatcherTimer _lyricsFastTimer;
+        private readonly DispatcherTimer _autoHideTimer;
+        private bool _isAutoHidden;
+        private readonly List<TextBlock> _danmakuTextBlocks = [];
         private readonly ICenterCardMediaSnapshotSource _centerCardMediaSource = new WindowsMediaSessionSnapshotSource();
         private Storyboard? _glowSpinStoryboard;
         private Storyboard? _dockExpandStoryboard;
@@ -56,6 +59,7 @@ namespace DynamicIslandBar
         private RunningAppsSnapshot _runningAppsSnapshot = new([], [], [], false);
         private bool _isDraggingCapsule;
         private bool _isCenterCardHovered;
+        private bool IsSideDockMode => _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;
         private Point _dragStartPoint;
         private double _dragStartLeft;
         private double _dragStartTop;
@@ -73,7 +77,6 @@ namespace DynamicIslandBar
         private int _volumeControlAppPid;
         private Slider? _appVolumeSlider;
         private Panel? _appVolumePanel;
-        private TimeSpan _cachedPositionForLyrics;
         private LyricsService _lyricsService = new();
         private int _playbackModeIndex;
 
@@ -97,6 +100,8 @@ namespace DynamicIslandBar
             _progressTimer.Tick += ProgressTimer_Tick;
             _lyricsFastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _lyricsFastTimer.Tick += LyricsFastTimer_Tick;
+            _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+            _autoHideTimer.Tick += AutoHideTimer_Tick;
         }
 
         private sealed class PopupState
@@ -138,6 +143,7 @@ namespace DynamicIslandBar
             _centerCardMediaRefreshTimer.Start();
             _progressTimer.Start();
             _lyricsFastTimer.Start();
+            _autoHideTimer.Start();
             _ = InitMediaServiceAsync();
             _windowLoaded = true;
             Dispatcher.BeginInvoke(MaybeWriteLayoutDiagnostics, DispatcherPriority.Loaded);
@@ -232,27 +238,59 @@ namespace DynamicIslandBar
             Left = frame.Left;
             Top = frame.Top;
 
-            CapsuleGrid.Width = Width - 20;
-            var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
-                _currentLayoutMetrics.CapsuleHeight,
-                _capsuleConfig.CapsuleThicknessPercent);
-            CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
-            CapsuleBorder.Height = capsuleHeight;
-            UpdateCapsuleCornerRadius(capsuleHeight);
-            ApplyCenterCardWidth();
-            CapsuleBorder.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
-                ? VerticalAlignment.Top
-                : VerticalAlignment.Center;
-            CapsuleGrid.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
-                ? VerticalAlignment.Top
-                : VerticalAlignment.Bottom;
+            if (IsSideDockMode)
+            {
+                CapsuleGrid.Width = Width - 20;
+                CapsuleGrid.Height = Height - 20;
+                // 停止可能正在运行的动画，否则会覆盖我们设置的值
+                CapsuleBorder.BeginAnimation(HeightProperty, null);
+                CapsuleBorder.BeginAnimation(WidthProperty, null);
+                // 侧边模式粗细：使用更大的基础值(120)保证内容可见
+                var capsuleThickness = Math.Max(
+                    80d,
+                    CapsuleAppearanceMapper.MapCapsuleHeight(120, _capsuleConfig.CapsuleThicknessPercent));
+                CapsuleBorder.Width = capsuleThickness;
+                CapsuleBorder.Height = Height - 40;
+                UpdateCapsuleCornerRadius(capsuleThickness);
+                ApplyCenterCardWidth();
+                CapsuleBorder.VerticalAlignment = VerticalAlignment.Center;
+                CapsuleBorder.HorizontalAlignment = _capsuleConfig.Mode == CapsuleMode.LeftDock
+                    ? HorizontalAlignment.Left
+                    : HorizontalAlignment.Right;
+                CapsuleGrid.VerticalAlignment = VerticalAlignment.Center;
 
-            PermissionPromptPanel.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
-                ? VerticalAlignment.Top
-                : VerticalAlignment.Bottom;
-            PermissionPromptPanel.Margin = _capsuleConfig.Mode == CapsuleMode.TopIsland
-                ? new Thickness(0, 118, 0, 0)
-                : new Thickness(0, 0, 0, 118);
+                SwitchToVerticalLayout();
+
+                PermissionPromptPanel.VerticalAlignment = VerticalAlignment.Bottom;
+                PermissionPromptPanel.Margin = new Thickness(0, 0, 0, 118);
+            }
+            else
+            {
+                CapsuleGrid.Width = Width - 20;
+                var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
+                    _currentLayoutMetrics.CapsuleHeight,
+                    _capsuleConfig.CapsuleThicknessPercent);
+                CapsuleBorder.Width = _currentLayoutMetrics.CapsuleWidth;
+                CapsuleBorder.Height = capsuleHeight;
+                UpdateCapsuleCornerRadius(capsuleHeight);
+                ApplyCenterCardWidth();
+                CapsuleBorder.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                    ? VerticalAlignment.Top
+                    : VerticalAlignment.Center;
+                CapsuleBorder.HorizontalAlignment = HorizontalAlignment.Center;
+                CapsuleGrid.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                    ? VerticalAlignment.Top
+                    : VerticalAlignment.Bottom;
+
+                SwitchToHorizontalLayout();
+
+                PermissionPromptPanel.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                    ? VerticalAlignment.Top
+                    : VerticalAlignment.Bottom;
+                PermissionPromptPanel.Margin = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                    ? new Thickness(0, 118, 0, 0)
+                    : new Thickness(0, 0, 0, 118);
+            }
 
             ApplySystemTaskbarVisibility();
             ConfigurePopup(WifiPopup, _currentLayoutMetrics.PopupDirection, -144);
@@ -260,6 +298,90 @@ namespace DynamicIslandBar
             ConfigurePopup(AppsPopup, _currentLayoutMetrics.PopupDirection, -142);
             ConfigurePopup(OverflowAppsPopup, _currentLayoutMetrics.PopupDirection, 0);
             ConfigurePopup(CenterCardAppsPopup, _currentLayoutMetrics.PopupDirection, -120);
+        }
+
+        private void SwitchToVerticalLayout()
+        {
+            // Already in vertical mode — nothing to do
+            if (CapsuleContentGrid.ColumnDefinitions.Count == 0
+                && CapsuleContentGrid.RowDefinitions.Count > 0)
+            {
+                return;
+            }
+
+            // Switch the content grid from columns to rows
+            CapsuleContentGrid.ColumnDefinitions.Clear();
+            CapsuleContentGrid.RowDefinitions.Clear();
+            CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // Reassign children from columns to rows
+            Grid.SetColumn(DockItems, 0);
+            Grid.SetRow(DockItems, 0);
+            DockItems.Orientation = Orientation.Vertical;
+            DockItems.HorizontalAlignment = HorizontalAlignment.Center;
+            DockItems.VerticalAlignment = VerticalAlignment.Top;
+
+            Grid.SetColumn(CapsuleSeparator, 0);
+            Grid.SetRow(CapsuleSeparator, 1);
+            CapsuleSeparator.Width = double.NaN;
+            CapsuleSeparator.Height = 1;
+            CapsuleSeparator.HorizontalAlignment = HorizontalAlignment.Stretch;
+            CapsuleSeparator.VerticalAlignment = VerticalAlignment.Center;
+            CapsuleSeparator.Margin = new Thickness(0, 12, 0, 12);
+
+            Grid.SetColumn(CenterCardSlot, 0);
+            Grid.SetRow(CenterCardSlot, 2);
+
+            Grid.SetColumn(SystemItems, 0);
+            Grid.SetRow(SystemItems, 3);
+            SystemItems.Orientation = Orientation.Vertical;
+            SystemItems.HorizontalAlignment = HorizontalAlignment.Center;
+            SystemItems.VerticalAlignment = VerticalAlignment.Bottom;
+        }
+
+        private void SwitchToHorizontalLayout()
+        {
+            // Already in horizontal mode — nothing to do (XAML defaults are correct)
+            if (CapsuleContentGrid.RowDefinitions.Count == 0
+                && CapsuleContentGrid.ColumnDefinitions.Count > 0)
+            {
+                return;
+            }
+
+            // Switch the content grid from rows back to columns
+            CapsuleContentGrid.RowDefinitions.Clear();
+            CapsuleContentGrid.ColumnDefinitions.Clear();
+            CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Reassign children from rows back to columns
+            Grid.SetRow(DockItems, 0);
+            Grid.SetColumn(DockItems, 0);
+            DockItems.Orientation = Orientation.Horizontal;
+            DockItems.HorizontalAlignment = HorizontalAlignment.Stretch;
+            DockItems.VerticalAlignment = VerticalAlignment.Center;
+
+            Grid.SetRow(CapsuleSeparator, 0);
+            Grid.SetColumn(CapsuleSeparator, 1);
+            CapsuleSeparator.Width = 1;
+            CapsuleSeparator.Height = 30;
+            CapsuleSeparator.HorizontalAlignment = HorizontalAlignment.Center;
+            CapsuleSeparator.VerticalAlignment = VerticalAlignment.Center;
+            CapsuleSeparator.Margin = new Thickness(12, 0, 12, 0);
+
+            Grid.SetRow(CenterCardSlot, 0);
+            Grid.SetColumn(CenterCardSlot, 2);
+
+            Grid.SetRow(SystemItems, 0);
+            Grid.SetColumn(SystemItems, 3);
+            SystemItems.Orientation = Orientation.Horizontal;
+            SystemItems.HorizontalAlignment = HorizontalAlignment.Stretch;
+            SystemItems.VerticalAlignment = VerticalAlignment.Center;
         }
 
         private LayoutMetrics BuildCurrentLayoutMetrics(double screenWidth, double screenHeight)
@@ -313,9 +435,29 @@ namespace DynamicIslandBar
 
         private void ConfigurePopup(Popup popup, PopupFlowDirection direction, double horizontalOffset)
         {
-            popup.Placement = direction == PopupFlowDirection.Up ? PlacementMode.Top : PlacementMode.Bottom;
-            popup.HorizontalOffset = horizontalOffset;
-            popup.VerticalOffset = direction == PopupFlowDirection.Up ? -12 : 12;
+            switch (direction)
+            {
+                case PopupFlowDirection.Up:
+                    popup.Placement = PlacementMode.Top;
+                    popup.HorizontalOffset = horizontalOffset;
+                    popup.VerticalOffset = -12;
+                    break;
+                case PopupFlowDirection.Down:
+                    popup.Placement = PlacementMode.Bottom;
+                    popup.HorizontalOffset = horizontalOffset;
+                    popup.VerticalOffset = 12;
+                    break;
+                case PopupFlowDirection.Left:
+                    popup.Placement = PlacementMode.Left;
+                    popup.HorizontalOffset = -12;
+                    popup.VerticalOffset = 0;
+                    break;
+                case PopupFlowDirection.Right:
+                    popup.Placement = PlacementMode.Right;
+                    popup.HorizontalOffset = 12;
+                    popup.VerticalOffset = 0;
+                    break;
+            }
         }
 
         private void ApplyTheme()
@@ -380,6 +522,18 @@ namespace DynamicIslandBar
 
         private void ApplyCapsuleThickness()
         {
+            if (IsSideDockMode)
+            {
+                // 侧边模式：粗细在 Width 方向，Height 是竖向长度，不能被覆盖
+                var thickness = Math.Max(
+                    80d,
+                    CapsuleAppearanceMapper.MapCapsuleHeight(120, _capsuleConfig.CapsuleThicknessPercent));
+                CapsuleBorder.BeginAnimation(WidthProperty, null);
+                CapsuleBorder.Width = thickness;
+                UpdateCapsuleCornerRadius(thickness);
+                return;
+            }
+
             if (_currentLayoutMetrics.CapsuleHeight <= 0)
             {
                 return;
@@ -640,6 +794,10 @@ namespace DynamicIslandBar
 
         private void InitDockAnimations()
         {
+            // NOTE: These storyboards target HeightProperty and are only valid
+            // for horizontal modes (BottomTaskbar / TopIsland). They are currently
+            // unused (never .Begin()'d). If activated in the future, side-dock mode
+            // must redirect to WidthProperty via AnimateCapsuleHeight() instead.
             _dockExpandStoryboard = new Storyboard();
             var heightAnim = new DoubleAnimation
             {
@@ -680,6 +838,7 @@ namespace DynamicIslandBar
         private void ExpandCapsuleForHover()
         {
             _capsuleHoverCollapseTimer.Stop();
+            ResetAutoHideTimer();
             AnimateCapsuleHeight(GetBaseCapsuleHeight() + 12, TimeSpan.FromMilliseconds(230), new BackEase
             {
                 EasingMode = EasingMode.EaseOut,
@@ -702,25 +861,93 @@ namespace DynamicIslandBar
             });
         }
 
-        private double GetBaseCapsuleHeight()
+        private void Capsule_MouseEnter(object sender, MouseEventArgs e)
         {
-            return _currentLayoutMetrics.CapsuleHeight > 0
-                ? CapsuleAppearanceMapper.MapCapsuleHeight(_currentLayoutMetrics.CapsuleHeight, _capsuleConfig.CapsuleThicknessPercent)
-                : CapsuleBorder.Height;
+            ResetAutoHideTimer();
         }
 
-        private void AnimateCapsuleHeight(double targetHeight, TimeSpan duration, IEasingFunction easing)
+        private void ResetAutoHideTimer()
         {
-            UpdateCapsuleCornerRadius(targetHeight);
+            _autoHideTimer.Stop();
+            _autoHideTimer.Start();
 
-            var animation = new DoubleAnimation
+            if (_isAutoHidden)
             {
-                To = targetHeight,
-                Duration = duration,
-                EasingFunction = easing
-            };
-            CapsuleBorder.BeginAnimation(HeightProperty, animation);
+                FadeInCapsule();
+            }
         }
+
+        private void AutoHideTimer_Tick(object? sender, EventArgs e)
+        {
+            _autoHideTimer.Stop();
+
+            if (_isDraggingCapsule)
+            {
+                _autoHideTimer.Start();
+                return;
+            }
+
+            FadeOutCapsule();
+        }
+
+        private void FadeOutCapsule()
+        {
+            _isAutoHidden = true;
+            CapsuleBorder.BeginAnimation(OpacityProperty, new DoubleAnimation
+            {
+                To = 0.12,
+                Duration = TimeSpan.FromMilliseconds(400),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+            });
+        }
+
+        private void FadeInCapsule()
+        {
+            _isAutoHidden = false;
+            CapsuleBorder.BeginAnimation(OpacityProperty, new DoubleAnimation
+            {
+                To = 1.0,
+                Duration = TimeSpan.FromMilliseconds(300),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+            });
+        }
+
+private double GetBaseCapsuleHeight()
+{
+    if (IsSideDockMode)
+    {
+        // 侧边模式："高度"指的是胶囊粗细（Width），不是竖向长度
+        return Math.Max(
+            80d,
+            CapsuleAppearanceMapper.MapCapsuleHeight(120, _capsuleConfig.CapsuleThicknessPercent));
+    }
+
+    return _currentLayoutMetrics.CapsuleHeight > 0
+        ? CapsuleAppearanceMapper.MapCapsuleHeight(_currentLayoutMetrics.CapsuleHeight, _capsuleConfig.CapsuleThicknessPercent)
+        : CapsuleBorder.Height;
+}
+
+private void AnimateCapsuleHeight(double targetHeight, TimeSpan duration, IEasingFunction easing)
+{
+    UpdateCapsuleCornerRadius(targetHeight);
+
+    var animation = new DoubleAnimation
+    {
+        To = targetHeight,
+        Duration = duration,
+        EasingFunction = easing
+    };
+
+    if (IsSideDockMode)
+    {
+        // 侧边模式：粗细在 Width 方向，悬停动画应操作 WidthProperty
+        CapsuleBorder.BeginAnimation(WidthProperty, animation);
+    }
+    else
+    {
+        CapsuleBorder.BeginAnimation(HeightProperty, animation);
+    }
+}
 
         #endregion
 
@@ -854,6 +1081,101 @@ namespace DynamicIslandBar
             {
                 OverflowAppsListPanel.Children.Add(CreateAppIcon(app, 44, expandOnHover: false));
             }
+        }
+
+        private void OverflowSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var query = OverflowSearchBox.Text?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                OverflowSearchResultsScroll.Visibility = Visibility.Collapsed;
+                OverflowAppsListPanel.Visibility = Visibility.Visible;
+                OverflowSearchResultsPanel.Children.Clear();
+                return;
+            }
+
+            OverflowAppsListPanel.Visibility = Visibility.Collapsed;
+            OverflowSearchResultsScroll.Visibility = Visibility.Visible;
+            OverflowSearchResultsPanel.Children.Clear();
+
+            var results = LocalAppSearchService.Search(query);
+            if (results.Count == 0)
+            {
+                OverflowSearchResultsPanel.Children.Add(new TextBlock
+                {
+                    Text = "未找到匹配的应用",
+                    Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)),
+                    FontSize = 12,
+                    Margin = new Thickness(4, 8, 4, 8)
+                });
+                return;
+            }
+
+            foreach (var app in results)
+            {
+                OverflowSearchResultsPanel.Children.Add(CreateSearchResultIcon(app));
+            }
+        }
+
+        private Border CreateSearchResultIcon(LocalAppEntry app)
+        {
+            var border = new Border
+            {
+                Width = 48,
+                Height = 48,
+                CornerRadius = new CornerRadius(24),
+                Margin = new Thickness(2),
+                Cursor = Cursors.Hand,
+                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = true
+            };
+
+            var iconSource = GetIconSource(app.ExecutablePath ?? app.IconPath);
+            if (iconSource != null)
+            {
+                border.Child = new Image
+                {
+                    Source = iconSource,
+                    Width = 24,
+                    Height = 24,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+            }
+            else
+            {
+                border.Child = new TextBlock
+                {
+                    Text = string.IsNullOrEmpty(app.DisplayName) ? "?" : app.DisplayName[..1],
+                    Foreground = Brushes.White,
+                    FontSize = 16,
+                    FontWeight = FontWeights.SemiBold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+            }
+
+            border.ToolTip = app.DisplayName;
+            border.MouseEnter += (_, _) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255));
+                ResetAutoHideTimer();
+            };
+            border.MouseLeave += (_, _) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255));
+            };
+            border.MouseLeftButtonDown += (_, e) =>
+            {
+                e.Handled = true;
+                LocalAppSearchService.LaunchApp(app.ExecutablePath ?? app.IconPath ?? string.Empty);
+                OverflowAppsPopup.IsOpen = false;
+            };
+
+            return border;
         }
 
         private void RenderAppsManagementPanel()
@@ -1014,7 +1336,11 @@ namespace DynamicIslandBar
         private void ShowAppHoverOverlay(FrameworkElement iconHost, RunningAppEntry app)
         {
             var position = iconHost.TransformToAncestor(CapsuleGrid).Transform(new Point(0, 0));
+            var direction = _capsuleConfig.Mode == CapsuleMode.RightDock
+                ? PopupFlowDirection.Left
+                : PopupFlowDirection.Right;
             var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+                direction,
                 position.X,
                 position.Y,
                 iconHost.ActualWidth > 0 ? iconHost.ActualWidth : iconHost.Width,
@@ -1151,11 +1477,47 @@ namespace DynamicIslandBar
             }
 
             ApplyGlowAccent(app);
+
+            if (IsSideDockMode)
+            {
+                DockPanel.SetDock(CenterCardLyricsIcon, Dock.Top);
+                CenterCardLyricsIcon.HorizontalAlignment = HorizontalAlignment.Center;
+                CenterCardLyricsIcon.VerticalAlignment = VerticalAlignment.Top;
+
+                Grid.SetRow(ActiveAppSummaryIcon, 0);
+                Grid.SetRow(CenterCardDetailsTextStack, 1);
+                Grid.SetRow(CenterCardTransportControls, 2);
+                CenterCardTransportControls.Orientation = Orientation.Vertical;
+            }
+            else
+            {
+                DockPanel.SetDock(CenterCardLyricsIcon, Dock.Left);
+                CenterCardLyricsIcon.HorizontalAlignment = HorizontalAlignment.Left;
+                CenterCardLyricsIcon.VerticalAlignment = VerticalAlignment.Center;
+                CenterCardTransportControls.Orientation = Orientation.Horizontal;
+            }
         }
 
         private void ApplyCenterCardWidth()
         {
-            ActiveAppSummaryPanel.Width = MapCenterCardWidth(_capsuleConfig.CenterCardWidthPercent);
+            if (IsSideDockMode)
+            {
+                // 侧边模式：CenterCardWidthPercent 映射到竖向主轴长度（高度）
+                var capsuleLength = CapsuleBorder.Height > 0 ? CapsuleBorder.Height : (Height - 40);
+                var availableSlotHeight = CenterCardSlot.ActualHeight > 0 ? CenterCardSlot.ActualHeight : 0;
+                var mappedLength = CenterCardLayoutPolicy.MapWidth(
+                    _capsuleConfig.Mode, capsuleLength, _capsuleConfig.CenterCardWidthPercent, availableSlotHeight);
+                ActiveAppSummaryPanel.Height = mappedLength;
+                ActiveAppSummaryPanel.Width = double.NaN;
+                ActiveAppSummaryPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
+                ActiveAppSummaryPanel.MaxWidth = CapsuleBorder.Width > 0 ? CapsuleBorder.Width - 10 : double.PositiveInfinity;
+            }
+            else
+            {
+                ActiveAppSummaryPanel.Width = MapCenterCardWidth(_capsuleConfig.CenterCardWidthPercent);
+                ActiveAppSummaryPanel.Height = 44;
+                ActiveAppSummaryPanel.MaxWidth = double.PositiveInfinity;
+            }
             ApplyCenterCardTransportDensity();
             ApplyCenterCardLyricsLayout();
         }
@@ -1234,37 +1596,183 @@ namespace DynamicIslandBar
         {
             Dispatcher.BeginInvoke(() =>
             {
+                var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;
+
                 CenterCardLyricMarqueeTransform.BeginAnimation(TranslateTransform.XProperty, null);
+                CenterCardLyricMarqueeTransform.BeginAnimation(TranslateTransform.YProperty, null);
                 CenterCardLyricMarqueeTransform.X = 0;
+                CenterCardLyricMarqueeTransform.Y = 0;
 
-                var viewportWidth = CenterCardLyricsViewport.ActualWidth > 0
-                    ? CenterCardLyricsViewport.ActualWidth
-                    : ActiveAppSummaryPanel.Width;
-                CenterCardLyricMarqueeText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var textWidth = Math.Max(
-                    CenterCardLyricMarqueeText.ActualWidth,
-                    CenterCardLyricMarqueeText.DesiredSize.Width);
-
-                if (viewportWidth <= 0 || textWidth <= viewportWidth)
+                if (usesVerticalLyricsFlow)
                 {
-                    return;
+                    var viewportHeight = CenterCardLyricsViewport.ActualHeight > 0
+                        ? CenterCardLyricsViewport.ActualHeight
+                        : ActiveAppSummaryPanel.Height;
+                    CenterCardLyricMarqueeText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var textHeight = Math.Max(
+                        CenterCardLyricMarqueeText.ActualHeight,
+                        CenterCardLyricMarqueeText.DesiredSize.Height);
+
+                    if (viewportHeight <= 0 || textHeight <= viewportHeight)
+                    {
+                        return;
+                    }
+
+                    var animation = new DoubleAnimation
+                    {
+                        From = viewportHeight,
+                        To = -(textHeight + 28),
+                        Duration = TimeSpan.FromSeconds(Math.Clamp((textHeight + viewportHeight) / 42, 8, 18)),
+                        RepeatBehavior = RepeatBehavior.Forever
+                    };
+                    Canvas.SetTop(CenterCardLyricMarqueeText, 0);
+                    CenterCardLyricMarqueeText.BeginAnimation(Canvas.TopProperty, animation);
+                }
+                else
+                {
+                    var viewportWidth = CenterCardLyricsViewport.ActualWidth > 0
+                        ? CenterCardLyricsViewport.ActualWidth
+                        : ActiveAppSummaryPanel.Width;
+                    CenterCardLyricMarqueeText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var textWidth = Math.Max(
+                        CenterCardLyricMarqueeText.ActualWidth,
+                        CenterCardLyricMarqueeText.DesiredSize.Width);
+
+                    if (viewportWidth <= 0 || textWidth <= viewportWidth)
+                    {
+                        return;
+                    }
+
+                    var animation = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = -(textWidth + 32),
+                        Duration = TimeSpan.FromSeconds(Math.Clamp((textWidth + viewportWidth) / 42, 8, 18)),
+                        RepeatBehavior = RepeatBehavior.Forever
+                    };
+                    CenterCardLyricMarqueeTransform.BeginAnimation(TranslateTransform.XProperty, animation);
                 }
 
-                var animation = new DoubleAnimation
-                {
-                    From = 0,
-                    To = -(textWidth + 32),
-                    Duration = TimeSpan.FromSeconds(Math.Clamp((textWidth + viewportWidth) / 42, 8, 18)),
-                    RepeatBehavior = RepeatBehavior.Forever
-                };
-                CenterCardLyricMarqueeTransform.BeginAnimation(TranslateTransform.XProperty, animation);
+                StartDanmakuLyrics(usesVerticalLyricsFlow);
             }, DispatcherPriority.Loaded);
         }
 
         private void StopCenterCardLyricsMarquee()
         {
+            StopDanmakuLyrics();
             CenterCardLyricMarqueeTransform.BeginAnimation(TranslateTransform.XProperty, null);
+            CenterCardLyricMarqueeTransform.BeginAnimation(TranslateTransform.YProperty, null);
             CenterCardLyricMarqueeTransform.X = 0;
+            CenterCardLyricMarqueeTransform.Y = 0;
+            CenterCardLyricMarqueeText.BeginAnimation(Canvas.TopProperty, null);
+        }
+
+        private void StartDanmakuLyrics(bool usesVerticalLyricsFlow)
+        {
+            StopDanmakuLyrics();
+
+            if (_mediaService == null || !_isMusicPlaying)
+            {
+                return;
+            }
+
+            var position = _mediaService.GetCurrentPosition();
+            var danmakuLines = _lyricsService.GetNearbyLyrics(position, 3);
+            if (danmakuLines.Count <= 1)
+            {
+                return;
+            }
+
+            var viewport = CenterCardLyricsViewport;
+            var viewportWidth = viewport.ActualWidth > 0 ? viewport.ActualWidth : ActiveAppSummaryPanel.Width;
+            var viewportHeight = viewport.ActualHeight > 0 ? viewport.ActualHeight : ActiveAppSummaryPanel.Height;
+
+            if (viewportWidth <= 0 && viewportHeight <= 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < danmakuLines.Count; i++)
+            {
+                var line = danmakuLines[i];
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                var danmakuText = new TextBlock
+                {
+                    Text = line,
+                    Foreground = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)),
+                    FontSize = 11,
+                    FontWeight = FontWeights.Normal,
+                    TextWrapping = TextWrapping.NoWrap,
+                    IsHitTestVisible = false
+                };
+
+                var transform = new TranslateTransform();
+                danmakuText.RenderTransform = transform;
+                danmakuText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+                if (usesVerticalLyricsFlow)
+                {
+                    var textHeight = Math.Max(danmakuText.ActualHeight, danmakuText.DesiredSize.Height);
+                    if (textHeight <= 0)
+                    {
+                        continue;
+                    }
+
+                    var laneOffset = (i - danmakuLines.Count / 2.0) * 14;
+                    var animation = new DoubleAnimation
+                    {
+                        From = viewportHeight + laneOffset,
+                        To = -(textHeight + 20),
+                        Duration = TimeSpan.FromSeconds(Math.Clamp((textHeight + viewportHeight) / 36, 7, 16)),
+                        BeginTime = TimeSpan.FromSeconds(i * 1.5),
+                        RepeatBehavior = RepeatBehavior.Forever
+                    };
+                    transform.BeginAnimation(TranslateTransform.YProperty, animation);
+                }
+                else
+                {
+                    var textWidth = Math.Max(danmakuText.ActualWidth, danmakuText.DesiredSize.Width);
+                    if (textWidth <= 0)
+                    {
+                        continue;
+                    }
+
+                    var laneOffset = (i - danmakuLines.Count / 2.0) * 16;
+                    danmakuText.VerticalAlignment = VerticalAlignment.Center;
+                    danmakuText.Margin = new Thickness(0, laneOffset, 0, 0);
+
+                    var animation = new DoubleAnimation
+                    {
+                        From = viewportWidth + (i * 30),
+                        To = -(textWidth + 28),
+                        Duration = TimeSpan.FromSeconds(Math.Clamp((textWidth + viewportWidth) / 36, 7, 16)),
+                        BeginTime = TimeSpan.FromSeconds(i * 1.5),
+                        RepeatBehavior = RepeatBehavior.Forever
+                    };
+                    transform.BeginAnimation(TranslateTransform.XProperty, animation);
+                }
+
+                viewport.Children.Add(danmakuText);
+                _danmakuTextBlocks.Add(danmakuText);
+            }
+        }
+
+        private void StopDanmakuLyrics()
+        {
+            foreach (var textBlock in _danmakuTextBlocks)
+            {
+                if (textBlock.RenderTransform is TranslateTransform transform)
+                {
+                    transform.BeginAnimation(TranslateTransform.XProperty, null);
+                    transform.BeginAnimation(TranslateTransform.YProperty, null);
+                }
+                CenterCardLyricsViewport.Children.Remove(textBlock);
+            }
+            _danmakuTextBlocks.Clear();
         }
 
         private void StartCenterCardWaveAnimations()
@@ -1580,9 +2088,13 @@ namespace DynamicIslandBar
         private void CenterCardResizeHandle_DragDelta(object sender, DragDeltaEventArgs e)
         {
             var side = sender is FrameworkElement element ? element.Tag?.ToString() : "Right";
-            var delta = string.Equals(side, "Left", StringComparison.OrdinalIgnoreCase)
-                ? -e.HorizontalChange * 2
+            var delta = IsSideDockMode
+                ? e.VerticalChange * 2
                 : e.HorizontalChange * 2;
+            if (string.Equals(side, "Left", StringComparison.OrdinalIgnoreCase))
+            {
+                delta = -delta;
+            }
             var targetWidth = ActiveAppSummaryPanel.Width + delta;
             CapsuleConfigMutator.SetCenterCardWidthPercent(_capsuleConfig, MapCenterCardWidthPercent(targetWidth));
             ApplyCenterCardWidth();
@@ -1940,9 +2452,10 @@ namespace DynamicIslandBar
 
         #region ContextMenu
 
-        private void Capsule_RightClick(object sender, MouseButtonEventArgs e)
-        {
-            var menu = new ContextMenu
+private void Capsule_RightClick(object sender, MouseButtonEventArgs e)
+{
+ResetAutoHideTimer();
+var menu = new ContextMenu
             {
                 Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
                 Foreground = Brushes.White
@@ -2136,7 +2649,7 @@ namespace DynamicIslandBar
             updateConfig(percent);
             if (refreshLayout)
             {
-                ApplyLayout();
+            ApplyLayout();
                 RefreshRunningAppsBar();
             }
             else
@@ -2463,14 +2976,15 @@ namespace DynamicIslandBar
 
         #region DragSnap
 
-        private void Capsule_DragStart(object sender, MouseButtonEventArgs e)
-        {
-            if (e.ChangedButton != MouseButton.Left || ShouldSuppressDragStart(e.OriginalSource as DependencyObject))
-            {
-                return;
-            }
+private void Capsule_DragStart(object sender, MouseButtonEventArgs e)
+{
+if (e.ChangedButton != MouseButton.Left || ShouldSuppressDragStart(e.OriginalSource as DependencyObject))
+{
+return;
+}
 
-            _isDraggingCapsule = true;
+ResetAutoHideTimer();
+_isDraggingCapsule = true;
             _dragStartPoint = PointToScreen(e.GetPosition(this));
             _dragStartLeft = Left;
             _dragStartTop = Top;
@@ -2501,9 +3015,10 @@ namespace DynamicIslandBar
             Mouse.Capture(null);
             e.Handled = true;
 
+            var (screenWidth, screenHeight) = GetPrimaryScreenSizeInDips();
             var resolvedMode = CapsuleLayoutManager.ResolveDropMode(
-                GetPrimaryScreenSizeInDips().Height,
-                Top,
+                screenWidth, screenHeight,
+                Left, Top,
                 _capsuleConfig.Mode);
 
             if (resolvedMode != _capsuleConfig.Mode)

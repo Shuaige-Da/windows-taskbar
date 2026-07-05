@@ -32,8 +32,8 @@ public class CapsuleLayoutManagerTests
     public void ResolveDropMode_SnapsToTopWhenCloseToTopThreshold()
     {
         var mode = CapsuleLayoutManager.ResolveDropMode(
-            screenHeight: 1080,
-            topAfterDrag: 20,
+            screenWidth: 1920, screenHeight: 1080,
+            leftAfterDrag: 900, topAfterDrag: 20,
             currentMode: CapsuleMode.BottomTaskbar);
 
         Assert.Equal(CapsuleMode.TopIsland, mode);
@@ -54,5 +54,19 @@ public class CapsuleLayoutManagerTests
         Assert.Equal(420, frame.Height);
         Assert.Equal(-20, frame.Left);
         Assert.Equal(902, frame.Top);
+    }
+
+    [Fact]
+    public void GetMetrics_UsesTopPopupDefaultsForSideDockModes()
+    {
+        var left = CapsuleLayoutManager.GetMetrics(CapsuleMode.LeftDock, 1920, 1080);
+        var right = CapsuleLayoutManager.GetMetrics(CapsuleMode.RightDock, 1920, 1080);
+        var top = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, 1920, 1080);
+
+        // Side dock modes use screen height as the base for vertical capsule length
+        Assert.Equal(1080, left.CapsuleWidth);
+        Assert.Equal(top.CapsuleHeight, left.CapsuleHeight);
+        Assert.Equal(PopupFlowDirection.Right, left.PopupDirection);
+        Assert.Equal(PopupFlowDirection.Left, right.PopupDirection);
     }
 }

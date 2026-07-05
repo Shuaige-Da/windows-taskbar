@@ -9,7 +9,9 @@ public class CenterCardLayoutPolicyTests
     [InlineData(CapsuleMode.BottomTaskbar, 760, 58, 233.8)]
     [InlineData(CapsuleMode.TopIsland, 760, 58, 233.8)]
     [InlineData(CapsuleMode.TopIsland, 760, 100, 304)]
-    public void MapWidth_ScalesWithCapsuleWidthUsingStoredRatio(
+    [InlineData(CapsuleMode.LeftDock, 760, 58, 233.8)]
+    [InlineData(CapsuleMode.RightDock, 760, 58, 233.8)]
+    public void MapWidth_ScalesWithTopRatioForTopAndSideModes(
         CapsuleMode mode,
         double capsuleWidth,
         int percent,
@@ -56,19 +58,17 @@ public class CenterCardLayoutPolicyTests
     }
 
     [Theory]
-    [InlineData(520, 42, true, true)]
-    [InlineData(360, 30, true, false)]
-    [InlineData(198, 24, false, false)]
-    public void GetLyricsLayout_PrioritizesTextSpaceWhenCenterCardIsNarrow(
-        double centerCardWidth,
-        double expectedHorizontalMargin,
-        bool expectedLeftWave,
-        bool expectedRightWave)
+    [InlineData(198, false, false)]
+    [InlineData(360, true, false)]
+    [InlineData(520, true, true)]
+    public void GetLyricsLayout_PrioritizesTextSpaceAcrossHorizontalAndVerticalModes(
+        double centerCardExtent,
+        bool expectedLeadingWave,
+        bool expectedTrailingWave)
     {
-        var layout = CenterCardLayoutPolicy.GetLyricsLayout(centerCardWidth);
+        var layout = CenterCardLayoutPolicy.GetLyricsLayout(centerCardExtent);
 
-        Assert.Equal(expectedHorizontalMargin, layout.HorizontalMargin);
-        Assert.Equal(expectedLeftWave, layout.ShowLeftWave);
-        Assert.Equal(expectedRightWave, layout.ShowRightWave);
+        Assert.Equal(expectedLeadingWave, layout.ShowLeftWave);
+        Assert.Equal(expectedTrailingWave, layout.ShowRightWave);
     }
 }

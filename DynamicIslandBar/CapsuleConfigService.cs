@@ -6,7 +6,9 @@ namespace DynamicIslandBar;
 public enum CapsuleMode
 {
     BottomTaskbar,
-    TopIsland
+    TopIsland,
+    LeftDock,
+    RightDock
 }
 
 public enum CapsuleThemePreset

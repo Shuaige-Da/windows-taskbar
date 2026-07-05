@@ -234,7 +234,8 @@
                     MouseRightButtonDown="Capsule_RightClick"
                     PreviewMouseLeftButtonDown="Capsule_DragStart"
                     PreviewMouseLeftButtonUp="Capsule_DragEnd"
-                    PreviewMouseMove="Capsule_DragMove">
+                    PreviewMouseMove="Capsule_DragMove"
+                    MouseEnter="Capsule_MouseEnter">
                 <Border.Background>
                     <StaticResource ResourceKey="CapsuleInnerDepthBrush"/>
                 </Border.Background>
@@ -247,7 +248,7 @@
                             Opacity="0.72"
                             IsHitTestVisible="False"/>
 
-                    <Grid Margin="14,0">
+                    <Grid x:Name="CapsuleContentGrid" Margin="14,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -386,11 +387,11 @@
                     </StackPanel>
 
                     <!-- ===== 分割线 ===== -->
-                    <Rectangle Grid.Column="1" Width="1" Height="30" Fill="#30FFFFFF" Margin="12,0"
+                    <Rectangle x:Name="CapsuleSeparator" Grid.Column="1" Width="1" Height="30" Fill="#30FFFFFF" Margin="12,0"
                                VerticalAlignment="Center"/>
 
                     <!-- ===== 右侧：系统信息区域 ===== -->
-                    <StackPanel Orientation="Horizontal" Grid.Column="3"
+                    <StackPanel x:Name="SystemItems" Orientation="Horizontal" Grid.Column="3"
                                 VerticalAlignment="Center" Margin="0,0,4,0">
 
                         <!-- WiFi 图标 -->
@@ -544,6 +545,11 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
                                 <Border x:Name="CenterCardAppSelectorButton"
                                         Grid.Column="0"
@@ -574,7 +580,8 @@
                                                 Height="28"
                                                 VerticalAlignment="Center"/>
 
-                                <StackPanel Grid.Column="2"
+                                <StackPanel x:Name="CenterCardDetailsTextStack"
+                                            Grid.Column="2"
                                             VerticalAlignment="Center"
                                             Margin="10,0,12,0">
                                     <TextBlock x:Name="ActiveAppSummaryTitle"
@@ -997,8 +1004,24 @@
                                    Foreground="White"
                                    FontSize="14"
                                    FontWeight="SemiBold"
-                                   Margin="0,0,0,10"/>
+                                   Margin="0,0,0,8"/>
+                        <TextBox x:Name="OverflowSearchBox"
+                                 Background="#20FFFFFF"
+                                 Foreground="White"
+                                 BorderBrush="#30FFFFFF"
+                                 BorderThickness="1"
+                                 Padding="8,5"
+                                 FontSize="12"
+                                 Margin="0,0,0,8"
+                                 ToolTip="搜索本地应用"
+                                 TextChanged="OverflowSearchBox_TextChanged"/>
                         <WrapPanel x:Name="OverflowAppsListPanel" ItemWidth="52"/>
+                        <ScrollViewer x:Name="OverflowSearchResultsScroll"
+                                      VerticalScrollBarVisibility="Auto"
+                                      MaxHeight="200"
+                                      Visibility="Collapsed">
+                            <WrapPanel x:Name="OverflowSearchResultsPanel" ItemWidth="52"/>
+                        </ScrollViewer>
                     </StackPanel>
                 </Border>
             </Popup>

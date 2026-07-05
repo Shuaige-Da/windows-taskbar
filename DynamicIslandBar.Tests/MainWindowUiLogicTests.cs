@@ -27,6 +27,7 @@ public class MainWindowUiLogicTests
     public void GetOverlayFrame_PlacesOverlayBesideIconWithoutChangingIconSlot()
     {
         var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Right,
             iconLeft: 120,
             iconTop: 180,
             iconWidth: 40,
@@ -44,6 +45,7 @@ public class MainWindowUiLogicTests
     public void GetOverlayFrame_ClampsOverlayInsideLayerNearRightEdge()
     {
         var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Right,
             iconLeft: 470,
             iconTop: 180,
             iconWidth: 40,
@@ -55,5 +57,23 @@ public class MainWindowUiLogicTests
 
         Assert.Equal(360, frame.Left);
         Assert.Equal(180, frame.Top);
+    }
+
+    [Fact]
+    public void GetOverlayFrame_PlacesRightDockOverlayOnCapsuleOuterLeftSide()
+    {
+        var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Left,
+            iconLeft: 470,
+            iconTop: 180,
+            iconWidth: 40,
+            iconHeight: 40,
+            overlayWidth: 84,
+            overlayHeight: 116,
+            layerWidth: 540,
+            layerHeight: 400);
+
+        Assert.Equal(380, frame.Left);
+        Assert.Equal(142, frame.Top);
     }
 }

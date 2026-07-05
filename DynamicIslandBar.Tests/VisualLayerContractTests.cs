@@ -19,7 +19,7 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"CapsuleBorder\"", xaml);
         Assert.Contains("Padding=\"0\"", xaml);
         Assert.Contains("BorderThickness=\"1.4\"", xaml);
-        Assert.Contains("<Grid Margin=\"14,0\">", xaml);
+        Assert.Contains("Margin=\"14,0\"", xaml);
         Assert.Contains("<ColumnDefinition Width=\"*\"/>", xaml);
         Assert.Contains("Grid.Column=\"2\"", xaml);
         Assert.DoesNotContain("Background=\"{StaticResource CapsuleInnerDepthBrush}\"", xaml);
@@ -241,6 +241,54 @@ public class VisualLayerContractTests
         Assert.Contains("FindVisualChildren<Rectangle>(CenterCardRightWave)", code);
         Assert.Contains("ApplyCenterCardLyricsLayout", code);
         Assert.Contains("CenterCardLayoutPolicy.GetLyricsLayout", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockCenterCardUsesVerticalContentFlowWithoutSideSpecificPresentationBranch()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("DockPanel.SetDock(CenterCardLyricsIcon, Dock.Top);", code);
+        Assert.Contains("CenterCardLyricsIcon.VerticalAlignment = VerticalAlignment.Top;", code);
+        Assert.Contains("Grid.SetRow(ActiveAppSummaryIcon, 0);", code);
+        Assert.Contains("Grid.SetRow(CenterCardDetailsTextStack, 1);", code);
+        Assert.Contains("Grid.SetRow(CenterCardTransportControls, 2);", code);
+        Assert.DoesNotContain("preferLyricsInDetails: IsSideDockMode", code);
+        Assert.Contains("x:Name=\"CenterCardLyricsLayer\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardDetailsLayer\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_TopModeSharesBottomCenterCardPresentationPath()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var state = CenterCardPresentationPolicy.Build(", code);
+        Assert.DoesNotContain("preferLyricsInDetails", code);
+        Assert.Contains("CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains("CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockLyricsUseBottomToTopDanmakuMotion()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
+        Assert.Contains("Canvas.SetTop(CenterCardLyricMarqueeText, 0);", code);
+        Assert.Contains("CenterCardLyricMarqueeText.BeginAnimation(Canvas.TopProperty, animation);", code);
+        Assert.Contains("To = -(textHeight + 28)", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockResizeUsesVerticalDeltaForCenterCardExtent()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var delta = IsSideDockMode", code);
+        Assert.Contains("e.VerticalChange * 2", code);
+        Assert.Contains("SetCenterCardWidthPercent", code);
     }
 
     private static string ReadMainWindowXaml()
