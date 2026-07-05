@@ -198,10 +198,15 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"CenterCardRightWave\"", xaml);
         Assert.Contains("x:Name=\"CenterCardTransportControls\"", xaml);
         Assert.Contains("x:Name=\"CenterCardPlayPauseButton\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardPlaybackModeIcon\" Fill=\"{x:Null}\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSidePlaybackModeIcon\" Fill=\"{x:Null}\"", xaml);
+        Assert.Contains("StrokeLineJoin=\"Round\"", xaml);
         Assert.Contains("Click=\"CenterCardPlayPause_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardPrevious_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardNext_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardVolume_Click\"", xaml);
+        Assert.Contains("MouseEnter=\"CenterCardVolumeButton_MouseEnter\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardVolumePanel\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppSelectorButton\"", xaml);
         Assert.Contains("x:Name=\"CenterCardSideAppSelectorButton\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppsPopup\"", xaml);
@@ -262,13 +267,16 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("_activeSnapPreview", code);
+        Assert.Contains("_snapPreviewOverlayWindow", code);
+        Assert.Contains("EnsureSnapPreviewOverlayWindow(", code);
         Assert.Contains("UpdateSnapPreview(", code);
         Assert.Contains("ApplySnapPreview(", code);
         Assert.Contains("ClearSnapPreview()", code);
         Assert.Contains("CaptureFloatingPosition()", code);
         Assert.Contains("CapsuleLayoutManager.BuildSnapPreview(", code);
         Assert.Contains("CapsuleSnapPreviewGeometry.ComputeOutlineOrigin(", code);
-        Assert.Contains("CapsuleGrid.PointFromScreen(", code);
+        Assert.Contains("Canvas.SetLeft(_snapPreviewOverlayOutline, screenOrigin.X);", code);
+        Assert.DoesNotContain("CapsuleGrid.PointFromScreen(", code);
         Assert.Contains("if (_activeSnapPreview != null)", code);
         Assert.DoesNotContain("preview.Frame.Left - Left - 10", code);
         Assert.DoesNotContain("preview.Frame.Top - Top - 10", code);
@@ -320,9 +328,11 @@ public class VisualLayerContractTests
         var xaml = ReadMainWindowXaml();
 
         Assert.Contains("x:Name=\"CenterCardSideDetailsPanel\"", xaml);
-        Assert.Contains("Width=\"166\"", xaml);
+        Assert.Contains("Width=\"190\"", xaml);
+        Assert.Contains("Height=\"360\"", xaml);
         Assert.Contains("Background=\"{StaticResource HoverOverlayGlassBrush}\"", xaml);
         Assert.Contains("ApplyGlassPanelTheme(CenterCardSideDetailsChrome)", ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs"));
+        Assert.Contains("x:Name=\"CenterCardSideVolumePanel\"", xaml);
         Assert.Contains("x:Name=\"CenterCardSideProgressBar\"", xaml);
         Assert.Contains("Grid.Row=\"1\"", xaml);
         Assert.Contains("Width=\"6\"", xaml);
@@ -347,7 +357,7 @@ public class VisualLayerContractTests
         var lyricsVisibilityIndex = code.IndexOf(
             "CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;",
             StringComparison.Ordinal);
-        var detailsVisibilityLine = "CenterCardDetailsLayer.Visibility = IsSideDockMode";
+        var detailsVisibilityLine = "CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;";
         var detailsVisibilityIndex = code.IndexOf(detailsVisibilityLine, StringComparison.Ordinal);
 
         Assert.Contains("var state = CenterCardPresentationPolicy.Build(", code);

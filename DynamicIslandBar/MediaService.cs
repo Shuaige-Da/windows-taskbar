@@ -1,5 +1,6 @@
 using Windows.Media.Control;
 using Windows.Storage.Streams;
+using Windows.Foundation;
 using System.Diagnostics;
 using System.IO;
 
@@ -411,7 +412,7 @@ namespace DynamicIslandBar
                 if (repeatVal != null)
                 {
                     var repeatInt = Convert.ToInt32(repeatVal);
-                    return repeatInt switch { 1 => 1, 2 => 2, _ => 0 };
+                    return repeatInt switch { 2 => 1, 1 => 2, _ => 0 };
                 }
                 return 0;
             }
@@ -429,6 +430,7 @@ namespace DynamicIslandBar
                 var shuffleMethod = sessionType.GetMethod("TryChangeShuffleActiveAsync");
                 var repeatMethod = sessionType.GetMethod("TryChangeAutoRepeatModeAsync");
                 var enumType = GetAutoRepeatModeEnumType();
+                var changed = false;
 
                 object?[] CreateRepeatArgs(int val) =>
                     enumType != null ? new object[] { Enum.ToObject(enumType, val) } : new object[] { val };
@@ -437,32 +439,52 @@ namespace DynamicIslandBar
                 {
                     case 0: // Sequential
                         if (shuffleMethod != null)
-                            await (Task<bool>)shuffleMethod.Invoke(session, new object[] { false })!;
+                            changed |= await AwaitBooleanAsync(shuffleMethod.Invoke(session, new object[] { false }));
                         if (repeatMethod != null)
-                            await (Task<bool>)repeatMethod.Invoke(session, CreateRepeatArgs(0))!;
+                            changed |= await AwaitBooleanAsync(repeatMethod.Invoke(session, CreateRepeatArgs(0)));
                         break;
                     case 1: // Loop All
                         if (shuffleMethod != null)
-                            await (Task<bool>)shuffleMethod.Invoke(session, new object[] { false })!;
+                            changed |= await AwaitBooleanAsync(shuffleMethod.Invoke(session, new object[] { false }));
                         if (repeatMethod != null)
-                            await (Task<bool>)repeatMethod.Invoke(session, CreateRepeatArgs(1))!;
+                            changed |= await AwaitBooleanAsync(repeatMethod.Invoke(session, CreateRepeatArgs(2)));
                         break;
                     case 2: // Loop One
                         if (shuffleMethod != null)
-                            await (Task<bool>)shuffleMethod.Invoke(session, new object[] { false })!;
+                            changed |= await AwaitBooleanAsync(shuffleMethod.Invoke(session, new object[] { false }));
                         if (repeatMethod != null)
-                            await (Task<bool>)repeatMethod.Invoke(session, CreateRepeatArgs(2))!;
+                            changed |= await AwaitBooleanAsync(repeatMethod.Invoke(session, CreateRepeatArgs(1)));
                         break;
                     case 3: // Shuffle
                         if (repeatMethod != null)
-                            await (Task<bool>)repeatMethod.Invoke(session, CreateRepeatArgs(0))!;
+                            changed |= await AwaitBooleanAsync(repeatMethod.Invoke(session, CreateRepeatArgs(0)));
                         if (shuffleMethod != null)
-                            await (Task<bool>)shuffleMethod.Invoke(session, new object[] { true })!;
+                            changed |= await AwaitBooleanAsync(shuffleMethod.Invoke(session, new object[] { true }));
                         break;
                 }
-                return true;
+                return changed;
             }
             catch { return false; }
+        }
+
+        private static async Task<bool> AwaitBooleanAsync(object? operation)
+        {
+            switch (operation)
+            {
+                case null:
+                    return false;
+                case Task<bool> task:
+                    return await task;
+                case IAsyncOperation<bool> asyncOperation:
+                    return await asyncOperation.AsTask();
+                case IAsyncAction asyncAction:
+                    await asyncAction.AsTask();
+                    return true;
+                case bool result:
+                    return result;
+                default:
+                    return false;
+            }
         }
     }
 }

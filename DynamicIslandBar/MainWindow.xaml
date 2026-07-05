@@ -141,6 +141,59 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="SideDockVolumeSliderStyle" TargetType="{x:Type Slider}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Slider}">
+                        <Grid Width="{TemplateBinding Width}"
+                              Height="{TemplateBinding Height}"
+                              SnapsToDevicePixels="True">
+                            <Rectangle Width="3"
+                                       RadiusX="1.5"
+                                       RadiusY="1.5"
+                                       Fill="#D8FFFFFF"
+                                       Opacity="0.9"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Stretch"/>
+                            <Track x:Name="PART_Track"
+                                   Orientation="{TemplateBinding Orientation}">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                                  Opacity="0"
+                                                  Focusable="False"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="14"
+                                           Height="14"
+                                           Focusable="False">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="{x:Type Thumb}">
+                                                <Grid>
+                                                    <Ellipse Width="14"
+                                                             Height="14"
+                                                             Fill="#46E0FF"/>
+                                                    <Ellipse Width="24"
+                                                             Height="24"
+                                                             Fill="#4646E0FF"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                                  Opacity="0"
+                                                  Focusable="False"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="{x:Type Separator}">
             <Setter Property="Template">
                 <Setter.Value>
@@ -646,7 +699,7 @@
                                             Margin="0,0,12,0"
                                             Visibility="Collapsed">
                                     <Button x:Name="CenterCardPlaybackModeButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="顺序播放" Click="CenterCardPlaybackMode_Click">
-                                        <Path x:Name="CenterCardPlaybackModeIcon" Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                        <Path x:Name="CenterCardPlaybackModeIcon" Fill="{x:Null}" Stroke="White" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Width="12" Height="12"
                                               Data="M4,6 H20 M4,12 H20 M4,18 H14"/>
                                     </Button>
                                     <Button x:Name="CenterCardPreviousButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click">
@@ -661,7 +714,7 @@
                                         <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
                                               Data="M6,6 L14.5,12 L6,18 Z M16,6 L18,6 L18,18 L16,18 Z"/>
                                     </Button>
-                                    <Button x:Name="CenterCardVolumeButton" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click">
+                                    <Button x:Name="CenterCardVolumeButton" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click" MouseEnter="CenterCardVolumeButton_MouseEnter" MouseLeave="CenterCardVolumeButton_MouseLeave">
                                         <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
                                               Data="M3,9 L3,15 L7,15 L12,20 L12,4 L7,9 Z M16.5,12 C16.5,10.23 15.48,8.71 14,7.97 L14,16.02 C15.48,15.29 16.5,13.77 16.5,12 Z"/>
                                     </Button>
@@ -842,8 +895,8 @@
                    PopupAnimation="Fade"
                    StaysOpen="True">
                 <Grid x:Name="CenterCardSideDetailsPanel"
-                      Width="166"
-                      Height="300"
+                      Width="190"
+                      Height="360"
                       MouseEnter="CenterCardSideDetails_MouseEnter"
                       MouseLeave="CenterCardSideDetails_MouseLeave">
                     <Border x:Name="CenterCardSideDetailsChrome"
@@ -867,12 +920,37 @@
                           VerticalAlignment="Stretch"
                           HorizontalAlignment="Stretch">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="26"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="26"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0"
+
+                        <Grid x:Name="CenterCardSideVolumePanel"
+                              Grid.Column="0"
+                              Width="24"
+                              Height="248"
+                              Margin="0,0,4,0"
+                              VerticalAlignment="Center"
+                              Visibility="Collapsed">
+                            <Slider x:Name="CenterCardSideVolumeSlider"
+                                    Style="{StaticResource SideDockVolumeSliderStyle}"
+                                    Orientation="Vertical"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    Value="0"
+                                    Width="22"
+                                    Height="222"
+                                    Foreground="#D8FFFFFF"
+                                    Background="#28FFFFFF"
+                                    HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
-                                    HorizontalAlignment="Center">
+                                    Cursor="Hand"
+                                    ValueChanged="CenterCardSideVolumeSlider_ValueChanged"/>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1"
+                                     VerticalAlignment="Center"
+                                     HorizontalAlignment="Center">
                         <ContentControl x:Name="CenterCardSideDetailsIcon"
                                         Width="30"
                                         Height="30"
@@ -897,7 +975,7 @@
                                     Orientation="Vertical"
                                     HorizontalAlignment="Center">
                             <Button x:Name="CenterCardSidePlaybackModeButton" Width="30" Height="30" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="顺序播放" Click="CenterCardPlaybackMode_Click">
-                                <Path x:Name="CenterCardSidePlaybackModeIcon" Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                <Path x:Name="CenterCardSidePlaybackModeIcon" Fill="{x:Null}" Stroke="White" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Width="12" Height="12"
                                       Data="M4,6 H20 M4,12 H20 M4,18 H14"/>
                             </Button>
                             <Button x:Name="CenterCardSidePreviousButton" Width="32" Height="32" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click">
@@ -912,7 +990,7 @@
                                 <Path Fill="White" Stretch="Uniform" Width="13" Height="13"
                                       Data="M6,6 L14.5,12 L6,18 Z M16,6 L18,6 L18,18 L16,18 Z"/>
                             </Button>
-                            <Button x:Name="CenterCardSideVolumeButton" Width="30" Height="30" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click">
+                            <Button x:Name="CenterCardSideVolumeButton" Width="30" Height="30" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click" MouseEnter="CenterCardVolumeButton_MouseEnter" MouseLeave="CenterCardVolumeButton_MouseLeave">
                                 <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
                                       Data="M3,9 L3,15 L7,15 L12,20 L12,4 L7,9 Z M16.5,12 C16.5,10.23 15.48,8.71 14,7.97 L14,16.02 C15.48,15.29 16.5,13.77 16.5,12 Z"/>
                             </Button>
@@ -920,9 +998,9 @@
                         </StackPanel>
 
                         <Grid x:Name="CenterCardSideProgressPanel"
-                              Grid.Column="1"
+                              Grid.Column="2"
                               Width="24"
-                              Height="210"
+                              Height="248"
                               Margin="4,0,0,0"
                               VerticalAlignment="Center">
                             <Grid.RowDefinitions>
@@ -1126,24 +1204,40 @@
                    VerticalOffset="-8"
                    AllowsTransparency="True"
                    PopupAnimation="Fade"
-                   StaysOpen="False">
-                <Border CornerRadius="10" Padding="8,6" Width="180"
-                        BorderBrush="#4046E0FF" BorderThickness="1"
+                   StaysOpen="True">
+                <Border x:Name="CenterCardVolumePanel"
+                        CornerRadius="18"
+                        Padding="12,9"
+                        Width="224"
+                        BorderBrush="#4046E0FF"
+                        BorderThickness="1"
                         MouseEnter="CenterCardVolumePopup_MouseEnter"
                         MouseLeave="CenterCardVolumePopup_MouseLeave">
-                    <Border.Background>
-                        <SolidColorBrush Color="#222222" Opacity="0.95"/>
-                    </Border.Background>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="🎵" Foreground="#FF5DBB" FontSize="12"
-                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <StackPanel x:Name="CenterCardVolumeContent"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center">
+                        <Border x:Name="CenterCardVolumeGlyph"
+                                Width="26" Height="26" CornerRadius="13"
+                                Background="#2AFFFFFF"
+                                BorderBrush="#36FFFFFF"
+                                BorderThickness="1"
+                                Margin="0,0,10,0">
+                            <TextBlock Text="♪"
+                                       Foreground="#FFFF5DBB"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
                         <Slider x:Name="CenterCardVolumeSlider" Minimum="0" Maximum="100"
-                                Width="100" VerticalAlignment="Center"
+                                Width="128" VerticalAlignment="Center"
                                 Foreground="#FF5DBB"
                                 ValueChanged="CenterCardVolumeSlider_ValueChanged"/>
                         <TextBlock x:Name="CenterCardVolumePercentText" Text="--%"
-                                   Foreground="#80FFFFFF" FontSize="10"
-                                   VerticalAlignment="Center" Margin="6,0,0,0" Width="30"/>
+                                   Foreground="#CCFFFFFF" FontSize="11"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="10,0,0,0" Width="34"/>
                     </StackPanel>
                 </Border>
             </Popup>

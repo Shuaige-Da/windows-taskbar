@@ -92,10 +92,73 @@ public class MainWindowUiLogicTests
         Assert.Contains("x:Name=\"CenterCardSideProgressBar\"", xaml);
         Assert.Contains("UpdateCenterCardSideDetailsOverlay(app, sideDetailsState);", code);
         Assert.Contains("var showProgress = !IsSideDockMode", code);
+        Assert.Contains("&& _mediaDuration.TotalSeconds > 0", code);
+        Assert.Contains("CenterCardSideProgressPanel.Visibility = _mediaDuration.TotalSeconds > 0", code);
+        Assert.DoesNotContain("&& _isMusicPlaying\r\n                && _mediaDuration.TotalSeconds > 0", code);
         Assert.Contains("CenterCardSideProgressBar.Value = Math.Clamp(percent, 0, 100);", code);
         Assert.Contains("ReferenceEquals(sender, CenterCardSideProgressBar)", code);
         Assert.Contains("? Math.Max(progressBar.ActualHeight, 1)", code);
         Assert.Contains("? trackLength - e.GetPosition(progressBar).Y", code);
+    }
+
+    [Fact]
+    public void MainWindow_PlaybackModeButtonUsesMediaServiceResult()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var mediaService = ReadProjectFile("DynamicIslandBar", "MediaService.cs");
+
+        Assert.Contains("var requestedMode = (_playbackModeIndex + 1) % 4;", code);
+        Assert.Contains("var changed = await _mediaService.SetPlaybackModeAsync(requestedMode);", code);
+        Assert.Contains("? requestedMode", code);
+        Assert.Contains("case IAsyncOperation<bool> asyncOperation:", mediaService);
+        Assert.Contains("return await asyncOperation.AsTask();", mediaService);
+    }
+
+    [Fact]
+    public void MediaService_PlaybackModeMapsListAndTrackRepeatCorrectly()
+    {
+        var mediaService = ReadProjectFile("DynamicIslandBar", "MediaService.cs");
+
+        Assert.Contains("return repeatInt switch { 2 => 1, 1 => 2, _ => 0 };", mediaService);
+        Assert.Contains("case 1: // Loop All", mediaService);
+        Assert.Contains("repeatMethod.Invoke(session, CreateRepeatArgs(2))", mediaService);
+        Assert.Contains("case 2: // Loop One", mediaService);
+        Assert.Contains("repeatMethod.Invoke(session, CreateRepeatArgs(1))", mediaService);
+    }
+
+    [Fact]
+    public void MainWindow_CenterCardVolumeControlsMusicAppOnly()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("ResolveCenterCardVolumeProcessId()", code);
+        Assert.Contains("OpenCenterCardVolumePopup(sender as UIElement ?? CenterCardVolumeButton);", code);
+        Assert.Contains("CenterCardVolumeButton_MouseEnter", code);
+        Assert.Contains("CenterCardVolumeSlider.IsEnabled = vol >= 0;", code);
+        Assert.Contains("AudioService.SetAppVolume(_volumeControlAppPid, pct);", code);
+        Assert.DoesNotContain("AudioService.SetVolume(pct); // Fallback", code);
+        Assert.DoesNotContain("vol = AudioService.GetVolume(); // Fallback to system volume", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockVolumePopupKeepsDetailsOpenAndUsesVerticalSlider()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+
+        Assert.Contains("x:Name=\"CenterCardSideVolumePanel\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSideVolumeSlider\"", xaml);
+        Assert.Contains("Style=\"{StaticResource SideDockVolumeSliderStyle}\"", xaml);
+        Assert.Contains("Fill=\"#46E0FF\"", xaml);
+        Assert.Contains("ValueChanged=\"CenterCardSideVolumeSlider_ValueChanged\"", xaml);
+        Assert.Contains("Orientation=\"Vertical\"", xaml);
+        Assert.Contains("ToggleCenterCardSideVolumeSlider();", code);
+        Assert.Contains("_isCenterCardSideVolumeSliderPinned", code);
+        Assert.Contains("CenterCardSideVolumePanel.Visibility = _isCenterCardSideVolumeSliderPinned", code);
+        Assert.Contains("CenterCardSideVolumeSlider.Value = vol >= 0 ? vol : 0;", code);
+        Assert.Contains("CenterCardSideVolumeSlider_ValueChanged", code);
+        Assert.Contains("_isCenterCardSideVolumeSliderPinned = false;", code);
+        Assert.Contains("ScheduleCenterCardHoverExit();", code);
     }
 
     [Fact]
@@ -105,7 +168,7 @@ public class MainWindowUiLogicTests
 
         Assert.Contains("var capsuleIsHovered = IsSideDockMode ? false : _isCenterCardHovered;", code);
         Assert.Contains("var sideDetailsState = CenterCardPresentationPolicy.Build(", code);
-        Assert.Contains("CenterCardDetailsLayer.Visibility = IsSideDockMode", code);
+        Assert.Contains("CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;", code);
         Assert.Contains("CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
         Assert.Contains("CenterCardLyricsDock.VerticalAlignment = VerticalAlignment.Stretch;", code);
         Assert.Contains("CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;", code);

@@ -23,6 +23,10 @@ namespace DynamicIslandBar
         private const byte VirtualKeyMediaPlayPause = 0xB3;
         private const uint KeyEventKeyUp = 0x0002;
         private const double AutoHideOpacity = 0.1;
+        private const int GwlExStyle = -20;
+        private const int WsExTransparent = 0x00000020;
+        private const int WsExToolWindow = 0x00000080;
+        private const int WsExNoActivate = 0x08000000;
 
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
@@ -30,6 +34,12 @@ namespace DynamicIslandBar
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GetCursorPos(out NativePoint lpPoint);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
         private readonly DispatcherTimer _glowStopTimer;
         private readonly DispatcherTimer _clockTimer;
@@ -67,6 +77,8 @@ namespace DynamicIslandBar
         private double _dragStartLeft;
         private double _dragStartTop;
         private CapsuleSnapPreview? _activeSnapPreview;
+        private Window? _snapPreviewOverlayWindow;
+        private Border? _snapPreviewOverlayOutline;
         private string? _lastPrimaryActivatedAppId;
         private DateTime _lastPrimaryActivatedAtUtc;
         private RunningAppEntry? _hoveredApp;
@@ -79,6 +91,7 @@ namespace DynamicIslandBar
         private bool _isProgressInterpolationActive;
         private bool _isMusicPlaying;
         private bool _isCapsuleAutoHidden;
+        private bool _isCenterCardSideVolumeSliderPinned;
         private int _volumeControlAppPid;
         private Slider? _appVolumeSlider;
         private Panel? _appVolumePanel;
@@ -120,6 +133,14 @@ namespace DynamicIslandBar
             _centerCardLyricsLoopTimer.Tick += CenterCardLyricsLoopTimer_Tick;
             MouseMove += Window_MouseMove;
             MouseEnter += Window_MouseEnter;
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _snapPreviewOverlayWindow?.Close();
+            _snapPreviewOverlayWindow = null;
+            _snapPreviewOverlayOutline = null;
+            base.OnClosed(e);
         }
 
         private sealed class PopupState
@@ -752,6 +773,7 @@ namespace DynamicIslandBar
             ApplyGlassPanelTheme(PermissionPromptPanel);
             ApplyGlassPanelTheme(AppHoverOverlayBackground);
             ApplyGlassPanelTheme(CenterCardSideDetailsChrome);
+            ApplyGlassPanelTheme(CenterCardVolumePanel);
         }
 
         private static Brush CreateBrush(string color)
@@ -953,11 +975,11 @@ namespace DynamicIslandBar
                         UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
                     }
 
-                    if (_isMusicPlaying && info.Duration.TotalSeconds > 0)
+                    if (info.Duration.TotalSeconds > 0)
                     {
                         _lastMediaPosition = info.Position;
                         _lastMediaUpdateUtc = DateTime.UtcNow;
-                        _isProgressInterpolationActive = true;
+                        _isProgressInterpolationActive = _isMusicPlaying;
 
                         var pct = info.Position.TotalSeconds / info.Duration.TotalSeconds * 100;
                         UpdateCenterCardProgressDisplays(pct, info.Position, info.Duration);
@@ -1011,7 +1033,7 @@ namespace DynamicIslandBar
                     UpdatePlaybackModeIcon();
 
                     // Re-update progress panel visibility now that media state is fresh
-                    var showProgress = !IsSideDockMode && _isCenterCardHovered && _isMusicPlaying && _mediaDuration.TotalSeconds > 0;
+                    var showProgress = !IsSideDockMode && _isCenterCardHovered && _mediaDuration.TotalSeconds > 0;
                     CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
                     if (_isCenterCardHovered)
                     {
@@ -1804,17 +1826,14 @@ namespace DynamicIslandBar
             ActiveAppSummarySubtitle.Text = state.SecondaryText;
             CenterCardLyricMarqueeText.Text = state.PrimaryText;
             CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
-            CenterCardDetailsLayer.Visibility = IsSideDockMode
-                ? Visibility.Collapsed
-                : state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;
+            CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;
             CenterCardLyricMarqueeText.Visibility = Visibility.Collapsed;
             CenterCardLyricsDanmakuCanvas.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
             CenterCardTransportControls.Visibility = !IsSideDockMode && state.ShowTransportControls ? Visibility.Visible : Visibility.Collapsed;
 
-            // Show progress panel when music app + hovered + playing
+            // Show progress panel when music app + hovered + timeline available.
             var showProgress = !IsSideDockMode
                 && state.ShowTransportControls
-                && _isMusicPlaying
                 && _mediaDuration.TotalSeconds > 0;
             CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
             UpdateCenterCardSideDetailsOverlay(app, sideDetailsState);
@@ -1863,9 +1882,16 @@ namespace DynamicIslandBar
             CenterCardSideDetailsArtist.Text = artist;
             CenterCardSideDetailsGlow.Stroke = CapsuleAppearanceMapper.BuildGlowBrush(_capsuleConfig.GlowIntensityPercent);
             CenterCardSideDetailsChrome.BorderBrush = CapsuleAppearanceMapper.BuildPanelBorderBrush(_capsuleConfig.GlowIntensityPercent);
-            CenterCardSideProgressPanel.Visibility = _isMusicPlaying && _mediaDuration.TotalSeconds > 0
+            CenterCardSideProgressPanel.Visibility = _mediaDuration.TotalSeconds > 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            CenterCardSideVolumePanel.Visibility = _isCenterCardSideVolumeSliderPinned
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            if (_isCenterCardSideVolumeSliderPinned)
+            {
+                UpdateCenterCardSideVolumeSlider();
+            }
 
             CenterCardSideDetailsPopup.Placement = _capsuleConfig.Mode == CapsuleMode.RightDock
                 ? PlacementMode.Left
@@ -1879,6 +1905,8 @@ namespace DynamicIslandBar
 
         private void HideCenterCardSideDetailsOverlay()
         {
+            _isCenterCardSideVolumeSliderPinned = false;
+            CenterCardSideVolumePanel.Visibility = Visibility.Collapsed;
             CenterCardSideDetailsPopup.IsOpen = false;
         }
 
@@ -2252,7 +2280,10 @@ namespace DynamicIslandBar
         private async void ScheduleCenterCardHoverExit()
         {
             await Task.Delay(140);
-            if (ActiveAppSummaryPanel.IsMouseOver || CenterCardSideDetailsPanel.IsMouseOver)
+            if (ActiveAppSummaryPanel.IsMouseOver
+                || CenterCardSideDetailsPanel.IsMouseOver
+                || CenterCardVolumePanel.IsMouseOver
+                || CenterCardVolumePopup.IsOpen)
             {
                 return;
             }
@@ -2417,8 +2448,11 @@ namespace DynamicIslandBar
             if (_mediaService == null)
                 return;
 
-            _playbackModeIndex = (_playbackModeIndex + 1) % 4;
-            await _mediaService.SetPlaybackModeAsync(_playbackModeIndex);
+            var requestedMode = (_playbackModeIndex + 1) % 4;
+            var changed = await _mediaService.SetPlaybackModeAsync(requestedMode);
+            _playbackModeIndex = changed
+                ? requestedMode
+                : _mediaService.GetPlaybackMode();
             UpdatePlaybackModeIcon();
         }
 
@@ -2445,30 +2479,189 @@ namespace DynamicIslandBar
 
         private void CenterCardVolume_Click(object sender, RoutedEventArgs e)
         {
-            _volumeControlAppPid = _mediaService?.GetMusicAppProcessId() ?? 0;
-            System.Diagnostics.Debug.WriteLine($"[Volume] CenterCardVolume_Click: PID={_volumeControlAppPid}");
+            if (IsSideDockMode)
+            {
+                ToggleCenterCardSideVolumeSlider();
+                return;
+            }
+
+            if (CenterCardVolumePopup.IsOpen)
+            {
+                CenterCardVolumePopup.IsOpen = false;
+                return;
+            }
+
+            OpenCenterCardVolumePopup(sender as UIElement ?? CenterCardVolumeButton);
+        }
+
+        private void CenterCardVolumeButton_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (IsSideDockMode)
+            {
+                return;
+            }
+
+            OpenCenterCardVolumePopup(sender as UIElement ?? CenterCardVolumeButton);
+        }
+
+        private async void CenterCardVolumeButton_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (IsSideDockMode)
+            {
+                return;
+            }
+
+            await ScheduleCenterCardVolumePopupCloseAsync();
+        }
+
+        private void ToggleCenterCardSideVolumeSlider()
+        {
+            _isCenterCardSideVolumeSliderPinned = !_isCenterCardSideVolumeSliderPinned;
+
+            if (_isCenterCardSideVolumeSliderPinned)
+            {
+                _volumeControlAppPid = ResolveCenterCardVolumeProcessId();
+                UpdateCenterCardSideVolumeSlider();
+            }
+
+            CenterCardSideVolumePanel.Visibility = _isCenterCardSideVolumeSliderPinned
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private void OpenCenterCardVolumePopup(UIElement placementTarget)
+        {
+            _volumeControlAppPid = ResolveCenterCardVolumeProcessId();
+            System.Diagnostics.Debug.WriteLine($"[Volume] CenterCardVolumePopup: PID={_volumeControlAppPid}");
             UpdateCenterCardVolumeSlider();
-            CenterCardVolumePopup.PlacementTarget = sender as UIElement ?? CenterCardVolumeButton;
-            CenterCardVolumePopup.IsOpen = !CenterCardVolumePopup.IsOpen;
+            ApplyCenterCardVolumePopupLayout();
+            ApplyCenterCardVolumePopupPlacement(placementTarget);
+            CenterCardVolumePopup.IsOpen = true;
+        }
+
+        private int ResolveCenterCardVolumeProcessId()
+        {
+            var mediaPid = _mediaService?.GetMusicAppProcessId() ?? 0;
+            if (mediaPid > 0 && AudioService.GetAppVolume(mediaPid) >= 0)
+            {
+                return mediaPid;
+            }
+
+            var app = GetPrimarySummaryApp();
+            if (app != null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
+            {
+                if (app.RepresentativeProcessId > 0 && AudioService.GetAppVolume(app.RepresentativeProcessId) >= 0)
+                {
+                    return app.RepresentativeProcessId;
+                }
+
+                var processIdFromPath = ResolveProcessIdFromExecutablePath(app.ExePath);
+                if (processIdFromPath > 0 && AudioService.GetAppVolume(processIdFromPath) >= 0)
+                {
+                    return processIdFromPath;
+                }
+            }
+
+            var activeAudioPid = AudioService.GetActiveAudioSessionPid();
+            return activeAudioPid > 0 && AudioService.GetAppVolume(activeAudioPid) >= 0
+                ? activeAudioPid
+                : 0;
+        }
+
+        private static int ResolveProcessIdFromExecutablePath(string? executablePath)
+        {
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                return 0;
+            }
+
+            try
+            {
+                var processName = System.IO.Path.GetFileNameWithoutExtension(executablePath);
+                if (string.IsNullOrWhiteSpace(processName))
+                {
+                    return 0;
+                }
+
+                return Process.GetProcessesByName(processName).FirstOrDefault()?.Id ?? 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private void ApplyCenterCardVolumePopupPlacement(UIElement placementTarget)
+        {
+            CenterCardVolumePopup.PlacementTarget = placementTarget;
+
+            if (_capsuleConfig.Mode == CapsuleMode.RightDock)
+            {
+                CenterCardVolumePopup.PlacementTarget = CenterCardSideDetailsPanel;
+                CenterCardVolumePopup.Placement = PlacementMode.Left;
+                CenterCardVolumePopup.HorizontalOffset = -8;
+                CenterCardVolumePopup.VerticalOffset = 0;
+                return;
+            }
+
+            if (_capsuleConfig.Mode == CapsuleMode.LeftDock)
+            {
+                CenterCardVolumePopup.PlacementTarget = CenterCardSideDetailsPanel;
+                CenterCardVolumePopup.Placement = PlacementMode.Right;
+                CenterCardVolumePopup.HorizontalOffset = 8;
+                CenterCardVolumePopup.VerticalOffset = 0;
+                return;
+            }
+
+            CenterCardVolumePopup.Placement = _capsuleConfig.Mode == CapsuleMode.TopIsland
+                ? PlacementMode.Bottom
+                : PlacementMode.Top;
+            CenterCardVolumePopup.HorizontalOffset = -96;
+            CenterCardVolumePopup.VerticalOffset = _capsuleConfig.Mode == CapsuleMode.TopIsland ? 12 : -12;
+        }
+
+        private void ApplyCenterCardVolumePopupLayout()
+        {
+            var isSideDock = IsSideDockMode;
+
+            CenterCardVolumePanel.Width = isSideDock ? 32 : 224;
+            CenterCardVolumePanel.Height = isSideDock ? 224 : double.NaN;
+            CenterCardVolumePanel.Padding = isSideDock ? new Thickness(0) : new Thickness(12, 9, 12, 9);
+            CenterCardVolumePanel.Background = isSideDock ? Brushes.Transparent : CapsuleAppearanceMapper.BuildPanelBackgroundBrush(_capsuleConfig.GlassOpacityPercent);
+            CenterCardVolumePanel.BorderThickness = isSideDock ? new Thickness(0) : new Thickness(1);
+            CenterCardVolumePanel.BorderBrush = isSideDock ? Brushes.Transparent : CapsuleAppearanceMapper.BuildPanelBorderBrush(_capsuleConfig.GlowIntensityPercent);
+            CenterCardVolumePanel.Effect = isSideDock ? null : CapsuleAppearanceMapper.BuildPanelShadowEffect(_capsuleConfig.ShadowPercent);
+            CenterCardVolumeContent.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;
+            CenterCardVolumeSlider.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;
+            CenterCardVolumeSlider.Width = isSideDock ? 24 : 128;
+            CenterCardVolumeSlider.Height = isSideDock ? 178 : double.NaN;
+            CenterCardVolumeSlider.Margin = isSideDock ? new Thickness(0, 22, 0, 0) : new Thickness(0);
+            CenterCardVolumeGlyph.Visibility = isSideDock ? Visibility.Collapsed : Visibility.Visible;
+            CenterCardVolumePercentText.Visibility = isSideDock ? Visibility.Collapsed : Visibility.Visible;
+            CenterCardVolumePercentText.Margin = isSideDock ? new Thickness(0) : new Thickness(10, 0, 0, 0);
+            CenterCardVolumePercentText.TextAlignment = isSideDock ? TextAlignment.Center : TextAlignment.Left;
         }
 
         private void UpdateCenterCardVolumeSlider()
         {
-            int vol;
-            if (_volumeControlAppPid > 0)
-            {
-                vol = AudioService.GetAppVolume(_volumeControlAppPid);
-                if (vol < 0)
-                    vol = AudioService.GetVolume(); // Fallback to system volume
-            }
-            else
-            {
-                vol = AudioService.GetVolume();
-            }
+            var vol = _volumeControlAppPid > 0 ? AudioService.GetAppVolume(_volumeControlAppPid) : -1;
 
             _suppressVolumeEvent = true;
             CenterCardVolumeSlider.Value = vol >= 0 ? vol : 0;
+            CenterCardVolumeSlider.IsEnabled = vol >= 0;
+            CenterCardVolumeSlider.Opacity = vol >= 0 ? 1 : 0.45;
             CenterCardVolumePercentText.Text = vol >= 0 ? $"{vol}%" : "N/A";
+            _suppressVolumeEvent = false;
+        }
+
+        private void UpdateCenterCardSideVolumeSlider()
+        {
+            var vol = _volumeControlAppPid > 0 ? AudioService.GetAppVolume(_volumeControlAppPid) : -1;
+
+            _suppressVolumeEvent = true;
+            CenterCardSideVolumeSlider.Value = vol >= 0 ? vol : 0;
+            CenterCardSideVolumeSlider.IsEnabled = vol >= 0;
+            CenterCardSideVolumeSlider.Opacity = vol >= 0 ? 1 : 0.42;
             _suppressVolumeEvent = false;
         }
 
@@ -2482,13 +2675,17 @@ namespace DynamicIslandBar
 
             if (_volumeControlAppPid > 0)
             {
-                if (!AudioService.SetAppVolume(_volumeControlAppPid, pct))
-                    AudioService.SetVolume(pct); // Fallback
+                AudioService.SetAppVolume(_volumeControlAppPid, pct);
             }
-            else
-            {
-                AudioService.SetVolume(pct);
-            }
+        }
+
+        private void CenterCardSideVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_suppressVolumeEvent || !_windowLoaded || _volumeControlAppPid <= 0)
+                return;
+
+            var pct = (int)CenterCardSideVolumeSlider.Value;
+            AudioService.SetAppVolume(_volumeControlAppPid, pct);
         }
 
         private void CenterCardVolumePopup_MouseEnter(object sender, MouseEventArgs e)
@@ -2496,9 +2693,23 @@ namespace DynamicIslandBar
             // Keep popup open while mouse is over it
         }
 
-        private void CenterCardVolumePopup_MouseLeave(object sender, MouseEventArgs e)
+        private async void CenterCardVolumePopup_MouseLeave(object sender, MouseEventArgs e)
         {
+            await ScheduleCenterCardVolumePopupCloseAsync();
+        }
+
+        private async Task ScheduleCenterCardVolumePopupCloseAsync()
+        {
+            await Task.Delay(140);
+            if (CenterCardVolumeButton.IsMouseOver
+                || CenterCardSideVolumeButton.IsMouseOver
+                || CenterCardVolumePanel.IsMouseOver)
+            {
+                return;
+            }
+
             CenterCardVolumePopup.IsOpen = false;
+            ScheduleCenterCardHoverExit();
         }
 
         private static void SendMediaKey(byte virtualKey)
@@ -3624,31 +3835,117 @@ namespace DynamicIslandBar
         private void ApplySnapPreview(CapsuleSnapPreview preview)
         {
             _activeSnapPreview = preview;
-            CapsuleSnapPreviewOutline.Width = preview.CapsuleWidth;
-            CapsuleSnapPreviewOutline.Height = preview.CapsuleHeight;
-            CapsuleSnapPreviewOutline.CornerRadius = new CornerRadius(preview.CapsuleHeight / 2);
+            var (screenWidth, screenHeight) = GetPrimaryScreenSizeInDips();
+            EnsureSnapPreviewOverlayWindow(screenWidth, screenHeight);
+            if (_snapPreviewOverlayOutline == null)
+            {
+                return;
+            }
+
+            CapsuleSnapPreviewOutline.Visibility = Visibility.Collapsed;
+            _snapPreviewOverlayOutline.Width = preview.CapsuleWidth;
+            _snapPreviewOverlayOutline.Height = preview.CapsuleHeight;
+            _snapPreviewOverlayOutline.CornerRadius = new CornerRadius(preview.CapsuleHeight / 2);
+            _snapPreviewOverlayOutline.BorderThickness = new Thickness(
+                Math.Max(2, CapsuleAppearanceMapper.MapGlowThickness(_capsuleConfig.GlowThicknessPercent)));
+            _snapPreviewOverlayOutline.BorderBrush = CapsuleAppearanceMapper.BuildGlowBrush(_capsuleConfig.GlowIntensityPercent);
             var screenOrigin = CapsuleSnapPreviewGeometry.ComputeOutlineOrigin(
                 preview.Frame,
+                preview.Mode,
                 preview.CapsuleWidth,
                 preview.CapsuleHeight,
                 preview.RotationDegrees);
-            var previewOrigin = CapsuleGrid.PointFromScreen(screenOrigin);
-            Canvas.SetLeft(CapsuleSnapPreviewOutline, previewOrigin.X);
-            Canvas.SetTop(CapsuleSnapPreviewOutline, previewOrigin.Y);
-            CapsuleSnapPreviewOutline.RenderTransformOrigin = new Point(0.5, 0.5);
-            CapsuleSnapPreviewOutline.RenderTransform = preview.RotationDegrees == 0
+
+            Canvas.SetLeft(_snapPreviewOverlayOutline, screenOrigin.X);
+            Canvas.SetTop(_snapPreviewOverlayOutline, screenOrigin.Y);
+            _snapPreviewOverlayOutline.RenderTransformOrigin = new Point(0.5, 0.5);
+            _snapPreviewOverlayOutline.RenderTransform = preview.RotationDegrees == 0
                 ? Transform.Identity
                 : new RotateTransform(preview.RotationDegrees);
-            CapsuleSnapPreviewOutline.Visibility = Visibility.Visible;
+            _snapPreviewOverlayOutline.Visibility = Visibility.Visible;
+            _snapPreviewOverlayWindow?.Show();
         }
 
         private void ClearSnapPreview()
         {
             _activeSnapPreview = null;
+            if (_snapPreviewOverlayOutline != null)
+            {
+                _snapPreviewOverlayOutline.Visibility = Visibility.Collapsed;
+                _snapPreviewOverlayOutline.RenderTransform = Transform.Identity;
+                Canvas.SetLeft(_snapPreviewOverlayOutline, 0);
+                Canvas.SetTop(_snapPreviewOverlayOutline, 0);
+            }
+
+            _snapPreviewOverlayWindow?.Hide();
             CapsuleSnapPreviewOutline.Visibility = Visibility.Collapsed;
             Canvas.SetLeft(CapsuleSnapPreviewOutline, 0);
             Canvas.SetTop(CapsuleSnapPreviewOutline, 0);
             CapsuleSnapPreviewOutline.RenderTransform = Transform.Identity;
+        }
+
+        private void EnsureSnapPreviewOverlayWindow(double screenWidth, double screenHeight)
+        {
+            if (_snapPreviewOverlayWindow != null && _snapPreviewOverlayOutline != null)
+            {
+                _snapPreviewOverlayWindow.Left = 0;
+                _snapPreviewOverlayWindow.Top = 0;
+                _snapPreviewOverlayWindow.Width = screenWidth;
+                _snapPreviewOverlayWindow.Height = screenHeight;
+                return;
+            }
+
+            _snapPreviewOverlayOutline = new Border
+            {
+                Visibility = Visibility.Collapsed,
+                Background = Brushes.Transparent,
+                BorderBrush = CapsuleAppearanceMapper.BuildGlowBrush(_capsuleConfig.GlowIntensityPercent),
+                BorderThickness = new Thickness(2),
+                IsHitTestVisible = false
+            };
+
+            var overlayCanvas = new Canvas
+            {
+                Background = Brushes.Transparent,
+                IsHitTestVisible = false
+            };
+            overlayCanvas.Children.Add(_snapPreviewOverlayOutline);
+
+            _snapPreviewOverlayWindow = new Window
+            {
+                WindowStyle = WindowStyle.None,
+                AllowsTransparency = true,
+                ResizeMode = ResizeMode.NoResize,
+                Background = Brushes.Transparent,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+                Topmost = true,
+                Focusable = false,
+                IsHitTestVisible = false,
+                Left = 0,
+                Top = 0,
+                Width = screenWidth,
+                Height = screenHeight,
+                Content = overlayCanvas
+            };
+            _snapPreviewOverlayWindow.SourceInitialized += (_, _) => MakeSnapPreviewOverlayClickThrough();
+        }
+
+        private void MakeSnapPreviewOverlayClickThrough()
+        {
+            if (_snapPreviewOverlayWindow == null)
+            {
+                return;
+            }
+
+            var handle = new WindowInteropHelper(_snapPreviewOverlayWindow).Handle;
+            if (handle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var style = GetWindowLong(handle, GwlExStyle);
+            SetWindowLong(handle, GwlExStyle, style | WsExTransparent | WsExToolWindow | WsExNoActivate);
         }
 
         private void CaptureFloatingPosition()
@@ -4318,10 +4615,18 @@ namespace DynamicIslandBar
     {
         public static Point ComputeOutlineOrigin(
             WindowFrame frame,
+            CapsuleMode mode,
             double capsuleWidth,
             double capsuleHeight,
             double rotationDegrees)
         {
+            if (mode == CapsuleMode.TopIsland && !IsQuarterTurn(rotationDegrees))
+            {
+                return new Point(
+                    frame.Left + ((frame.Width - capsuleWidth) / 2),
+                    frame.Top);
+            }
+
             var renderedBounds = ComputeRenderedBounds(
                 new Point(0, 0),
                 capsuleWidth,
