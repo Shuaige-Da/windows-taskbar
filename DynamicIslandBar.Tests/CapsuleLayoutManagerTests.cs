@@ -59,6 +59,20 @@ public class CapsuleLayoutManagerTests
         Assert.Equal(bottom.PopupDirection, floating.PopupDirection);
     }
 
+    [Theory]
+    [InlineData(CapsuleMode.BottomTaskbar, 1920)]
+    [InlineData(CapsuleMode.Floating, 1920)]
+    [InlineData(CapsuleMode.TopIsland, 1920)]
+    [InlineData(CapsuleMode.LeftDock, 1040)]
+    [InlineData(CapsuleMode.RightDock, 1040)]
+    public void GetCapsuleLengthCapacity_UsesDockAxisAvailableLength(CapsuleMode mode, double expected)
+    {
+        Assert.Equal(
+            expected,
+            CapsuleLayoutManager.GetCapsuleLengthCapacity(mode, screenWidth: 1920, screenHeight: 1080),
+            precision: 1);
+    }
+
     [Fact]
     public void ResolveDropMode_SnapsToTopWhenCloseToTopThreshold()
     {

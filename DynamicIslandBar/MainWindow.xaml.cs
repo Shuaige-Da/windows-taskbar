@@ -72,10 +72,14 @@ namespace DynamicIslandBar
         private LayoutMetrics _currentLayoutMetrics;
         private RunningAppsSnapshot _runningAppsSnapshot = new([], [], [], false);
         private bool _isDraggingCapsule;
+        private bool _isResizingCapsuleThickness;
         private bool _isCenterCardHovered;
         private Point _dragStartPoint;
         private double _dragStartLeft;
         private double _dragStartTop;
+        private Point _thicknessResizeStartPoint;
+        private double _thicknessResizeStartValue;
+        private string _thicknessResizeEdge = string.Empty;
         private CapsuleSnapPreview? _activeSnapPreview;
         private Window? _snapPreviewOverlayWindow;
         private Border? _snapPreviewOverlayOutline;
@@ -563,17 +567,39 @@ namespace DynamicIslandBar
         private LayoutMetrics BuildCurrentLayoutMetrics(double screenWidth, double screenHeight)
         {
             var metrics = CapsuleLayoutManager.GetMetrics(_capsuleConfig.Mode, screenWidth, screenHeight);
+            var capsuleLengthCapacity = CapsuleLayoutManager.GetCapsuleLengthCapacity(
+                _capsuleConfig.Mode,
+                screenWidth,
+                screenHeight);
             var capsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
                 _capsuleConfig.Mode,
-                metrics.CapsuleWidth,
-                _capsuleConfig.CapsuleLengthPercent);
+                capsuleLengthCapacity,
+                GetCapsuleLengthPercentForMode(_capsuleConfig.Mode));
 
             return metrics with
             {
                 CapsuleWidth = capsuleWidth,
-                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, metrics.CapsuleWidth, capsuleWidth),
+                VisibleAppSlots = MapVisibleAppSlots(_capsuleConfig.Mode, capsuleLengthCapacity, capsuleWidth),
                 PopupDirection = ResolveSideDockPopupDirection(_capsuleConfig.Mode)
             };
+        }
+
+        private int GetCapsuleLengthPercentForMode(CapsuleMode mode)
+        {
+            return mode is CapsuleMode.TopIsland or CapsuleMode.LeftDock or CapsuleMode.RightDock
+                ? _capsuleConfig.TopDockCapsuleLengthPercent
+                : _capsuleConfig.CapsuleLengthPercent;
+        }
+
+        private void SetCapsuleLengthPercentForCurrentMode(int value)
+        {
+            if (_capsuleConfig.Mode is CapsuleMode.TopIsland or CapsuleMode.LeftDock or CapsuleMode.RightDock)
+            {
+                CapsuleConfigMutator.SetTopDockCapsuleLengthPercent(_capsuleConfig, value);
+                return;
+            }
+
+            CapsuleConfigMutator.SetCapsuleLengthPercent(_capsuleConfig, value);
         }
 
         private static PopupFlowDirection ResolveSideDockPopupDirection(CapsuleMode mode)
@@ -693,6 +719,48 @@ namespace DynamicIslandBar
             CapsuleBorder.Width = IsSideDockMode ? capsuleThickness : logicalCapsuleLength;
             CapsuleBorder.Height = IsSideDockMode ? logicalCapsuleLength : capsuleThickness;
             UpdateCapsuleCornerRadius(capsuleThickness);
+            ApplyCapsuleLengthHandleLayout(capsuleThickness);
+        }
+
+        private void ApplyCapsuleLengthHandleLayout(double capsuleThickness)
+        {
+            if (IsSideDockMode)
+            {
+                var handleWidth = Math.Max(26, capsuleThickness * 0.72);
+                CapsuleStartResizeHandle.Width = handleWidth;
+                CapsuleStartResizeHandle.Height = 18;
+                CapsuleStartResizeHandle.HorizontalAlignment = HorizontalAlignment.Center;
+                CapsuleStartResizeHandle.VerticalAlignment = VerticalAlignment.Top;
+                CapsuleStartResizeHandle.Margin = new Thickness(0, 1, 0, 0);
+                CapsuleStartResizeHandle.Cursor = Cursors.SizeNS;
+                CapsuleStartResizeHandle.Tag = "Top";
+
+                CapsuleEndResizeHandle.Width = handleWidth;
+                CapsuleEndResizeHandle.Height = 18;
+                CapsuleEndResizeHandle.HorizontalAlignment = HorizontalAlignment.Center;
+                CapsuleEndResizeHandle.VerticalAlignment = VerticalAlignment.Bottom;
+                CapsuleEndResizeHandle.Margin = new Thickness(0, 0, 0, 1);
+                CapsuleEndResizeHandle.Cursor = Cursors.SizeNS;
+                CapsuleEndResizeHandle.Tag = "Bottom";
+                return;
+            }
+
+            var handleHeight = Math.Max(26, capsuleThickness * 0.72);
+            CapsuleStartResizeHandle.Width = 18;
+            CapsuleStartResizeHandle.Height = handleHeight;
+            CapsuleStartResizeHandle.HorizontalAlignment = HorizontalAlignment.Left;
+            CapsuleStartResizeHandle.VerticalAlignment = VerticalAlignment.Center;
+            CapsuleStartResizeHandle.Margin = new Thickness(1, 0, 0, 0);
+            CapsuleStartResizeHandle.Cursor = Cursors.SizeWE;
+            CapsuleStartResizeHandle.Tag = "Left";
+
+            CapsuleEndResizeHandle.Width = 18;
+            CapsuleEndResizeHandle.Height = handleHeight;
+            CapsuleEndResizeHandle.HorizontalAlignment = HorizontalAlignment.Right;
+            CapsuleEndResizeHandle.VerticalAlignment = VerticalAlignment.Center;
+            CapsuleEndResizeHandle.Margin = new Thickness(0, 0, 1, 0);
+            CapsuleEndResizeHandle.Cursor = Cursors.SizeWE;
+            CapsuleEndResizeHandle.Tag = "Right";
         }
 
         private void ApplyClampedWindowOrigin(double screenWidth, double screenHeight, double desiredLeft, double desiredTop)
@@ -718,6 +786,105 @@ namespace DynamicIslandBar
                 _capsuleConfig.FloatingLeft = clampedOrigin.X;
                 _capsuleConfig.FloatingTop = clampedOrigin.Y;
             }
+        }
+
+        private bool TryBeginCapsuleThicknessResize(MouseButtonEventArgs e)
+        {
+            var edge = ResolveCapsuleThicknessResizeEdge(e.GetPosition(CapsuleBorder));
+            if (string.IsNullOrEmpty(edge))
+            {
+                return false;
+            }
+
+            _isResizingCapsuleThickness = true;
+            _thicknessResizeEdge = edge;
+            _thicknessResizeStartPoint = PointToScreen(e.GetPosition(this));
+            _thicknessResizeStartValue = IsSideDockMode ? CapsuleBorder.Width : CapsuleBorder.Height;
+            Mouse.Capture(CapsuleBorder, CaptureMode.SubTree);
+            return true;
+        }
+
+        private void UpdateCapsuleThicknessResizeCursor(MouseEventArgs e)
+        {
+            if (_isDraggingCapsule || _isResizingCapsuleThickness)
+            {
+                return;
+            }
+
+            if (!CapsuleBorder.IsMouseOver || ShouldSuppressDragStart(e.OriginalSource as DependencyObject))
+            {
+                CapsuleBorder.ClearValue(CursorProperty);
+                return;
+            }
+
+            var edge = ResolveCapsuleThicknessResizeEdge(e.GetPosition(CapsuleBorder));
+            if (string.IsNullOrEmpty(edge))
+            {
+                CapsuleBorder.ClearValue(CursorProperty);
+                return;
+            }
+
+            CapsuleBorder.Cursor = IsSideDockMode ? Cursors.SizeWE : Cursors.SizeNS;
+        }
+
+        private string ResolveCapsuleThicknessResizeEdge(Point position)
+        {
+            var width = Math.Max(CapsuleBorder.ActualWidth, CapsuleBorder.Width);
+            var height = Math.Max(CapsuleBorder.ActualHeight, CapsuleBorder.Height);
+            if (width <= 0 || height <= 0)
+            {
+                return string.Empty;
+            }
+
+            const double edgeZone = 10;
+            if (IsSideDockMode)
+            {
+                if (position.X <= edgeZone)
+                {
+                    return "Left";
+                }
+
+                return position.X >= width - edgeZone ? "Right" : string.Empty;
+            }
+
+            if (position.Y <= edgeZone)
+            {
+                return "Top";
+            }
+
+            return position.Y >= height - edgeZone ? "Bottom" : string.Empty;
+        }
+
+        private void UpdateCapsuleThicknessFromDrag(MouseEventArgs e)
+        {
+            var currentPoint = PointToScreen(e.GetPosition(this));
+            var delta = IsSideDockMode
+                ? string.Equals(_thicknessResizeEdge, "Left", StringComparison.OrdinalIgnoreCase)
+                    ? -currentPoint.X + _thicknessResizeStartPoint.X
+                    : currentPoint.X - _thicknessResizeStartPoint.X
+                : string.Equals(_thicknessResizeEdge, "Top", StringComparison.OrdinalIgnoreCase)
+                    ? -currentPoint.Y + _thicknessResizeStartPoint.Y
+                    : currentPoint.Y - _thicknessResizeStartPoint.Y;
+
+            var targetThickness = _thicknessResizeStartValue + (delta * 2);
+            CapsuleConfigMutator.SetCapsuleThicknessPercent(_capsuleConfig, MapCapsuleThicknessPercent(targetThickness));
+            ApplyLayout();
+        }
+
+        private int MapCapsuleThicknessPercent(double targetThickness)
+        {
+            if (_currentLayoutMetrics.CapsuleHeight <= 0)
+            {
+                return _capsuleConfig.CapsuleThicknessPercent;
+            }
+
+            var baseHeight = _currentLayoutMetrics.CapsuleHeight;
+            var minimumHeight = baseHeight / 3d;
+            var zeroPercentHeight = CapsuleAppearanceMapper.MapCapsuleHeight(baseHeight, 0);
+            var clampedThickness = Math.Clamp(targetThickness, zeroPercentHeight, baseHeight);
+            var ratio = (clampedThickness - minimumHeight) / (baseHeight - minimumHeight);
+            var displayRatio = (ratio - 0.5) / 0.5;
+            return Math.Clamp((int)Math.Round(displayRatio * 100), 0, 100);
         }
 
         private void ConfigurePopup(Popup popup, PopupFlowDirection direction, double horizontalOffset)
@@ -1209,6 +1376,7 @@ namespace DynamicIslandBar
         {
             RestoreCapsuleVisibility();
             ResetAutoHideTimer();
+            UpdateCapsuleThicknessResizeCursor(e);
         }
 
         private void Window_MouseEnter(object sender, MouseEventArgs e)
@@ -2773,6 +2941,49 @@ namespace DynamicIslandBar
             CapsuleConfigService.Save(_capsuleConfig);
         }
 
+        private void CapsuleResizeHandle_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            var side = sender is FrameworkElement element ? element.Tag?.ToString() : "Right";
+            var delta = IsSideDockMode
+                ? string.Equals(side, "Top", StringComparison.OrdinalIgnoreCase)
+                    ? -e.VerticalChange * 2
+                    : e.VerticalChange * 2
+                : string.Equals(side, "Left", StringComparison.OrdinalIgnoreCase)
+                    ? -e.HorizontalChange * 2
+                    : e.HorizontalChange * 2;
+            var currentLength = IsSideDockMode
+                ? CapsuleBorder.Height
+                : CapsuleBorder.Width;
+            var targetLength = currentLength + delta;
+
+            SetCapsuleLengthPercentForCurrentMode(MapCapsuleLengthPercentForCurrentMode(targetLength));
+            ApplyLayout();
+            RefreshRunningAppsBar();
+        }
+
+        private void CapsuleResizeHandle_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            CapsuleConfigService.Save(_capsuleConfig);
+        }
+
+        private int MapCapsuleLengthPercentForCurrentMode(double targetLength)
+        {
+            var (screenWidth, screenHeight) = GetPrimaryScreenSizeInDips();
+            var capacity = CapsuleLayoutManager.GetCapsuleLengthCapacity(
+                _capsuleConfig.Mode,
+                screenWidth,
+                screenHeight);
+            var minimumLength = Math.Min(CapsuleAppearanceMapper.TopIslandDefaultWidth, capacity);
+            if (capacity <= minimumLength)
+            {
+                return 0;
+            }
+
+            var clampedLength = Math.Clamp(targetLength, minimumLength, capacity);
+            var ratio = (clampedLength - minimumLength) / (capacity - minimumLength);
+            return Math.Clamp((int)Math.Round(ratio * 100), 0, 100);
+        }
+
         private string GetPrimarySummaryStatus(RunningAppEntry? app)
         {
             if (app == null)
@@ -3132,6 +3343,7 @@ namespace DynamicIslandBar
             };
 
             var settingsMenu = new MenuItem { Header = "设置", Foreground = Brushes.White };
+            var usesTopDockLength = _capsuleConfig.Mode is CapsuleMode.TopIsland or CapsuleMode.LeftDock or CapsuleMode.RightDock;
 
             var themeMenu = new MenuItem { Header = "风格", Foreground = Brushes.White };
             AddThemeMenuItem(themeMenu, CapsuleThemePreset.ClassicDark, "ClassicDark");
@@ -3153,8 +3365,8 @@ namespace DynamicIslandBar
                 value => CapsuleConfigMutator.SetCapsuleThicknessPercent(_capsuleConfig, value)));
             appearanceMenu.Items.Add(CreateAppearanceSliderItem(
                 "胶囊长度",
-                _capsuleConfig.CapsuleLengthPercent,
-                value => CapsuleConfigMutator.SetCapsuleLengthPercent(_capsuleConfig, value),
+                usesTopDockLength ? _capsuleConfig.TopDockCapsuleLengthPercent : _capsuleConfig.CapsuleLengthPercent,
+                value => SetCapsuleLengthPercentForCurrentMode(value),
                 refreshLayout: true));
 
             var glowMenu = new MenuItem { Header = "流光", Foreground = Brushes.White };
@@ -3685,6 +3897,12 @@ namespace DynamicIslandBar
                 return;
             }
 
+            if (TryBeginCapsuleThicknessResize(e))
+            {
+                e.Handled = true;
+                return;
+            }
+
             _isDraggingCapsule = true;
             _dragStartPoint = PointToScreen(e.GetPosition(this));
             _dragStartLeft = Left;
@@ -3697,6 +3915,12 @@ namespace DynamicIslandBar
 
         private void Capsule_DragMove(object sender, MouseEventArgs e)
         {
+            if (_isResizingCapsuleThickness)
+            {
+                UpdateCapsuleThicknessFromDrag(e);
+                return;
+            }
+
             if (!_isDraggingCapsule)
             {
                 return;
@@ -3713,6 +3937,17 @@ namespace DynamicIslandBar
 
         private void Capsule_DragEnd(object sender, MouseButtonEventArgs e)
         {
+            if (_isResizingCapsuleThickness)
+            {
+                _isResizingCapsuleThickness = false;
+                _thicknessResizeEdge = string.Empty;
+                CapsuleBorder.ClearValue(CursorProperty);
+                Mouse.Capture(null);
+                CapsuleConfigService.Save(_capsuleConfig);
+                e.Handled = true;
+                return;
+            }
+
             if (!_isDraggingCapsule)
             {
                 return;
@@ -3800,10 +4035,20 @@ namespace DynamicIslandBar
 
             var topMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.TopIsland, screenWidth, screenHeight);
             var bottomMetrics = CapsuleLayoutManager.GetMetrics(CapsuleMode.BottomTaskbar, screenWidth, screenHeight);
+            var topDockPreviewMode = previewEdge switch
+            {
+                SnapEdge.Left => CapsuleMode.LeftDock,
+                SnapEdge.Right => CapsuleMode.RightDock,
+                _ => CapsuleMode.TopIsland
+            };
+            var topDockPreviewCapsuleLengthCapacity = CapsuleLayoutManager.GetCapsuleLengthCapacity(
+                topDockPreviewMode,
+                screenWidth,
+                screenHeight);
             var topCapsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
-                CapsuleMode.TopIsland,
-                topMetrics.CapsuleWidth,
-                _capsuleConfig.CapsuleLengthPercent);
+                topDockPreviewMode,
+                topDockPreviewCapsuleLengthCapacity,
+                _capsuleConfig.TopDockCapsuleLengthPercent);
             var topCapsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(
                 topMetrics.CapsuleHeight,
                 _capsuleConfig.CapsuleThicknessPercent);
@@ -4004,15 +4249,16 @@ namespace DynamicIslandBar
         private LayoutMetrics BuildLayoutMetricsForMode(CapsuleMode mode, double screenWidth, double screenHeight)
         {
             var metrics = CapsuleLayoutManager.GetMetrics(mode, screenWidth, screenHeight);
+            var capsuleLengthCapacity = CapsuleLayoutManager.GetCapsuleLengthCapacity(mode, screenWidth, screenHeight);
             var capsuleWidth = CapsuleAppearanceMapper.MapCapsuleWidth(
                 mode,
-                metrics.CapsuleWidth,
-                _capsuleConfig.CapsuleLengthPercent);
+                capsuleLengthCapacity,
+                GetCapsuleLengthPercentForMode(mode));
 
             return metrics with
             {
                 CapsuleWidth = capsuleWidth,
-                VisibleAppSlots = MapVisibleAppSlots(mode, metrics.CapsuleWidth, capsuleWidth),
+                VisibleAppSlots = MapVisibleAppSlots(mode, capsuleLengthCapacity, capsuleWidth),
                 PopupDirection = ResolveSideDockPopupDirection(mode)
             };
         }

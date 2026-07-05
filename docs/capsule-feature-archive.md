@@ -47,6 +47,7 @@
 | `GlowSpeedPercent` | `58` | 流光速度 |
 | `CapsuleThicknessPercent` | `100` | 胶囊粗细 |
 | `CapsuleLengthPercent` | `100` | 胶囊长度 |
+| `TopDockCapsuleLengthPercent` | `0` | 顶部 / 左右吸附胶囊长度；`0%` 保持顶部默认长度 |
 | `CenterCardWidthPercent` | `58` | 中心卡片宽度比例档位 |
 | `CenterCardAppId` | `null` | 当前锁定到中心卡片的应用 |
 
@@ -91,6 +92,11 @@
 - `CapsuleThicknessPercent = 100%` 时，实际高度等于基础高度的 `100%`
 - 当前公式保留一个最小安全高度，避免应用图标和中心卡片内容被压扁
 
+调节入口：
+
+- 外观设置菜单里的“胶囊粗细”
+- 胶囊外轮廓边缘的隐形拖拽区域，水平模式拖上下边，左右吸附模式拖左右边
+
 ### 3. 胶囊长度映射
 
 定义位置：[CapsuleAppearanceMapper.cs](D:/UI-win/DynamicIslandBar/CapsuleAppearanceMapper.cs)
@@ -102,8 +108,21 @@
 
 顶部模式：
 
-- 当前实现固定返回 `min(760, baseWidth)`
-- 也就是说，顶部模式下长度滑块目前不真正改变顶栏宽度
+- 使用独立的 `TopDockCapsuleLengthPercent`
+- `0%` 长度 = `760px` 顶部默认胶囊长度
+- `100%` 长度 = 当前主屏宽度
+
+左右吸附模式：
+
+- 与顶部模式共用 `TopDockCapsuleLengthPercent`
+- `0%` 长度 = `760px` 顶部默认胶囊长度
+- `100%` 长度 = 当前主屏高度减去上下安全边距
+- 视觉上仍按顶部胶囊参数生成，再转为竖向主轴布局
+
+调节入口：
+
+- 外观设置菜单里的“胶囊长度”
+- 胶囊两端边缘的弧形拖拽手柄，水平模式拖左右端，左右吸附模式拖上下端
 
 ### 4. 流光映射
 

@@ -83,6 +83,15 @@ public static class CapsuleLayoutManager
         };
     }
 
+    public static double GetCapsuleLengthCapacity(CapsuleMode mode, double screenWidth, double screenHeight)
+    {
+        return mode switch
+        {
+            CapsuleMode.LeftDock or CapsuleMode.RightDock => Math.Max(screenHeight - (SideDockVerticalPadding * 2), 0),
+            _ => Math.Max(screenWidth, 0)
+        };
+    }
+
     public static CapsuleMode ResolveDropMode(
         double screenWidth,
         double screenHeight,

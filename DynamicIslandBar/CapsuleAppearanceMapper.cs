@@ -145,11 +145,6 @@ public static class CapsuleAppearanceMapper
 
     public static double MapCapsuleWidth(CapsuleMode mode, double baseWidth, int capsuleLengthPercent)
     {
-        if (mode == CapsuleMode.TopIsland)
-        {
-            return Math.Min(TopIslandDefaultWidth, baseWidth);
-        }
-
         var ratio = Math.Clamp(capsuleLengthPercent, 0, 100) / 100.0;
         var minWidth = TopIslandDefaultWidth;
         minWidth = Math.Min(minWidth, baseWidth);

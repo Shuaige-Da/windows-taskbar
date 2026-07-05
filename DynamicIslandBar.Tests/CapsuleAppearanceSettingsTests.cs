@@ -15,7 +15,8 @@ public class CapsuleAppearanceSettingsTests
             GlowThicknessPercent = 36,
             GlowSpeedPercent = 64,
             CapsuleThicknessPercent = 58,
-            CapsuleLengthPercent = 74
+            CapsuleLengthPercent = 74,
+            TopDockCapsuleLengthPercent = 42
         };
 
         var json = CapsuleConfigSerializer.Serialize(config);
@@ -28,6 +29,7 @@ public class CapsuleAppearanceSettingsTests
         Assert.Equal(64, restored.GlowSpeedPercent);
         Assert.Equal(58, restored.CapsuleThicknessPercent);
         Assert.Equal(74, restored.CapsuleLengthPercent);
+        Assert.Equal(42, restored.TopDockCapsuleLengthPercent);
     }
 
     [Theory]
@@ -45,6 +47,7 @@ public class CapsuleAppearanceSettingsTests
         CapsuleConfigMutator.SetGlowSpeedPercent(config, input);
         CapsuleConfigMutator.SetCapsuleThicknessPercent(config, input);
         CapsuleConfigMutator.SetCapsuleLengthPercent(config, input);
+        CapsuleConfigMutator.SetTopDockCapsuleLengthPercent(config, input);
 
         Assert.Equal(expected, config.GlassOpacityPercent);
         Assert.Equal(expected, config.ShadowPercent);
@@ -53,6 +56,7 @@ public class CapsuleAppearanceSettingsTests
         Assert.Equal(expected, config.GlowSpeedPercent);
         Assert.Equal(expected, config.CapsuleThicknessPercent);
         Assert.Equal(expected, config.CapsuleLengthPercent);
+        Assert.Equal(expected, config.TopDockCapsuleLengthPercent);
     }
 
     [Fact]
@@ -158,9 +162,15 @@ public class CapsuleAppearanceSettingsTests
     [InlineData(CapsuleMode.BottomTaskbar, 1920, 0, 760)]
     [InlineData(CapsuleMode.BottomTaskbar, 1920, 50, 1340)]
     [InlineData(CapsuleMode.BottomTaskbar, 1920, 100, 1920)]
-    [InlineData(CapsuleMode.TopIsland, 760, 0, 760)]
-    [InlineData(CapsuleMode.TopIsland, 760, 50, 760)]
-    [InlineData(CapsuleMode.TopIsland, 760, 100, 760)]
+    [InlineData(CapsuleMode.TopIsland, 1920, 0, 760)]
+    [InlineData(CapsuleMode.TopIsland, 1920, 50, 1340)]
+    [InlineData(CapsuleMode.TopIsland, 1920, 100, 1920)]
+    [InlineData(CapsuleMode.LeftDock, 1080, 0, 760)]
+    [InlineData(CapsuleMode.LeftDock, 1080, 50, 920)]
+    [InlineData(CapsuleMode.LeftDock, 1080, 100, 1080)]
+    [InlineData(CapsuleMode.RightDock, 1080, 0, 760)]
+    [InlineData(CapsuleMode.RightDock, 1080, 50, 920)]
+    [InlineData(CapsuleMode.RightDock, 1080, 100, 1080)]
     public void MapCapsuleWidth_MapsPercentToLength(CapsuleMode mode, double baseWidth, int percent, double expected)
     {
         Assert.Equal(expected, CapsuleAppearanceMapper.MapCapsuleWidth(mode, baseWidth, percent), precision: 1);

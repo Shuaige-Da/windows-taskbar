@@ -40,6 +40,7 @@ public sealed class CapsuleConfig
     public int GlowSpeedPercent { get; set; } = 58;
     public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
+    public int TopDockCapsuleLengthPercent { get; set; } = 0;
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
     public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
@@ -134,6 +135,11 @@ public static class CapsuleConfigMutator
         config.CapsuleLengthPercent = ClampPercent(percent);
     }
 
+    public static void SetTopDockCapsuleLengthPercent(CapsuleConfig config, int percent)
+    {
+        config.TopDockCapsuleLengthPercent = ClampPercent(percent);
+    }
+
     public static void SetCenterCardWidthPercent(CapsuleConfig config, int percent)
     {
         config.CenterCardWidthPercent = ClampPercent(percent);
@@ -213,6 +219,7 @@ internal sealed class CapsuleConfigStore
     public int GlowSpeedPercent { get; set; } = 58;
     public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
+    public int TopDockCapsuleLengthPercent { get; set; } = 0;
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
     public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
@@ -237,6 +244,7 @@ internal sealed class CapsuleConfigStore
             GlowSpeedPercent = ClampPercent(GlowSpeedPercent),
             CapsuleThicknessPercent = ClampPercent(CapsuleThicknessPercent),
             CapsuleLengthPercent = ClampPercent(CapsuleLengthPercent),
+            TopDockCapsuleLengthPercent = ClampPercent(TopDockCapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(CenterCardWidthPercent),
             CenterCardAppId = CenterCardAppId,
             LyricLanguage = LyricLanguage
@@ -283,6 +291,7 @@ internal sealed class CapsuleConfigStore
             GlowSpeedPercent = ClampPercent(config.GlowSpeedPercent),
             CapsuleThicknessPercent = ClampPercent(config.CapsuleThicknessPercent),
             CapsuleLengthPercent = ClampPercent(config.CapsuleLengthPercent),
+            TopDockCapsuleLengthPercent = ClampPercent(config.TopDockCapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(config.CenterCardWidthPercent),
             CenterCardAppId = config.CenterCardAppId,
             LyricLanguage = config.LyricLanguage

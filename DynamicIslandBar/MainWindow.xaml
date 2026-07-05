@@ -734,7 +734,10 @@
                                    Opacity="0">
                                 <Thumb.Template>
                                     <ControlTemplate TargetType="Thumb">
-                                        <Border CornerRadius="2" Background="#26FFFFFF"/>
+                                        <Border CornerRadius="12"
+                                                Background="#34FFFFFF"
+                                                BorderBrush="#30FFFFFF"
+                                                BorderThickness="1"/>
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
@@ -750,7 +753,10 @@
                                    Opacity="0">
                                 <Thumb.Template>
                                     <ControlTemplate TargetType="Thumb">
-                                        <Border CornerRadius="2" Background="#26FFFFFF"/>
+                                        <Border CornerRadius="12"
+                                                Background="#34FFFFFF"
+                                                BorderBrush="#30FFFFFF"
+                                                BorderThickness="1"/>
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
@@ -818,6 +824,46 @@
                     </Border>
                     </Grid>
                 </Grid>
+                <Thumb x:Name="CapsuleStartResizeHandle"
+                       Width="18"
+                       Height="52"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Center"
+                       Cursor="SizeWE"
+                       DragDelta="CapsuleResizeHandle_DragDelta"
+                       DragCompleted="CapsuleResizeHandle_DragCompleted"
+                       ToolTip="拖动调节胶囊长度"
+                       Tag="Left"
+                       Opacity="0.34">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border CornerRadius="12"
+                                    Background="#34FFFFFF"
+                                    BorderBrush="#30FFFFFF"
+                                    BorderThickness="1"/>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+                <Thumb x:Name="CapsuleEndResizeHandle"
+                       Width="18"
+                       Height="52"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       Cursor="SizeWE"
+                       DragDelta="CapsuleResizeHandle_DragDelta"
+                       DragCompleted="CapsuleResizeHandle_DragCompleted"
+                       ToolTip="拖动调节胶囊长度"
+                       Tag="Right"
+                       Opacity="0.34">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border CornerRadius="12"
+                                    Background="#34FFFFFF"
+                                    BorderBrush="#30FFFFFF"
+                                    BorderThickness="1"/>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
                 </Grid>
             </Border>
 

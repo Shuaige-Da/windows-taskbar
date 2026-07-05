@@ -345,8 +345,47 @@ public class VisualLayerContractTests
         var xaml = ReadMainWindowXaml();
 
         Assert.Contains("Opacity=\"0\"", xaml);
-        Assert.Contains("CornerRadius=\"2\"", xaml);
-        Assert.Contains("Background=\"#26FFFFFF\"", xaml);
+        Assert.Contains("CornerRadius=\"12\"", xaml);
+        Assert.Contains("Background=\"#34FFFFFF\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CapsuleLengthHandlesAreDeclaredOnCapsuleEdge()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("x:Name=\"CapsuleStartResizeHandle\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleEndResizeHandle\"", xaml);
+        Assert.Contains("DragDelta=\"CapsuleResizeHandle_DragDelta\"", xaml);
+        Assert.Contains("DragCompleted=\"CapsuleResizeHandle_DragCompleted\"", xaml);
+        Assert.Contains("ToolTip=\"拖动调节胶囊长度\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CapsuleLengthHandlesReuseCurrentModeLengthConfiguration()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("private void CapsuleResizeHandle_DragDelta", code);
+        Assert.Contains("SetCapsuleLengthPercentForCurrentMode(", code);
+        Assert.Contains("MapCapsuleLengthPercentForCurrentMode(", code);
+        Assert.Contains("CapsuleConfigService.Save(_capsuleConfig);", code);
+    }
+
+    [Fact]
+    public void MainWindow_CapsuleThicknessCanBeDraggedFromCapsuleEdgeWithoutVisibleHandle()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("_isResizingCapsuleThickness", code);
+        Assert.Contains("TryBeginCapsuleThicknessResize(", code);
+        Assert.Contains("UpdateCapsuleThicknessFromDrag(", code);
+        Assert.Contains("UpdateCapsuleThicknessResizeCursor(", code);
+        Assert.Contains("MapCapsuleThicknessPercent(", code);
+        Assert.Contains("CapsuleConfigMutator.SetCapsuleThicknessPercent(_capsuleConfig", code);
+        Assert.Contains("if (_isResizingCapsuleThickness)", code);
+        Assert.Contains("CapsuleBorder.Cursor = IsSideDockMode ? Cursors.SizeWE : Cursors.SizeNS;", code);
+        Assert.Contains("CapsuleBorder.ClearValue(CursorProperty);", code);
     }
 
     [Fact]
