@@ -347,6 +347,84 @@ public class LyricsService
         return null;
     }
 
+    public IReadOnlyList<string> GetCurrentLyricSequence(TimeSpan position, int maxLines)
+    {
+        if (maxLines <= 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        if (_parsedLyrics.Count > 0)
+        {
+            var index = GetCurrentParsedLyricIndex(position);
+            return _parsedLyrics
+                .Skip(index)
+                .Take(maxLines)
+                .Select(line => line.Text)
+                .ToArray();
+        }
+
+        if (_plainLyricLines.Length > 0)
+        {
+            var index = GetCurrentPlainLyricIndex(position);
+            return _plainLyricLines
+                .Skip(index)
+                .Take(maxLines)
+                .ToArray();
+        }
+
+        return Array.Empty<string>();
+    }
+
+    public TimeSpan GetCurrentLyricDuration(TimeSpan position)
+    {
+        if (_parsedLyrics.Count < 2)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var index = GetCurrentParsedLyricIndex(position);
+        if (index < 0 || index >= _parsedLyrics.Count - 1)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return _parsedLyrics[index + 1].Time - _parsedLyrics[index].Time;
+    }
+
+    private int GetCurrentParsedLyricIndex(TimeSpan position)
+    {
+        if (_parsedLyrics.Count == 0 || position <= TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        var index = 0;
+        for (var i = 0; i < _parsedLyrics.Count; i++)
+        {
+            if (_parsedLyrics[i].Time <= position)
+            {
+                index = i;
+                continue;
+            }
+
+            break;
+        }
+
+        return index;
+    }
+
+    private int GetCurrentPlainLyricIndex(TimeSpan position)
+    {
+        if (_plainLyricLines.Length == 0 || _songDuration.TotalSeconds <= 0 || position <= TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        var ratio = Math.Clamp(position.TotalSeconds / _songDuration.TotalSeconds, 0, 0.99);
+        return Math.Min((int)(ratio * _plainLyricLines.Length), _plainLyricLines.Length - 1);
+    }
+
     private static string CleanTitle(string title)
     {
         if (string.IsNullOrWhiteSpace(title))

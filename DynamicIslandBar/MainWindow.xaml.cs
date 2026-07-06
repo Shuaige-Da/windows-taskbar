@@ -104,6 +104,7 @@ namespace DynamicIslandBar
         private int _nextDanmakuLaneIndex;
         private bool _isCenterCardLyricsMarqueeActive;
         private string? _activeCenterCardLyricText;
+        private TimeSpan _centerCardCurrentLyricDuration = TimeSpan.Zero;
         private int _playbackModeIndex;
         private IReadOnlyList<LocalInstalledApp> _installedApps = [];
         private bool _installedAppsLoaded;
@@ -1067,7 +1068,7 @@ namespace DynamicIslandBar
             if (position <= TimeSpan.Zero)
                 return;
 
-            var currentLyric = _lyricsService.GetCurrentLyric(position);
+            var currentLyric = GetCenterCardLyricDisplayText(position);
             if (!string.IsNullOrWhiteSpace(currentLyric) && currentLyric != snapshot.Lyric)
             {
                 _centerCardLiveMediaSnapshot = snapshot with { Lyric = currentLyric };
@@ -1169,10 +1170,10 @@ namespace DynamicIslandBar
                         if (_lyricsService.RealDuration > TimeSpan.Zero)
                             _mediaService.SetRealDuration(_lyricsService.RealDuration);
 
-                        var refreshedLyric = _lyricsService.GetCurrentLyric(info.Position);
+                        var refreshedLyric = GetCenterCardLyricDisplayText(info.Position);
                         if (string.IsNullOrWhiteSpace(refreshedLyric) && info.Position <= TimeSpan.Zero)
                         {
-                            refreshedLyric = _lyricsService.GetCurrentLyric(_mediaService.GetCurrentPosition());
+                            refreshedLyric = GetCenterCardLyricDisplayText(_mediaService.GetCurrentPosition());
                         }
 
                         if (!string.IsNullOrWhiteSpace(refreshedLyric) && snapshot != null)
@@ -1212,6 +1213,16 @@ namespace DynamicIslandBar
                     System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Error: {ex.GetType().Name}: {ex.Message}");
                 }
             }
+        }
+
+        private string? GetCenterCardLyricDisplayText(TimeSpan position)
+        {
+            var sequence = _lyricsService.GetCurrentLyricSequence(position, maxLines: 6);
+            _centerCardCurrentLyricDuration = _lyricsService.GetCurrentLyricDuration(position);
+            var track = CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(sequence);
+            return string.IsNullOrWhiteSpace(track)
+                ? _lyricsService.GetCurrentLyric(position)
+                : track;
         }
 
         private bool IsRunningAppsRefreshInteractive()
@@ -2013,7 +2024,12 @@ namespace DynamicIslandBar
 
             if (state.ShowLyricsMarquee)
             {
-                if (!_isCenterCardLyricsMarqueeActive || !string.Equals(_activeCenterCardLyricText, state.PrimaryText, StringComparison.Ordinal))
+                if (CenterCardLyricsDanmakuPolicy.ShouldRestartMarquee(
+                    _isCenterCardLyricsMarqueeActive,
+                    IsSideDockMode,
+                    CenterCardLyricsDanmakuCanvas.Children.Count,
+                    _activeCenterCardLyricText,
+                    state.PrimaryText))
                 {
                     _activeCenterCardLyricText = state.PrimaryText;
                     StartCenterCardLyricsMarquee();
@@ -2174,7 +2190,7 @@ namespace DynamicIslandBar
                 _lastDanmakuLyric,
                 lyric,
                 _nextDanmakuLaneIndex,
-                laneCount: usesVerticalLyricsFlow ? 1 : 3);
+                laneCount: 1);
             _nextDanmakuLaneIndex = registration.NextLaneIndex;
             if (!registration.ShouldEnqueue || string.IsNullOrWhiteSpace(lyric))
             {
@@ -2201,7 +2217,7 @@ namespace DynamicIslandBar
                 return;
             }
 
-            if (IsSideDockMode && CenterCardLyricsDanmakuCanvas.Children.Count > 0)
+            if (CenterCardLyricsDanmakuCanvas.Children.Count > 0)
             {
                 return;
             }
@@ -2226,7 +2242,7 @@ namespace DynamicIslandBar
                     return;
                 }
 
-                var laneCount = usesVerticalLyricsFlow ? 1 : 3;
+                var laneCount = 1;
                 var laneHeight = Math.Max(18d, viewportHeight / laneCount);
                 var textBlock = new TextBlock
                 {
@@ -2250,6 +2266,21 @@ namespace DynamicIslandBar
                 textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                 var textWidth = Math.Max(textBlock.DesiredSize.Width, 120);
                 var textHeight = Math.Max(textBlock.DesiredSize.Height, 36);
+                var fallbackDuration = TimeSpan.FromSeconds(Math.Clamp(
+                    (usesVerticalLyricsFlow ? viewportHeight + textHeight : viewportWidth + textWidth) / 92,
+                    6,
+                    12));
+                var currentLyricVisibleDistance = usesVerticalLyricsFlow
+                    ? viewportHeight + EstimateCurrentLyricTextHeight(lyric, textBlock)
+                    : viewportWidth + EstimateCurrentLyricTextWidth(lyric, textBlock);
+                var totalTravelDistance = usesVerticalLyricsFlow
+                    ? viewportHeight + textHeight + 28
+                    : viewportWidth + textWidth + 36;
+                var synchronizedDuration = CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(
+                    _centerCardCurrentLyricDuration,
+                    totalTravelDistance,
+                    currentLyricVisibleDistance,
+                    fallbackDuration);
                 var verticalStartTop = usesVerticalLyricsFlow
                     ? viewportHeight + 2
                     : Math.Max(viewportHeight - textHeight - 8 - (laneIndex * 18), 0);
@@ -2261,29 +2292,23 @@ namespace DynamicIslandBar
                 }
                 else
                 {
-                    Canvas.SetLeft(textBlock, viewportWidth + (laneIndex * 28));
-                    Canvas.SetTop(textBlock, laneIndex * laneHeight);
+                    Canvas.SetLeft(textBlock, viewportWidth);
+                    Canvas.SetTop(textBlock, Math.Max((viewportHeight - textHeight) / 2, 0));
                 }
                 CenterCardLyricsDanmakuCanvas.Children.Add(textBlock);
 
                 var animation = new DoubleAnimation
                 {
-                    From = usesVerticalLyricsFlow ? verticalStartTop : viewportWidth + (laneIndex * 28),
+                    From = usesVerticalLyricsFlow ? verticalStartTop : viewportWidth,
                     To = usesVerticalLyricsFlow ? -(textHeight + 28) : -(textWidth + 36),
-                    Duration = TimeSpan.FromSeconds(Math.Clamp(
-                        (usesVerticalLyricsFlow ? viewportHeight + textHeight : viewportWidth + textWidth) / 92,
-                        6,
-                        12)),
+                    Duration = synchronizedDuration,
                     BeginTime = TimeSpan.FromMilliseconds(laneIndex * 140),
                     FillBehavior = FillBehavior.Stop
                 };
                 animation.Completed += (_, _) =>
                 {
                     CenterCardLyricsDanmakuCanvas.Children.Remove(textBlock);
-                    if (usesVerticalLyricsFlow)
-                    {
-                        ScheduleSideDockLyricsContinuation();
-                    }
+                    ScheduleCenterCardLyricsContinuation();
                 };
 
                 if (usesVerticalLyricsFlow)
@@ -2297,11 +2322,53 @@ namespace DynamicIslandBar
             }, DispatcherPriority.Loaded);
         }
 
-        private async void ScheduleSideDockLyricsContinuation()
+        private static double EstimateCurrentLyricTextWidth(string lyric, TextBlock measuredTrack)
+        {
+            var firstLine = lyric.Split(CenterCardLyricsDanmakuPolicy.ContinuousTrackGap, StringSplitOptions.None)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstLine))
+            {
+                return Math.Min(measuredTrack.DesiredSize.Width, 120);
+            }
+
+            var measurement = new TextBlock
+            {
+                Text = firstLine.Trim(),
+                FontSize = measuredTrack.FontSize,
+                FontWeight = measuredTrack.FontWeight,
+                FontFamily = measuredTrack.FontFamily,
+                TextWrapping = TextWrapping.NoWrap
+            };
+            measurement.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Max(measurement.DesiredSize.Width, 24);
+        }
+
+        private static double EstimateCurrentLyricTextHeight(string lyric, TextBlock measuredTrack)
+        {
+            var firstLine = lyric.Split(CenterCardLyricsDanmakuPolicy.ContinuousTrackGap, StringSplitOptions.None)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstLine))
+            {
+                return Math.Min(measuredTrack.DesiredSize.Height, 120);
+            }
+
+            var measurement = new TextBlock
+            {
+                Text = CenterCardLyricsDanmakuPolicy.FormatVerticalTrack(firstLine.Trim()),
+                FontSize = measuredTrack.FontSize,
+                FontWeight = measuredTrack.FontWeight,
+                FontFamily = measuredTrack.FontFamily,
+                TextWrapping = TextWrapping.NoWrap,
+                LineHeight = measuredTrack.LineHeight
+            };
+            measurement.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Max(measurement.DesiredSize.Height, 24);
+        }
+
+        private async void ScheduleCenterCardLyricsContinuation()
         {
             await Task.Delay(160);
             if (!_isCenterCardLyricsMarqueeActive
-                || !IsSideDockMode
                 || CenterCardLyricsLayer.Visibility != Visibility.Visible
                 || CenterCardLyricsDanmakuCanvas.Children.Count > 0
                 || string.IsNullOrWhiteSpace(CenterCardLyricMarqueeText.Text))
@@ -2315,10 +2382,7 @@ namespace DynamicIslandBar
 
         private static string FormatVerticalLyricColumn(string lyric)
         {
-            var characters = lyric
-                .Where(c => !char.IsWhiteSpace(c))
-                .Select(c => c.ToString());
-            return string.Join(Environment.NewLine, characters);
+            return CenterCardLyricsDanmakuPolicy.FormatVerticalTrack(lyric);
         }
 
         private void UpdateCenterCardHoverVisual(CenterCardPresentation state)

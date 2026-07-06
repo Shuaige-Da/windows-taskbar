@@ -10,15 +10,34 @@ public class MainWindowUiLogicTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
-        Assert.Contains("laneCount: usesVerticalLyricsFlow ? 1 : 3", code);
+        Assert.Contains("laneCount: 1", code);
         Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(lyric) : lyric", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.FormatVerticalTrack(lyric)", code);
         Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
         Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
         Assert.Contains("Canvas.SetTop(textBlock, verticalStartTop);", code);
         Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
         Assert.Contains("? viewportHeight + 2", code);
         Assert.Contains("To = usesVerticalLyricsFlow ? -(textHeight + 28) : -(textWidth + 36)", code);
-        Assert.Contains("ScheduleSideDockLyricsContinuation();", code);
+        Assert.Contains("EstimateCurrentLyricTextHeight(lyric, textBlock)", code);
+        Assert.Contains("var totalTravelDistance = usesVerticalLyricsFlow", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation();", code);
+    }
+
+    [Fact]
+    public void MainWindow_HorizontalLyricsUseContinuousSingleTrack()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("GetCenterCardLyricDisplayText(position)", code);
+        Assert.Contains("_lyricsService.GetCurrentLyricSequence(position, maxLines: 6)", code);
+        Assert.Contains("_centerCardCurrentLyricDuration = _lyricsService.GetCurrentLyricDuration(position);", code);
+        Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Count > 0", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation();", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(sequence)", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.ShouldRestartMarquee(", code);
+        Assert.DoesNotContain("laneCount: usesVerticalLyricsFlow ? 1 : 3", code);
     }
 
     [Fact]
@@ -37,7 +56,7 @@ public class MainWindowUiLogicTests
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
-        Assert.Contains("var refreshedLyric = _lyricsService.GetCurrentLyric(info.Position);", code);
+        Assert.Contains("var refreshedLyric = GetCenterCardLyricDisplayText(info.Position);", code);
         Assert.Contains("_centerCardLiveMediaSnapshot = snapshot with { Lyric = refreshedLyric };", code);
         Assert.Contains("UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));", code);
     }
@@ -75,8 +94,9 @@ public class MainWindowUiLogicTests
         Assert.Contains("private readonly DispatcherTimer _centerCardLyricsLoopTimer;", code);
         Assert.Contains("_centerCardLyricsLoopTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2200) };", code);
         Assert.Contains("_centerCardLyricsLoopTimer.Tick += CenterCardLyricsLoopTimer_Tick;", code);
-        Assert.Contains("if (!_isCenterCardLyricsMarqueeActive || !string.Equals(_activeCenterCardLyricText, state.PrimaryText, StringComparison.Ordinal))", code);
-        Assert.Contains("if (IsSideDockMode && CenterCardLyricsDanmakuCanvas.Children.Count > 0)", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.ShouldRestartMarquee(", code);
+        Assert.DoesNotContain("if (!_isCenterCardLyricsMarqueeActive || !string.Equals(_activeCenterCardLyricText, state.PrimaryText, StringComparison.Ordinal))", code);
+        Assert.Contains("if (CenterCardLyricsDanmakuCanvas.Children.Count > 0)", code);
         Assert.Contains("await Task.Delay(160);", code);
         Assert.Contains("_lastDanmakuLyric = null;", code);
         Assert.Contains("UpdateCenterCardLyricsDanmaku(CenterCardLyricMarqueeText.Text);", code);
