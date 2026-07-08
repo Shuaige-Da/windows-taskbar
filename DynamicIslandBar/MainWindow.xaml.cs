@@ -2222,7 +2222,7 @@ namespace DynamicIslandBar
                 return;
             }
 
-            _lastDanmakuLyric = null;
+            // Don't reset _lastDanmakuLyric here - let dedup logic work naturally
             UpdateCenterCardLyricsDanmaku(CenterCardLyricMarqueeText.Text);
         }
 
@@ -2248,16 +2248,18 @@ namespace DynamicIslandBar
                 {
                     Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(lyric) : lyric,
                     Foreground = Brushes.White,
-                    FontSize = 13,
+                    FontSize = 20,
                     FontWeight = FontWeights.SemiBold,
                     Opacity = 0.94,
                     TextTrimming = TextTrimming.None
                 };
                 textBlock.TextWrapping = TextWrapping.NoWrap;
                 textBlock.TextAlignment = usesVerticalLyricsFlow ? TextAlignment.Center : TextAlignment.Left;
+                // Always clear old danmaku before adding new one to prevent duplicates
+                CenterCardLyricsDanmakuCanvas.Children.Clear();
+
                 if (usesVerticalLyricsFlow)
                 {
-                    CenterCardLyricsDanmakuCanvas.Children.Clear();
                     textBlock.Width = Math.Max(viewportWidth, 36);
                     textBlock.FontSize = 14;
                     textBlock.LineHeight = 19;

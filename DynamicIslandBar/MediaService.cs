@@ -34,6 +34,11 @@ namespace DynamicIslandBar
         private readonly System.Diagnostics.Stopwatch _smtcTimer = new();
         private GlobalSystemMediaTransportControlsSession? _subscribedSession;
 
+        // Debounce for MediaPropertiesChanged to avoid false song changes on metadata updates
+        private string? _pendingTitle;
+        private string? _pendingArtist;
+        private long _pendingChangeTimestamp;
+
         /// <summary>
         /// Set the real duration from external source (e.g. lyrics API) for better position estimation.
         /// </summary>
@@ -122,13 +127,36 @@ namespace DynamicIslandBar
                 var props = sender.TryGetMediaPropertiesAsync().AsTask().Result;
                 var newTitle = props?.Title;
                 var newArtist = props?.Artist;
+                var now = Stopwatch.GetTimestamp();
+
+                // Debounce: some apps update metadata without changing the song
+                // Only restart timer if the same title persists after 500ms
                 if (newTitle != _estimatedTitle || newArtist != _estimatedArtist)
                 {
-                    _estimatedTitle = newTitle;
-                    _estimatedArtist = newArtist;
-                    _songTimer.Restart();
-                    _firstSongSeen = true;
-                    _wasPlaying = true;
+                    if (_pendingTitle != newTitle || _pendingArtist != newArtist)
+                    {
+                        // First detection of change - start debounce
+                        _pendingTitle = newTitle;
+                        _pendingArtist = newArtist;
+                        _pendingChangeTimestamp = now;
+                    }
+                    else if (now - _pendingChangeTimestamp > Stopwatch.Frequency / 2) // 500ms
+                    {
+                        // Change persisted - confirm song change
+                        _estimatedTitle = newTitle;
+                        _estimatedArtist = newArtist;
+                        _songTimer.Restart();
+                        _firstSongSeen = true;
+                        _wasPlaying = true;
+                        _pendingTitle = null;
+                        _pendingArtist = null;
+                    }
+                }
+                else
+                {
+                    // Title/artist reverted or same - cancel debounce
+                    _pendingTitle = null;
+                    _pendingArtist = null;
                 }
             }
             catch { }
@@ -250,14 +278,12 @@ namespace DynamicIslandBar
                 }
                 else if (isPlaying && position > TimeSpan.Zero)
                 {
-                    // SMTC is reporting position - sync timer
-                    _songTimer.Restart();
-                    _songTimer.Stop();
-                    // Set the stopwatch elapsed by restarting and immediately stopping won't work
-                    // Instead, track the offset
+                    // SMTC is reporting position - use it directly as primary source
+                    // The timer-based fallback is used only when SMTC position is 0
                     _estimatedTitle = title;
                     _estimatedArtist = artist;
                     _wasPlaying = true;
+                    _firstSongSeen = true;
                 }
 
                 return (title, artist, isPlaying, position, duration);

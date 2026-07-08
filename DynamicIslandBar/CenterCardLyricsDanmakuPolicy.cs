@@ -84,7 +84,12 @@ public static class CenterCardLyricsDanmakuPolicy
         }
 
         var multiplier = totalTravelDistance / currentLyricVisibleDistance;
-        return TimeSpan.FromSeconds(currentLyricDuration.TotalSeconds * multiplier);
+        var seconds = currentLyricDuration.TotalSeconds * multiplier;
+
+        // Clamp to reasonable range to avoid too fast or too slow scrolling
+        seconds = Math.Clamp(seconds, 4.0, 10.0);
+
+        return TimeSpan.FromSeconds(seconds);
     }
 
     public static bool ShouldRestartMarquee(

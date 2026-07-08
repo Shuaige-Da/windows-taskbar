@@ -620,7 +620,7 @@
                                         <TextBlock x:Name="CenterCardLyricMarqueeText"
                                                     Text=""
                                                     Foreground="White"
-                                                    FontSize="14"
+                                                    FontSize="21"
                                                     FontWeight="SemiBold"
                                                     VerticalAlignment="Center"
                                                     TextWrapping="NoWrap"
