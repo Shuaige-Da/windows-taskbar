@@ -301,9 +301,10 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
-        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(lyric) : lyric", code);
+        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(currentWindow.Text) : currentWindow.Text", code);
         Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
         Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
+        Assert.Contains("CenterCardLyricScrollPolicy.BuildVerticalPlan(", code);
         Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
         Assert.Contains("textBlock.BeginAnimation(Canvas.LeftProperty, animation);", code);
     }
