@@ -8,6 +8,12 @@ namespace DynamicIslandBar;
 
 public record LyricLine(TimeSpan Time, string Text);
 
+public readonly record struct CurrentLyricWindow(
+    string Text,
+    TimeSpan Start,
+    TimeSpan End,
+    bool IsSynced);
+
 public class LyricsService
 {
     private static readonly HttpClient HttpClient = new(new HttpClientHandler
@@ -25,8 +31,10 @@ public class LyricsService
     private string _lastArtist = string.Empty;
     private string[] _plainLyricLines = Array.Empty<string>();
     private TimeSpan _songDuration = TimeSpan.Zero;
-    private int _fetching; // 0 = idle, 1 = fetching
     private LyricLanguage _preferredLanguage = LyricLanguage.Simplified;
+    private readonly LyricsFetchCoordinator _fetchCoordinator = new();
+    private Task<LyricFetchPayload?>? _activeFetchTask;
+    private string _activeFetchSongKey = string.Empty;
 
     // Cache original (Traditional) lyrics for language switching
     private List<LyricLine> _parsedLyricsTraditional = new();
@@ -38,6 +46,11 @@ public class LyricsService
     /// The real song duration (from lyrics API), may differ from SMTC-reported duration.
     /// </summary>
     public TimeSpan RealDuration => _songDuration;
+
+    private sealed record LyricFetchPayload(
+        List<LyricLine> SyncedLyricsTraditional,
+        string[] PlainLyricsTraditional,
+        TimeSpan RealDuration);
 
     public LyricLanguage PreferredLanguage
     {
@@ -54,45 +67,52 @@ public class LyricsService
 
     /// <summary>
     /// Fetch lyrics for a song. Caches by title+artist, only re-fetches when song changes.
-    /// Tries LRCLIB first, then falls back to NetEase Cloud Music API.
+    /// Tries NetEase first, then falls back to LRCLIB.
     /// </summary>
     public async Task<bool> EnsureLyricsAsync(string title, string artist, TimeSpan duration, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(title))
+        {
             return false;
+        }
 
-        // Already have lyrics for this song
         if (title == _lastTitle && artist == _lastArtist && HasLyrics)
+        {
             return true;
+        }
 
-        // Already fetching (atomic compare)
-        if (Interlocked.CompareExchange(ref _fetching, 1, 0) != 0)
-            return false;
+        var songKey = BuildSongKey(title, artist, duration);
+        if (_activeFetchTask is not null && string.Equals(songKey, _activeFetchSongKey, StringComparison.Ordinal))
+        {
+            var activePayload = await _activeFetchTask;
+            if (activePayload is not null
+                && !HasLyrics
+                && title == _lastTitle
+                && artist == _lastArtist)
+            {
+                ApplyPayload(title, artist, duration, activePayload);
+                ApplyLanguagePreference();
+            }
 
-        _lastTitle = title;
-        _lastArtist = artist;
-        _songDuration = duration;
-        _parsedLyrics.Clear();
-        _plainLyricLines = Array.Empty<string>();
+            return HasLyrics;
+        }
+
+        var token = _fetchCoordinator.Begin(songKey);
+        _activeFetchSongKey = songKey;
+        ClearLyricsForPendingSong(title, artist, duration);
 
         try
         {
-            // Phase 1: Try NetEase first to get real duration and lyrics
-            var (netEaseFound, realDuration) = await SearchNetEaseAsync(title, artist, ct);
+            _activeFetchTask = FetchLyricsPayloadAsync(title, artist, duration, ct);
+            var payload = await _activeFetchTask;
 
-            // Update duration with the real one from NetEase (SMTC often reports 0)
-            if (realDuration > TimeSpan.Zero)
-                _songDuration = realDuration;
-
-            // Phase 2: Try LRCLIB with the real duration for better matching
-            if (!netEaseFound)
+            if (payload is null || !_fetchCoordinator.IsCurrent(token))
             {
-                await SearchLrclibAsync(title, artist, _songDuration, ct);
+                return false;
             }
 
-            // Apply language preference (convert to Simplified if needed)
+            ApplyPayload(title, artist, duration, payload);
             ApplyLanguagePreference();
-
             return HasLyrics;
         }
         catch
@@ -101,35 +121,83 @@ public class LyricsService
         }
         finally
         {
-            Interlocked.Exchange(ref _fetching, 0);
+            if (_fetchCoordinator.IsCurrent(token))
+            {
+                _activeFetchTask = null;
+                _activeFetchSongKey = string.Empty;
+            }
         }
     }
 
-    /// <summary>
-    /// Search LRCLIB for lyrics. Returns true if synced or plain lyrics were found.
-    /// </summary>
-    private async Task<bool> SearchLrclibAsync(string title, string artist, TimeSpan duration, CancellationToken ct)
+    private async Task<LyricFetchPayload?> FetchLyricsPayloadAsync(
+        string title,
+        string artist,
+        TimeSpan duration,
+        CancellationToken ct)
     {
-        var cleanedTitle = CleanTitle(title);
-        // Build search titles: try cleaned first, then original if different and non-empty
-        var searchTitles = new List<string>();
-        if (!string.IsNullOrWhiteSpace(cleanedTitle) && cleanedTitle != title)
-            searchTitles.Add(cleanedTitle);
-        if (!string.IsNullOrWhiteSpace(title))
-            searchTitles.Add(title);
-        if (searchTitles.Count == 0)
-            return false;
+        var cleanTitle = CleanTitle(title);
+        var identity = new LyricSearchIdentity(
+            string.IsNullOrWhiteSpace(cleanTitle) ? title : cleanTitle,
+            artist,
+            duration);
+        var netEasePayload = await SearchNetEaseAsync(identity, ct);
+        if (netEasePayload is not null)
+        {
+            return netEasePayload;
+        }
 
-        string? bestSyncedLrc = null;
-        double bestSyncedDiff = double.MaxValue;
-        string? bestPlain = null;
-        double bestPlainDiff = double.MaxValue;
+        return await SearchLrclibAsync(identity, ct);
+    }
+
+    private void ClearLyricsForPendingSong(string title, string artist, TimeSpan duration)
+    {
+        _lastTitle = title;
+        _lastArtist = artist;
+        _songDuration = duration;
+        _parsedLyrics.Clear();
+        _parsedLyricsTraditional.Clear();
+        _plainLyricLines = Array.Empty<string>();
+        _plainLyricLinesTraditional = Array.Empty<string>();
+    }
+
+    private void ApplyPayload(
+        string title,
+        string artist,
+        TimeSpan fallbackDuration,
+        LyricFetchPayload payload)
+    {
+        _lastTitle = title;
+        _lastArtist = artist;
+        _songDuration = payload.RealDuration > TimeSpan.Zero ? payload.RealDuration : fallbackDuration;
+        _parsedLyricsTraditional = payload.SyncedLyricsTraditional;
+        _plainLyricLinesTraditional = payload.PlainLyricsTraditional;
+        _parsedLyrics = new List<LyricLine>(_parsedLyricsTraditional);
+        _plainLyricLines = (string[])_plainLyricLinesTraditional.Clone();
+    }
+
+    private static string BuildSongKey(string title, string artist, TimeSpan duration)
+    {
+        return $"{title}\u001f{artist}\u001f{duration.TotalMilliseconds:0}";
+    }
+
+    /// <summary>
+    /// Search LRCLIB for lyrics. Returns synced lyrics first, plain lyrics as fallback.
+    /// </summary>
+    private async Task<LyricFetchPayload?> SearchLrclibAsync(LyricSearchIdentity identity, CancellationToken ct)
+    {
+        var searchTitles = GetDistinctSearchTitles(identity.Title);
+        if (searchTitles.Length == 0)
+        {
+            return null;
+        }
+
+        LyricFetchPayload? bestPayload = null;
+        double bestScore = 0d;
 
         foreach (var searchTitle in searchTitles)
         {
-            // Search with artist first, then without artist (broader results)
-            var urlWithArtist = !string.IsNullOrWhiteSpace(artist)
-                ? $"https://lrclib.net/api/search?track_name={Uri.EscapeDataString(searchTitle)}&artist_name={Uri.EscapeDataString(artist)}"
+            var urlWithArtist = !string.IsNullOrWhiteSpace(identity.Artist)
+                ? $"https://lrclib.net/api/search?track_name={Uri.EscapeDataString(searchTitle)}&artist_name={Uri.EscapeDataString(identity.Artist)}"
                 : null;
             var urlNoArtist = $"https://lrclib.net/api/search?track_name={Uri.EscapeDataString(searchTitle)}";
 
@@ -141,101 +209,92 @@ public class LyricsService
             {
                 for (int attempt = 0; attempt <= MaxRetries; attempt++)
                 {
-                try
-                {
-                    var response = await HttpClient.GetAsync(url, ct);
-                    if (!response.IsSuccessStatusCode)
-                        break;
-
-                    var json = await response.Content.ReadAsStringAsync(ct);
-                    using var doc = JsonDocument.Parse(json);
-
-                    foreach (var item in doc.RootElement.EnumerateArray())
+                    try
                     {
-                        var dur = item.TryGetProperty("duration", out var durProp) ? durProp.GetDouble() : 0;
-                        var diff = duration.TotalSeconds > 0 ? Math.Abs(dur - duration.TotalSeconds) : 0;
-
-                        if (item.TryGetProperty("syncedLyrics", out var syncedProp))
+                        var response = await HttpClient.GetAsync(url, ct);
+                        if (!response.IsSuccessStatusCode)
                         {
-                            var synced = syncedProp.GetString();
-                            if (!string.IsNullOrWhiteSpace(synced) && (bestSyncedLrc == null || diff < bestSyncedDiff))
-                            {
-                                bestSyncedLrc = synced;
-                                bestSyncedDiff = diff;
-                            }
+                            break;
                         }
 
-                        if (bestSyncedLrc == null && item.TryGetProperty("plainLyrics", out var plainProp))
+                        var json = await response.Content.ReadAsStringAsync(ct);
+                        using var doc = JsonDocument.Parse(json);
+
+                        foreach (var item in doc.RootElement.EnumerateArray())
                         {
-                            var plain = plainProp.GetString();
-                            if (!string.IsNullOrWhiteSpace(plain) && (bestPlain == null || diff < bestPlainDiff))
+                            var syncedLyrics = GetStringProperty(item, "syncedLyrics");
+                            var plainLyrics = GetStringProperty(item, "plainLyrics");
+                            var duration = item.TryGetProperty("duration", out var durProp)
+                                ? TimeSpan.FromSeconds(durProp.GetDouble())
+                                : TimeSpan.Zero;
+                            var candidate = new LyricCandidate(
+                                "lrclib",
+                                GetStringProperty(item, "id"),
+                                GetStringProperty(item, "trackName"),
+                                GetStringProperty(item, "artistName"),
+                                duration,
+                                !string.IsNullOrWhiteSpace(syncedLyrics),
+                                !string.IsNullOrWhiteSpace(plainLyrics),
+                                false,
+                                false);
+
+                            var score = LyricMatchingPolicy.Score(identity, candidate);
+                            if (score < LyricMatchingPolicy.MinimumAcceptedScore || score <= bestScore)
                             {
-                                bestPlain = plain;
-                                bestPlainDiff = diff;
+                                continue;
                             }
+
+                            var payload = candidate.HasSyncedLyrics
+                                ? CreateSyncedPayload(syncedLyrics, duration)
+                                : CreatePlainPayload(plainLyrics, duration);
+                            if (payload is null)
+                            {
+                                continue;
+                            }
+
+                            bestScore = score;
+                            bestPayload = payload;
                         }
                     }
-                }
-                catch
-                {
-                    if (attempt < MaxRetries)
+                    catch
                     {
-                        await Task.Delay(1000 * (attempt + 1), ct);
-                        continue;
+                        if (attempt < MaxRetries)
+                        {
+                            await Task.Delay(1000 * (attempt + 1), ct);
+                            continue;
+                        }
                     }
-                }
-                break; // success or exhausted retries
+
+                    break;
                 } // for attempt
             }
-
-            if (bestSyncedLrc != null)
-                break;
         }
 
-        // Store results
-        _parsedLyricsTraditional.Clear();
-        _plainLyricLinesTraditional = Array.Empty<string>();
-
-        if (!string.IsNullOrWhiteSpace(bestSyncedLrc))
-        {
-            ParseLrc(bestSyncedLrc);
-            _parsedLyricsTraditional = new List<LyricLine>(_parsedLyrics);
-        }
-
-        if (_parsedLyrics.Count == 0 && !string.IsNullOrWhiteSpace(bestPlain))
-        {
-            _plainLyricLines = bestPlain.Split('\n', '\r')
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .Select(l => l.Trim())
-                .ToArray();
-            _plainLyricLinesTraditional = (string[])_plainLyricLines.Clone();
-        }
-
-        return HasLyrics;
+        return bestPayload;
     }
 
-    private async Task<(bool Found, TimeSpan RealDuration)> SearchNetEaseAsync(string title, string artist, CancellationToken ct)
+    private async Task<LyricFetchPayload?> SearchNetEaseAsync(LyricSearchIdentity identity, CancellationToken ct)
     {
         try
         {
-            var cleanedTitle = CleanTitle(title);
-            var searchTitle = !string.IsNullOrWhiteSpace(cleanedTitle) ? cleanedTitle : title;
-            var keyword = !string.IsNullOrWhiteSpace(artist)
-                ? $"{searchTitle} {artist}"
-                : searchTitle;
+            var keyword = !string.IsNullOrWhiteSpace(identity.Artist)
+                ? $"{identity.Title} {identity.Artist}"
+                : identity.Title;
 
             var searchUrl = "https://music.163.com/api/search/get";
             var searchBody = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["s"] = keyword,
                 ["type"] = "1",
-                ["limit"] = "5",
+                ["limit"] = "10",
                 ["offset"] = "0"
             });
 
             var searchResponse = await HttpClient.PostAsync(searchUrl, searchBody, ct);
             if (!searchResponse.IsSuccessStatusCode)
-                return (false, TimeSpan.Zero);
+            {
+                return null;
+            }
 
             var searchJson = await searchResponse.Content.ReadAsStringAsync(ct);
             using var searchDoc = JsonDocument.Parse(searchJson);
@@ -244,44 +303,169 @@ public class LyricsService
                 !result.TryGetProperty("songs", out var songs) ||
                 songs.GetArrayLength() == 0)
             {
-                return (false, TimeSpan.Zero);
+                return null;
             }
+
+            var candidates = new List<LyricCandidate>();
+            var payloadsBySongId = new Dictionary<string, LyricFetchPayload>();
 
             foreach (var song in songs.EnumerateArray())
             {
                 var songId = song.TryGetProperty("id", out var idProp) ? idProp.GetInt64() : 0;
                 var durationMs = song.TryGetProperty("duration", out var durProp) ? durProp.GetInt64() : 0;
                 var realDuration = durationMs > 0 ? TimeSpan.FromMilliseconds(durationMs) : TimeSpan.Zero;
-                if (songId == 0) continue;
-
-                var lyricUrl = $"https://music.163.com/api/lyric?id={songId}";
-                var lyricResponse = await HttpClient.GetAsync(lyricUrl, ct);
-                if (!lyricResponse.IsSuccessStatusCode) continue;
-
-                var lyricJson = await lyricResponse.Content.ReadAsStringAsync(ct);
-                using var lyricDoc = JsonDocument.Parse(lyricJson);
-
-                if (!lyricDoc.RootElement.TryGetProperty("lrc", out var lrcObj) ||
-                    !lrcObj.TryGetProperty("lyric", out var lyricProp))
-                    continue;
-
-                var lrcText = lyricProp.GetString();
-                if (string.IsNullOrWhiteSpace(lrcText)) continue;
-
-                var tempParsed = ParseLrcLines(lrcText);
-                if (tempParsed.Count > 0)
+                if (songId == 0)
                 {
-                    _parsedLyricsTraditional = tempParsed;
-                    return (true, realDuration);
+                    continue;
+                }
+
+                using var lyricDoc = await FetchNetEaseLyricDocumentAsync(songId.ToString(), ct);
+                var lrcText = ExtractNetEaseLrcText(lyricDoc.RootElement);
+                var parsedLyrics = string.IsNullOrWhiteSpace(lrcText)
+                    ? new List<LyricLine>()
+                    : ParseLrcLines(lrcText);
+                var candidate = new LyricCandidate(
+                    "netease",
+                    songId.ToString(),
+                    GetStringProperty(song, "name"),
+                    ExtractNetEaseArtist(song),
+                    realDuration,
+                    parsedLyrics.Count > 0,
+                    false,
+                    IsTruthyProperty(lyricDoc.RootElement, "nolyric"),
+                    IsTruthyProperty(lyricDoc.RootElement, "uncollected"));
+
+                candidates.Add(candidate);
+
+                if (parsedLyrics.Count > 0)
+                {
+                    payloadsBySongId[candidate.Id] = new LyricFetchPayload(
+                        parsedLyrics,
+                        Array.Empty<string>(),
+                        realDuration);
                 }
             }
 
-            return (false, TimeSpan.Zero);
+            var selected = LyricMatchingPolicy.SelectBestCandidate(identity, candidates);
+            if (selected is null)
+            {
+                return null;
+            }
+
+            return payloadsBySongId.TryGetValue(selected.Id, out var payload)
+                ? payload
+                : null;
         }
         catch
         {
-            return (false, TimeSpan.Zero);
+            return null;
         }
+    }
+
+    private static async Task<JsonDocument> FetchNetEaseLyricDocumentAsync(string songId, CancellationToken ct)
+    {
+        var lyricUrl = $"https://music.163.com/api/lyric?id={songId}";
+        var lyricResponse = await HttpClient.GetAsync(lyricUrl, ct);
+        lyricResponse.EnsureSuccessStatusCode();
+        return JsonDocument.Parse(await lyricResponse.Content.ReadAsStringAsync(ct));
+    }
+
+    private static LyricFetchPayload? CreateSyncedPayload(string lrcText, TimeSpan duration)
+    {
+        var parsedLyrics = ParseLrcLines(lrcText);
+        return parsedLyrics.Count > 0
+            ? new LyricFetchPayload(parsedLyrics, Array.Empty<string>(), duration)
+            : null;
+    }
+
+    private static LyricFetchPayload? CreatePlainPayload(string plainLyrics, TimeSpan duration)
+    {
+        var lines = SplitPlainLyrics(plainLyrics);
+        return lines.Length > 0
+            ? new LyricFetchPayload(new List<LyricLine>(), lines, duration)
+            : null;
+    }
+
+    private static string[] SplitPlainLyrics(string? plainLyrics)
+    {
+        return string.IsNullOrWhiteSpace(plainLyrics)
+            ? Array.Empty<string>()
+            : plainLyrics
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.Length > 0)
+                .ToArray();
+    }
+
+    private static string[] GetDistinctSearchTitles(string title)
+    {
+        var cleanedTitle = CleanTitle(title);
+        return new[] { cleanedTitle, title }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string GetStringProperty(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return string.Empty;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.String => property.GetString() ?? string.Empty,
+            JsonValueKind.Number => property.GetRawText(),
+            _ => string.Empty
+        };
+    }
+
+    private static string ExtractNetEaseArtist(JsonElement song)
+    {
+        if (song.TryGetProperty("artists", out var artists) && artists.ValueKind == JsonValueKind.Array)
+        {
+            return string.Join(", ", artists
+                .EnumerateArray()
+                .Select(artist => GetStringProperty(artist, "name"))
+                .Where(name => !string.IsNullOrWhiteSpace(name)));
+        }
+
+        if (song.TryGetProperty("ar", out var ar) && ar.ValueKind == JsonValueKind.Array)
+        {
+            return string.Join(", ", ar
+                .EnumerateArray()
+                .Select(artist => GetStringProperty(artist, "name"))
+                .Where(name => !string.IsNullOrWhiteSpace(name)));
+        }
+
+        return string.Empty;
+    }
+
+    private static string ExtractNetEaseLrcText(JsonElement root)
+    {
+        return root.TryGetProperty("lrc", out var lrcObj)
+            && lrcObj.TryGetProperty("lyric", out var lyricProp)
+            ? lyricProp.GetString() ?? string.Empty
+            : string.Empty;
+    }
+
+    private static bool IsTruthyProperty(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return false;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.Number => property.TryGetInt32(out var value) && value != 0,
+            JsonValueKind.String => bool.TryParse(property.GetString(), out var boolValue)
+                ? boolValue
+                : property.GetString() == "1",
+            _ => false
+        };
     }
 
     private static List<LyricLine> ParseLrcLines(string lrcText)
@@ -342,6 +526,37 @@ public class LyricsService
             if (index >= _plainLyricLines.Length)
                 index = _plainLyricLines.Length - 1;
             return _plainLyricLines[index];
+        }
+
+        return null;
+    }
+
+    public CurrentLyricWindow? GetCurrentLyricWindow(TimeSpan position)
+    {
+        if (_parsedLyrics.Count > 0)
+        {
+            var index = GetCurrentParsedLyricIndex(position);
+            var current = _parsedLyrics[index];
+            var end = index < _parsedLyrics.Count - 1
+                ? _parsedLyrics[index + 1].Time
+                : current.Time + TimeSpan.FromSeconds(3);
+
+            return new CurrentLyricWindow(current.Text, current.Time, end, true);
+        }
+
+        if (_plainLyricLines.Length > 0)
+        {
+            var index = GetCurrentPlainLyricIndex(position);
+            var segment = _songDuration.TotalSeconds > 0
+                ? TimeSpan.FromSeconds(_songDuration.TotalSeconds / _plainLyricLines.Length)
+                : TimeSpan.FromSeconds(3);
+            var start = TimeSpan.FromTicks(segment.Ticks * index);
+
+            return new CurrentLyricWindow(
+                _plainLyricLines[index],
+                start,
+                start + segment,
+                false);
         }
 
         return null;
