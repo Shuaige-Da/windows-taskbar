@@ -17,16 +17,16 @@ public class CenterCardLyricScrollPolicyTests
     }
 
     [Fact]
-    public void BuildPlan_ShortLineStartsAtRightEdgeAndScrollsLeftLikeDanmaku()
+    public void BuildPlan_ShortLineStartsVisibleAtRightEdgeAndScrollsLeftLikeDanmaku()
     {
         var plan = CenterCardLyricScrollPolicy.BuildHorizontalPlan(
             viewportWidth: 240,
             textWidth: 56,
             lineLifetime: TimeSpan.FromSeconds(4));
 
-        Assert.Equal(240, plan.StartOffset);
+        Assert.Equal(184, plan.StartOffset);
         Assert.True(plan.EndOffset < 0);
-        Assert.True(plan.Distance >= 240 + 56);
+        Assert.True(plan.Distance >= 184 + 56);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class CenterCardLyricScrollPolicyTests
             textWidth: 420,
             lineLifetime: TimeSpan.FromSeconds(4));
 
-        Assert.Equal(240, plan.StartOffset);
+        Assert.Equal(0, plan.StartOffset);
         Assert.True(plan.EndOffset < 0);
         Assert.True(plan.Distance >= 180);
         Assert.Equal(TimeSpan.FromSeconds(4), plan.Duration);

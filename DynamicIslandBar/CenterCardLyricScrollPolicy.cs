@@ -19,7 +19,7 @@ public static class CenterCardLyricScrollPolicy
         var safeViewportWidth = Math.Max(viewportWidth, 1d);
         var safeTextWidth = Math.Max(textWidth, 1d);
         var duration = ResolveDuration(lineLifetime);
-        var startOffset = safeViewportWidth;
+        var startOffset = Math.Max(safeViewportWidth - safeTextWidth, 0d);
         var endOffset = -(safeTextWidth + 36d);
 
         return new CenterCardLyricScrollPlan(
