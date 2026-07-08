@@ -20,14 +20,25 @@ public static class CenterCardLyricScrollPolicy
         var safeTextWidth = Math.Max(textWidth, 1d);
         var duration = ResolveDuration(lineLifetime);
         var overflow = Math.Max(0d, safeTextWidth - safeViewportWidth);
-        var distance = overflow > 0d
-            ? overflow + 36d
-            : Math.Max(18d, Math.Min(safeViewportWidth * 0.18d, 32d));
+        if (overflow > 0d)
+        {
+            var overflowDistance = overflow + 36d;
+            return new CenterCardLyricScrollPlan(
+                StartOffset: 0d,
+                EndOffset: -overflowDistance,
+                Distance: overflowDistance,
+                Duration: duration);
+        }
+
+        var distance = Math.Max(18d, Math.Min(safeViewportWidth * 0.18d, 32d));
+        var centeredOffset = Math.Max((safeViewportWidth - safeTextWidth) / 2d, 0d);
+        var startOffset = Math.Min(centeredOffset + (distance / 2d), safeViewportWidth);
+        var endOffset = Math.Max(centeredOffset - (distance / 2d), 0d);
 
         return new CenterCardLyricScrollPlan(
-            StartOffset: safeViewportWidth,
-            EndOffset: -distance,
-            Distance: distance,
+            StartOffset: startOffset,
+            EndOffset: endOffset,
+            Distance: Math.Abs(startOffset - endOffset),
             Duration: duration);
     }
 

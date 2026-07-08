@@ -17,6 +17,19 @@ public class CenterCardLyricScrollPolicyTests
     }
 
     [Fact]
+    public void BuildPlan_ShortLineUsesSmallVisibleTravel()
+    {
+        var plan = CenterCardLyricScrollPolicy.BuildHorizontalPlan(
+            viewportWidth: 240,
+            textWidth: 56,
+            lineLifetime: TimeSpan.FromSeconds(4));
+
+        Assert.InRange(plan.StartOffset, 0, 240);
+        Assert.InRange(plan.EndOffset, 0, 240);
+        Assert.True(Math.Abs(plan.StartOffset - plan.EndOffset) <= 32);
+    }
+
+    [Fact]
     public void BuildPlan_LongLineUsesOverflowDistance()
     {
         var plan = CenterCardLyricScrollPolicy.BuildHorizontalPlan(
