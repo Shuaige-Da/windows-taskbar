@@ -20,3 +20,12 @@ Setup1/**/Debug/
 Setup1/**/Release/
 Setup1/**/*.log
 Setup1/**/setup.exe
+
+# Local temp/debug files
+Setup2/
+Setup3/
+_dream_query*.py
+tmp_diff.txt
+.mimocode/.cron-lock
+docs/previews/
+docs/superpowers/plans/
