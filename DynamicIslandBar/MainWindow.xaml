@@ -1,6 +1,7 @@
-﻿<Window x:Class="DynamicIslandBar.MainWindow"
+<Window x:Class="DynamicIslandBar.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:DynamicIslandBar"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -13,6 +14,7 @@
         Title="DynamicIslandBar">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <local:PercentToScaleConverter x:Key="PercentToScaleConverter"/>
         <LinearGradientBrush x:Key="CapsuleGlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
             <GradientStop Color="#58FFFFFF" Offset="0"/>
             <GradientStop Color="#16FFFFFF" Offset="0.34"/>
@@ -139,6 +141,59 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="SideDockVolumeSliderStyle" TargetType="{x:Type Slider}">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Slider}">
+                        <Grid Width="{TemplateBinding Width}"
+                              Height="{TemplateBinding Height}"
+                              SnapsToDevicePixels="True">
+                            <Rectangle Width="3"
+                                       RadiusX="1.5"
+                                       RadiusY="1.5"
+                                       Fill="#D8FFFFFF"
+                                       Opacity="0.9"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Stretch"/>
+                            <Track x:Name="PART_Track"
+                                   Orientation="{TemplateBinding Orientation}">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                                  Opacity="0"
+                                                  Focusable="False"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="14"
+                                           Height="14"
+                                           Focusable="False">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="{x:Type Thumb}">
+                                                <Grid>
+                                                    <Ellipse Width="14"
+                                                             Height="14"
+                                                             Fill="#46E0FF"/>
+                                                    <Ellipse Width="24"
+                                                             Height="24"
+                                                             Fill="#4646E0FF"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                                  Opacity="0"
+                                                  Focusable="False"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="{x:Type Separator}">
             <Setter Property="Template">
                 <Setter.Value>
@@ -219,6 +274,21 @@
         <Grid x:Name="CapsuleGrid" HorizontalAlignment="Center" VerticalAlignment="Bottom"
               Width="540" Height="400">
 
+            <Canvas x:Name="CapsuleSnapPreviewLayer"
+                    Width="{Binding ElementName=CapsuleGrid, Path=Width}"
+                    Height="{Binding ElementName=CapsuleGrid, Path=Height}"
+                    IsHitTestVisible="False"
+                    Panel.ZIndex="4">
+                <Border x:Name="CapsuleSnapPreviewOutline"
+                        Width="500"
+                        Height="80"
+                        Visibility="Collapsed"
+                        BorderThickness="2"
+                        CornerRadius="40"
+                        BorderBrush="#8046E0FF"
+                        Background="#12000000"/>
+            </Canvas>
+
             <!-- ===== 主胶囊背景 ===== -->
             <Border x:Name="CapsuleBorder"
                     Height="80" Width="500"
@@ -245,7 +315,8 @@
                             Opacity="0.72"
                             IsHitTestVisible="False"/>
 
-                    <Grid Margin="14,0">
+                    <!-- <Grid Margin="14,0"> -->
+                    <Grid x:Name="CapsuleContentGrid" Margin="14,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -388,7 +459,7 @@
                                VerticalAlignment="Center"/>
 
                     <!-- ===== 右侧：系统信息区域 ===== -->
-                    <StackPanel Orientation="Horizontal" Grid.Column="3"
+                    <StackPanel x:Name="SystemIconsHost" Orientation="Horizontal" Grid.Column="3"
                                 VerticalAlignment="Center" Margin="0,0,4,0">
 
                         <!-- WiFi 图标 -->
@@ -485,11 +556,39 @@
                             MouseLeave="CenterCard_MouseLeave"
                             MouseLeftButtonDown="CenterCard_MouseLeftButtonDown">
                         <Grid>
+                            <Border x:Name="CenterCardSideAppSelectorButton"
+                                    Width="24"
+                                    Height="24"
+                                    Margin="0,8,8,0"
+                                    Cursor="Hand"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Visibility="Collapsed"
+                                    Panel.ZIndex="4"
+                                    MouseLeftButtonDown="CenterCardAppSelector_Click"
+                                    MouseEnter="CenterCardAppSelector_MouseEnter"
+                                    MouseLeave="CenterCardAppSelector_MouseLeave">
+                                <Path Stroke="#D8FFFFFF"
+                                      StrokeThickness="1.8"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Stretch="Uniform"
+                                      Width="10"
+                                      Height="6"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Data="M0,0 L5,5 L10,0"/>
+                            </Border>
+
                             <Grid x:Name="CenterCardLyricsLayer"
                                   Margin="42,0"
                                   Visibility="Collapsed"
                                   ClipToBounds="True">
-                                <DockPanel LastChildFill="True" VerticalAlignment="Center">
+                                <DockPanel x:Name="CenterCardLyricsDock"
+                                           LastChildFill="True"
+                                           VerticalAlignment="Center">
                                     <ContentControl x:Name="CenterCardLyricsIcon"
                                                     Width="28"
                                                     Height="28"
@@ -519,16 +618,19 @@
                                     </StackPanel>
                                     <Grid x:Name="CenterCardLyricsViewport" ClipToBounds="True">
                                         <TextBlock x:Name="CenterCardLyricMarqueeText"
-                                                   Text=""
-                                                   Foreground="White"
-                                                   FontSize="14"
-                                                   FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"
-                                                   TextWrapping="NoWrap">
+                                                    Text=""
+                                                    Foreground="White"
+                                                    FontSize="14"
+                                                    FontWeight="SemiBold"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="NoWrap"
+                                                    Visibility="Collapsed">
                                             <TextBlock.RenderTransform>
-                                                <TranslateTransform x:Name="CenterCardLyricMarqueeTransform"/>
+                                                <TranslateTransform x:Name="CenterCardLyricMarqueeTranslate"/>
                                             </TextBlock.RenderTransform>
                                         </TextBlock>
+                                        <Canvas x:Name="CenterCardLyricsDanmakuCanvas"
+                                                IsHitTestVisible="False"/>
                                     </Grid>
                                 </DockPanel>
                             </Grid>
@@ -572,7 +674,8 @@
                                                 Height="28"
                                                 VerticalAlignment="Center"/>
 
-                                <StackPanel Grid.Column="2"
+                                <StackPanel x:Name="CenterCardDetailsTextStack"
+                                            Grid.Column="2"
                                             VerticalAlignment="Center"
                                             Margin="10,0,12,0">
                                     <TextBlock x:Name="ActiveAppSummaryTitle"
@@ -596,7 +699,7 @@
                                             Margin="0,0,12,0"
                                             Visibility="Collapsed">
                                     <Button x:Name="CenterCardPlaybackModeButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="顺序播放" Click="CenterCardPlaybackMode_Click">
-                                        <Path x:Name="CenterCardPlaybackModeIcon" Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                        <Path x:Name="CenterCardPlaybackModeIcon" Fill="{x:Null}" Stroke="White" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Width="12" Height="12"
                                               Data="M4,6 H20 M4,12 H20 M4,18 H14"/>
                                     </Button>
                                     <Button x:Name="CenterCardPreviousButton" Width="28" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click">
@@ -611,7 +714,7 @@
                                         <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
                                               Data="M6,6 L14.5,12 L6,18 Z M16,6 L18,6 L18,18 L16,18 Z"/>
                                     </Button>
-                                    <Button x:Name="CenterCardVolumeButton" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click">
+                                    <Button x:Name="CenterCardVolumeButton" Width="32" Height="28" Margin="2,0" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click" MouseEnter="CenterCardVolumeButton_MouseEnter" MouseLeave="CenterCardVolumeButton_MouseLeave">
                                         <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
                                               Data="M3,9 L3,15 L7,15 L12,20 L12,4 L7,9 Z M16.5,12 C16.5,10.23 15.48,8.71 14,7.97 L14,16.02 C15.48,15.29 16.5,13.77 16.5,12 Z"/>
                                     </Button>
@@ -631,7 +734,10 @@
                                    Opacity="0">
                                 <Thumb.Template>
                                     <ControlTemplate TargetType="Thumb">
-                                        <Border CornerRadius="5" Background="#70FFFFFF"/>
+                                        <Border CornerRadius="12"
+                                                Background="#34FFFFFF"
+                                                BorderBrush="#30FFFFFF"
+                                                BorderThickness="1"/>
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
@@ -647,7 +753,10 @@
                                    Opacity="0">
                                 <Thumb.Template>
                                     <ControlTemplate TargetType="Thumb">
-                                        <Border CornerRadius="5" Background="#70FFFFFF"/>
+                                        <Border CornerRadius="12"
+                                                Background="#34FFFFFF"
+                                                BorderBrush="#30FFFFFF"
+                                                BorderThickness="1"/>
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>
@@ -690,10 +799,9 @@
                                                                 <Border x:Name="PART_Indicator"
                                                                         CornerRadius="2"
                                                                         Background="{TemplateBinding Foreground}"
-                                                                        HorizontalAlignment="Left"
                                                                         RenderTransformOrigin="0,0.5">
                                                                     <Border.RenderTransform>
-                                                                        <ScaleTransform ScaleX="{TemplateBinding Value}"/>
+                                                                        <ScaleTransform ScaleX="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Value, Converter={StaticResource PercentToScaleConverter}}"/>
                                                                     </Border.RenderTransform>
                                                                 </Border>
                                                             </Grid>
@@ -715,17 +823,56 @@
                         </Grid>
                     </Border>
                     </Grid>
-
-                    </Grid>
+                </Grid>
+                <Thumb x:Name="CapsuleStartResizeHandle"
+                       Width="18"
+                       Height="52"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Center"
+                       Cursor="SizeWE"
+                       DragDelta="CapsuleResizeHandle_DragDelta"
+                       DragCompleted="CapsuleResizeHandle_DragCompleted"
+                       ToolTip="拖动调节胶囊长度"
+                       Tag="Left"
+                       Opacity="0.34">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border CornerRadius="12"
+                                    Background="#34FFFFFF"
+                                    BorderBrush="#30FFFFFF"
+                                    BorderThickness="1"/>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+                <Thumb x:Name="CapsuleEndResizeHandle"
+                       Width="18"
+                       Height="52"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       Cursor="SizeWE"
+                       DragDelta="CapsuleResizeHandle_DragDelta"
+                       DragCompleted="CapsuleResizeHandle_DragCompleted"
+                       ToolTip="拖动调节胶囊长度"
+                       Tag="Right"
+                       Opacity="0.34">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border CornerRadius="12"
+                                    Background="#34FFFFFF"
+                                    BorderBrush="#30FFFFFF"
+                                    BorderThickness="1"/>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
                 </Grid>
             </Border>
 
             <!-- ===== 应用悬浮说明层：不参与主栏布局，避免推动后续图标 ===== -->
-            <Canvas x:Name="AppHoverOverlayLayer"
-                    Width="{Binding ElementName=CapsuleGrid, Path=Width}"
-                    Height="{Binding ElementName=CapsuleGrid, Path=Height}"
-                    IsHitTestVisible="False"
-                    Panel.ZIndex="5">
+            <Popup x:Name="AppHoverOverlayPopup"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True"
+                   IsHitTestVisible="False">
                 <Grid x:Name="AppHoverOverlayPanel"
                       Width="172"
                       Height="40"
@@ -754,13 +901,16 @@
                                StrokeDashCap="Round"
                                Opacity="0.9"/>
 
-                    <DockPanel Margin="10,0,12,0" LastChildFill="True">
+                    <StackPanel x:Name="AppHoverOverlayContent"
+                                Orientation="Horizontal"
+                                Margin="10,0,12,0"
+                                VerticalAlignment="Center">
                         <ContentControl x:Name="AppHoverOverlayIcon"
                                         Width="22"
                                         Height="22"
-                                        VerticalAlignment="Center"
-                                        DockPanel.Dock="Left"/>
-                        <StackPanel Orientation="Horizontal"
+                                        VerticalAlignment="Center"/>
+                        <StackPanel x:Name="AppHoverOverlayTextStack"
+                                    Orientation="Vertical"
                                     VerticalAlignment="Center"
                                     Margin="8,0,0,0">
                             <TextBlock x:Name="AppHoverOverlayTitle"
@@ -769,18 +919,200 @@
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"
                                        MaxWidth="92"
+                                       TextAlignment="Left"
                                        TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="AppHoverOverlayStatus"
                                        Foreground="#94FFFFFF"
                                        FontSize="10"
                                        VerticalAlignment="Center"
-                                       Margin="7,0,0,0"
-                                       MaxWidth="48"
+                                       Margin="0,2,0,0"
+                                       MaxWidth="92"
+                                       TextAlignment="Left"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
-                    </DockPanel>
+                    </StackPanel>
                 </Grid>
-            </Canvas>
+            </Popup>
+
+            <Popup x:Name="CenterCardSideDetailsPopup"
+                   PlacementTarget="{Binding ElementName=ActiveAppSummaryPanel}"
+                   Placement="Right"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="True">
+                <Grid x:Name="CenterCardSideDetailsPanel"
+                      Width="190"
+                      Height="360"
+                      MouseEnter="CenterCardSideDetails_MouseEnter"
+                      MouseLeave="CenterCardSideDetails_MouseLeave">
+                    <Border x:Name="CenterCardSideDetailsChrome"
+                            CornerRadius="28"
+                            Background="{StaticResource HoverOverlayGlassBrush}"
+                            BorderBrush="#55FFFFFF"
+                            BorderThickness="1">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="28" ShadowDepth="8" Opacity="0.42" Color="Black"/>
+                        </Border.Effect>
+                    </Border>
+
+                    <Rectangle x:Name="CenterCardSideDetailsGlow"
+                               RadiusX="28"
+                               RadiusY="28"
+                               Stroke="#4CD964"
+                               StrokeThickness="1.2"
+                               Opacity="0.58"/>
+
+                    <Grid Margin="14,16"
+                          VerticalAlignment="Stretch"
+                          HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="26"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="26"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid x:Name="CenterCardSideVolumePanel"
+                              Grid.Column="0"
+                              Width="24"
+                              Height="248"
+                              Margin="0,0,4,0"
+                              VerticalAlignment="Center"
+                              Visibility="Collapsed">
+                            <Slider x:Name="CenterCardSideVolumeSlider"
+                                    Style="{StaticResource SideDockVolumeSliderStyle}"
+                                    Orientation="Vertical"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    Value="0"
+                                    Width="22"
+                                    Height="222"
+                                    Foreground="#D8FFFFFF"
+                                    Background="#28FFFFFF"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Cursor="Hand"
+                                    ValueChanged="CenterCardSideVolumeSlider_ValueChanged"/>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1"
+                                     VerticalAlignment="Center"
+                                     HorizontalAlignment="Center">
+                        <ContentControl x:Name="CenterCardSideDetailsIcon"
+                                        Width="30"
+                                        Height="30"
+                                        HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="CenterCardSideDetailsTitle"
+                                   Foreground="White"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="110"
+                                   Margin="0,10,0,0"/>
+                        <TextBlock x:Name="CenterCardSideDetailsArtist"
+                                   Foreground="#A8FFFFFF"
+                                   FontSize="11"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="110"
+                                   Margin="0,3,0,10"/>
+
+                        <StackPanel x:Name="CenterCardSideTransportControls"
+                                    Orientation="Vertical"
+                                    HorizontalAlignment="Center">
+                            <Button x:Name="CenterCardSidePlaybackModeButton" Width="30" Height="30" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="顺序播放" Click="CenterCardPlaybackMode_Click">
+                                <Path x:Name="CenterCardSidePlaybackModeIcon" Fill="{x:Null}" Stroke="White" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Width="12" Height="12"
+                                      Data="M4,6 H20 M4,12 H20 M4,18 H14"/>
+                            </Button>
+                            <Button x:Name="CenterCardSidePreviousButton" Width="32" Height="32" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="上一首" Click="CenterCardPrevious_Click">
+                                <Path Fill="White" Stretch="Uniform" Width="13" Height="13"
+                                      Data="M6,6 L8,6 L8,18 L6,18 Z M9.5,12 L18,6 L18,18 Z"/>
+                            </Button>
+                            <Button x:Name="CenterCardSidePlayPauseButton" Width="42" Height="42" Margin="0,4" Style="{StaticResource CenterCardButtonStyle}" ToolTip="播放 / 暂停" Click="CenterCardPlayPause_Click">
+                                <Path x:Name="CenterCardSidePlayPauseIcon" Fill="White" Stretch="Uniform" Width="16" Height="16"
+                                      Data="M6,4 L6,20 L10,20 L10,4 Z M14,4 L14,20 L18,20 L18,4 Z"/>
+                            </Button>
+                            <Button x:Name="CenterCardSideNextButton" Width="32" Height="32" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="下一首" Click="CenterCardNext_Click">
+                                <Path Fill="White" Stretch="Uniform" Width="13" Height="13"
+                                      Data="M6,6 L14.5,12 L6,18 Z M16,6 L18,6 L18,18 L16,18 Z"/>
+                            </Button>
+                            <Button x:Name="CenterCardSideVolumeButton" Width="30" Height="30" Margin="0,2" Style="{StaticResource CenterCardButtonStyle}" ToolTip="音量" Click="CenterCardVolume_Click" MouseEnter="CenterCardVolumeButton_MouseEnter" MouseLeave="CenterCardVolumeButton_MouseLeave">
+                                <Path Fill="White" Stretch="Uniform" Width="12" Height="12"
+                                      Data="M3,9 L3,15 L7,15 L12,20 L12,4 L7,9 Z M16.5,12 C16.5,10.23 15.48,8.71 14,7.97 L14,16.02 C15.48,15.29 16.5,13.77 16.5,12 Z"/>
+                            </Button>
+                        </StackPanel>
+                        </StackPanel>
+
+                        <Grid x:Name="CenterCardSideProgressPanel"
+                              Grid.Column="2"
+                              Width="24"
+                              Height="248"
+                              Margin="4,0,0,0"
+                              VerticalAlignment="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="CenterCardSideCurrentTime"
+                                       Grid.Row="0"
+                                       Text="0:00"
+                                       Foreground="#78FFFFFF"
+                                       FontSize="9"
+                                       FontFamily="Consolas"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,0,0,6"/>
+                            <ProgressBar x:Name="CenterCardSideProgressBar"
+                                         Grid.Row="1"
+                                         Width="6"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         Value="0"
+                                         Foreground="#FF2D55"
+                                         Background="#25FFFFFF"
+                                         BorderThickness="0"
+                                         HorizontalAlignment="Center"
+                                         VerticalAlignment="Stretch"
+                                         MouseLeftButtonDown="CenterCardProgress_Click"
+                                         Cursor="Hand">
+                                <ProgressBar.Resources>
+                                    <Style TargetType="ProgressBar">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ProgressBar">
+                                                    <Border CornerRadius="3" Background="{TemplateBinding Background}">
+                                                        <Grid>
+                                                            <Border x:Name="PART_Track"/>
+                                                            <Border x:Name="PART_Indicator"
+                                                                    CornerRadius="3"
+                                                                    Background="{TemplateBinding Foreground}"
+                                                                    RenderTransformOrigin="0.5,1">
+                                                                <Border.RenderTransform>
+                                                                    <ScaleTransform ScaleY="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Value, Converter={StaticResource PercentToScaleConverter}}"/>
+                                                                </Border.RenderTransform>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ProgressBar.Resources>
+                            </ProgressBar>
+                            <TextBlock x:Name="CenterCardSideTotalTime"
+                                       Grid.Row="2"
+                                       Text="0:00"
+                                       Foreground="#78FFFFFF"
+                                       FontSize="9"
+                                       FontFamily="Consolas"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,6,0,0"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Popup>
 
             <!-- ===== WiFi 控制面板 ===== -->
             <Popup x:Name="WifiPopup"
@@ -918,24 +1250,40 @@
                    VerticalOffset="-8"
                    AllowsTransparency="True"
                    PopupAnimation="Fade"
-                   StaysOpen="False">
-                <Border CornerRadius="10" Padding="8,6" Width="180"
-                        BorderBrush="#4046E0FF" BorderThickness="1"
+                   StaysOpen="True">
+                <Border x:Name="CenterCardVolumePanel"
+                        CornerRadius="18"
+                        Padding="12,9"
+                        Width="224"
+                        BorderBrush="#4046E0FF"
+                        BorderThickness="1"
                         MouseEnter="CenterCardVolumePopup_MouseEnter"
                         MouseLeave="CenterCardVolumePopup_MouseLeave">
-                    <Border.Background>
-                        <SolidColorBrush Color="#222222" Opacity="0.95"/>
-                    </Border.Background>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="🎵" Foreground="#FF5DBB" FontSize="12"
-                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <StackPanel x:Name="CenterCardVolumeContent"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center">
+                        <Border x:Name="CenterCardVolumeGlyph"
+                                Width="26" Height="26" CornerRadius="13"
+                                Background="#2AFFFFFF"
+                                BorderBrush="#36FFFFFF"
+                                BorderThickness="1"
+                                Margin="0,0,10,0">
+                            <TextBlock Text="♪"
+                                       Foreground="#FFFF5DBB"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
                         <Slider x:Name="CenterCardVolumeSlider" Minimum="0" Maximum="100"
-                                Width="100" VerticalAlignment="Center"
+                                Width="128" VerticalAlignment="Center"
                                 Foreground="#FF5DBB"
                                 ValueChanged="CenterCardVolumeSlider_ValueChanged"/>
                         <TextBlock x:Name="CenterCardVolumePercentText" Text="--%"
-                                   Foreground="#80FFFFFF" FontSize="10"
-                                   VerticalAlignment="Center" Margin="6,0,0,0" Width="30"/>
+                                   Foreground="#CCFFFFFF" FontSize="11"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="10,0,0,0" Width="34"/>
                     </StackPanel>
                 </Border>
             </Popup>
@@ -997,6 +1345,22 @@
                                    FontSize="14"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,10"/>
+                        <TextBox x:Name="OverflowAppsSearchBox"
+                                 Height="34"
+                                 Margin="0,0,0,8"
+                                 Padding="10,6"
+                                 Background="#22151818"
+                                 Foreground="White"
+                                 BorderBrush="#5076D964"
+                                 BorderThickness="1"
+                                 CaretBrush="White"
+                                 TextChanged="OverflowAppsSearchBox_TextChanged"
+                                 ToolTip="输入应用名称搜索本地已安装应用"/>
+                        <TextBlock x:Name="OverflowAppsEmptyStateText"
+                                   Foreground="#CCFFFFFF"
+                                   FontSize="11"
+                                   Margin="2,0,2,8"
+                                   Visibility="Collapsed"/>
                         <WrapPanel x:Name="OverflowAppsListPanel" ItemWidth="52"/>
                     </StackPanel>
                 </Border>

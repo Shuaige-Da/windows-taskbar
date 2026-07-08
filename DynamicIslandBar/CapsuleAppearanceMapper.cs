@@ -6,6 +6,8 @@ namespace DynamicIslandBar;
 public static class CapsuleAppearanceMapper
 {
     public const double TopIslandDefaultWidth = 760d;
+    private const double DefaultMinimumThicknessRatio = 2d / 3d;
+    private const double SideDockMinimumThicknessRatio = 0.76d;
 
     public static LinearGradientBrush BuildBackgroundBrush(int opacityPercent)
     {
@@ -55,6 +57,23 @@ public static class CapsuleAppearanceMapper
             ShadowDepth = 8 * ratio,
             Opacity = 0.14 + (0.28 * ratio)
         };
+    }
+
+    public static DropShadowEffect? BuildShadowEffect(CapsuleMode mode, int shadowPercent)
+    {
+        var effect = BuildShadowEffect(shadowPercent);
+        if (effect == null)
+        {
+            return null;
+        }
+
+        if (mode is CapsuleMode.LeftDock or CapsuleMode.RightDock)
+        {
+            effect.ShadowDepth = 0;
+            effect.Opacity *= 0.58;
+        }
+
+        return effect;
     }
 
     public static DropShadowEffect? BuildPanelShadowEffect(int shadowPercent)
@@ -120,19 +139,21 @@ public static class CapsuleAppearanceMapper
 
     public static double MapCapsuleHeight(double baseHeight, int capsuleThicknessPercent)
     {
+        return MapCapsuleHeight(CapsuleMode.BottomTaskbar, baseHeight, capsuleThicknessPercent);
+    }
+
+    public static double MapCapsuleHeight(CapsuleMode mode, double baseHeight, int capsuleThicknessPercent)
+    {
         var displayRatio = Math.Clamp(capsuleThicknessPercent, 0, 100) / 100.0;
-        var ratio = 0.5 + (displayRatio * 0.5);
-        var minimumHeight = baseHeight / 3d;
-        return minimumHeight + ((baseHeight - minimumHeight) * ratio);
+        var minimumRatio = mode is CapsuleMode.LeftDock or CapsuleMode.RightDock
+            ? SideDockMinimumThicknessRatio
+            : DefaultMinimumThicknessRatio;
+        var ratio = minimumRatio + ((1d - minimumRatio) * displayRatio);
+        return baseHeight * ratio;
     }
 
     public static double MapCapsuleWidth(CapsuleMode mode, double baseWidth, int capsuleLengthPercent)
     {
-        if (mode == CapsuleMode.TopIsland)
-        {
-            return Math.Min(TopIslandDefaultWidth, baseWidth);
-        }
-
         var ratio = Math.Clamp(capsuleLengthPercent, 0, 100) / 100.0;
         var minWidth = TopIslandDefaultWidth;
         minWidth = Math.Min(minWidth, baseWidth);

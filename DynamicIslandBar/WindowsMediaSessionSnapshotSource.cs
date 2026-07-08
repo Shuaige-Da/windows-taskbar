@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using Windows.Media.Control;
 
 namespace DynamicIslandBar;
@@ -14,29 +16,66 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
         try
         {
             if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
-            {
                 return null;
-            }
 
             var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             cancellationToken.ThrowIfCancellationRequested();
 
-            var session = manager.GetSessions()
-                .FirstOrDefault(candidate => CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, candidate.SourceAppUserModelId));
+            var sessions = manager.GetSessions();
 
-            session ??= CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)
-                ? manager.GetCurrentSession()
-                : null;
+            // Strict match: AUMID must contain app's exe name or app name
+            GlobalSystemMediaTransportControlsSession? session = null;
+            var exeName = !string.IsNullOrWhiteSpace(app.ExePath)
+                ? Path.GetFileNameWithoutExtension(app.ExePath)?.ToLowerInvariant() ?? ""
+                : "";
+
+            foreach (var candidate in sessions)
+            {
+                try
+                {
+                    var aumid = candidate.SourceAppUserModelId?.ToLowerInvariant() ?? "";
+                    // Match if AUMID contains the exe name (e.g. "cloudmusic" in "CloudMusic!xxx")
+                    if (!string.IsNullOrWhiteSpace(exeName) && exeName.Length > 3 && aumid.Contains(exeName))
+                    {
+                        session = candidate;
+                        Debug.WriteLine($"[SnapshotSource] Matched by exe name: '{exeName}' in '{aumid}'");
+                        break;
+                    }
+                    // Match if AUMID equals app's AppId
+                    if (!string.IsNullOrWhiteSpace(app.AppId) &&
+                        string.Equals(aumid, app.AppId.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        session = candidate;
+                        Debug.WriteLine($"[SnapshotSource] Matched by AppId: '{app.AppId}'");
+                        break;
+                    }
+                }
+                catch { }
+            }
+
             if (session == null)
             {
-                return null;
+                session = manager.GetCurrentSession();
+                if (session == null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
+                {
+                    foreach (var candidate in sessions)
+                    {
+                        try
+                        {
+                            if (candidate.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                            {
+                                session = candidate;
+                                Debug.WriteLine($"[SnapshotSource] Fallback matched playing media session: {candidate.SourceAppUserModelId}");
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
             }
 
-            if (!CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, session.SourceAppUserModelId)
-                && !CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
-            {
+            if (session == null)
                 return null;
-            }
 
             var properties = await session.TryGetMediaPropertiesAsync();
             cancellationToken.ThrowIfCancellationRequested();
@@ -44,24 +83,24 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
             var title = properties.Title?.Trim() ?? string.Empty;
             var artist = properties.Artist?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(artist))
-            {
                 return null;
-            }
 
             var playbackInfo = session.GetPlaybackInfo();
             var isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            var lyric = title; // GSMTC doesn't provide actual lyrics; show title as marquee text
+
+            Debug.WriteLine($"[SnapshotSource] OK: Title='{title}', Artist='{artist}', Playing={isPlaying}, AUMID={session.SourceAppUserModelId}");
 
             return new CenterCardMediaSnapshot(
                 IsMusicApp: true,
                 IsPlaying: isPlaying,
                 Title: string.IsNullOrWhiteSpace(title) ? "正在播放" : title,
                 Artist: artist,
-                Lyric: lyric,
+                Lyric: string.Empty,
                 SourceAppUserModelId: session.SourceAppUserModelId);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[SnapshotSource] Error: {ex.Message}");
             return null;
         }
     }

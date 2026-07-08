@@ -5,6 +5,208 @@ namespace DynamicIslandBar.Tests;
 public class MainWindowUiLogicTests
 {
     [Fact]
+    public void MainWindow_SideDockLyricsUseBottomToTopDanmakuMotion()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
+        Assert.Contains("laneCount: 1", code);
+        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(lyric) : lyric", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.FormatVerticalTrack(lyric)", code);
+        Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
+        Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
+        Assert.Contains("Canvas.SetTop(textBlock, verticalStartTop);", code);
+        Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
+        Assert.Contains("? viewportHeight + 2", code);
+        Assert.Contains("To = usesVerticalLyricsFlow ? -(textHeight + 28) : -(textWidth + 36)", code);
+        Assert.Contains("EstimateCurrentLyricTextHeight(lyric, textBlock)", code);
+        Assert.Contains("var totalTravelDistance = usesVerticalLyricsFlow", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation();", code);
+    }
+
+    [Fact]
+    public void MainWindow_HorizontalLyricsUseContinuousSingleTrack()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("GetCenterCardLyricDisplayText(position)", code);
+        Assert.Contains("_lyricsService.GetCurrentLyricSequence(position, maxLines: 6)", code);
+        Assert.Contains("_centerCardCurrentLyricDuration = _lyricsService.GetCurrentLyricDuration(position);", code);
+        Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Count > 0", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation();", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(sequence)", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.ShouldRestartMarquee(", code);
+        Assert.DoesNotContain("laneCount: usesVerticalLyricsFlow ? 1 : 3", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockNormalLyricsUseDanmakuCanvasInsteadOfPinnedText()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("CenterCardLyricMarqueeText.Visibility = Visibility.Collapsed;", code);
+        Assert.Contains("CenterCardLyricsDanmakuCanvas.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains("UpdateCenterCardLyricsDanmaku(CenterCardLyricMarqueeText.Text);", code);
+        Assert.DoesNotContain("CenterCardLyricsDanmakuCanvas.Visibility = Visibility.Collapsed;", code);
+    }
+
+    [Fact]
+    public void MainWindow_MediaRefreshReappliesLyricsAfterLyricsFetchCompletes()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var refreshedLyric = GetCenterCardLyricDisplayText(info.Position);", code);
+        Assert.Contains("_centerCardLiveMediaSnapshot = snapshot with { Lyric = refreshedLyric };", code);
+        Assert.Contains("UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));", code);
+    }
+
+    [Fact]
+    public void MainWindow_MediaRefreshCreatesLiveSnapshotFromMediaServiceWhenStrictSnapshotIsMissing()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("if (snapshot == null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)", code);
+        Assert.Contains("snapshot = new CenterCardMediaSnapshot(", code);
+        Assert.Contains("Title: info.Title ?? app.DisplayName,", code);
+        Assert.Contains("Artist: info.Artist ?? string.Empty,", code);
+        Assert.Contains("IsPlaying: info.IsPlaying,", code);
+        Assert.Contains("_centerCardLiveMediaSnapshot = snapshot;", code);
+        Assert.Contains("UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockResizeUsesVerticalDeltaForCenterCardExtent()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var delta = IsSideDockMode", code);
+        Assert.Contains("string.Equals(side, \"Top\", StringComparison.OrdinalIgnoreCase)", code);
+        Assert.Contains("e.VerticalChange * 2", code);
+        Assert.Contains("SetCenterCardWidthPercent", code);
+    }
+
+    [Fact]
+    public void MainWindow_LyricsMarqueeLoopAvoidsPerRefreshResetAndRequeuesSameLine()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("private readonly DispatcherTimer _centerCardLyricsLoopTimer;", code);
+        Assert.Contains("_centerCardLyricsLoopTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2200) };", code);
+        Assert.Contains("_centerCardLyricsLoopTimer.Tick += CenterCardLyricsLoopTimer_Tick;", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.ShouldRestartMarquee(", code);
+        Assert.DoesNotContain("if (!_isCenterCardLyricsMarqueeActive || !string.Equals(_activeCenterCardLyricText, state.PrimaryText, StringComparison.Ordinal))", code);
+        Assert.Contains("if (CenterCardLyricsDanmakuCanvas.Children.Count > 0)", code);
+        Assert.Contains("await Task.Delay(160);", code);
+        Assert.Contains("_lastDanmakuLyric = null;", code);
+        Assert.Contains("UpdateCenterCardLyricsDanmaku(CenterCardLyricMarqueeText.Text);", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockProgressUsesExternalDetailsPanelInsteadOfCrampedCapsuleProgress()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+
+        Assert.Contains("x:Name=\"CenterCardSideDetailsPanel\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSideProgressBar\"", xaml);
+        Assert.Contains("UpdateCenterCardSideDetailsOverlay(app, sideDetailsState);", code);
+        Assert.Contains("var showProgress = !IsSideDockMode", code);
+        Assert.Contains("&& _mediaDuration.TotalSeconds > 0", code);
+        Assert.Contains("CenterCardSideProgressPanel.Visibility = _mediaDuration.TotalSeconds > 0", code);
+        Assert.DoesNotContain("&& _isMusicPlaying\r\n                && _mediaDuration.TotalSeconds > 0", code);
+        Assert.Contains("CenterCardSideProgressBar.Value = Math.Clamp(percent, 0, 100);", code);
+        Assert.Contains("ReferenceEquals(sender, CenterCardSideProgressBar)", code);
+        Assert.Contains("? Math.Max(progressBar.ActualHeight, 1)", code);
+        Assert.Contains("? trackLength - e.GetPosition(progressBar).Y", code);
+    }
+
+    [Fact]
+    public void MainWindow_PlaybackModeButtonUsesMediaServiceResult()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var mediaService = ReadProjectFile("DynamicIslandBar", "MediaService.cs");
+
+        Assert.Contains("var requestedMode = (_playbackModeIndex + 1) % 4;", code);
+        Assert.Contains("var changed = await _mediaService.SetPlaybackModeAsync(requestedMode);", code);
+        Assert.Contains("? requestedMode", code);
+        Assert.Contains("case IAsyncOperation<bool> asyncOperation:", mediaService);
+        Assert.Contains("return await asyncOperation.AsTask();", mediaService);
+    }
+
+    [Fact]
+    public void MediaService_PlaybackModeMapsListAndTrackRepeatCorrectly()
+    {
+        var mediaService = ReadProjectFile("DynamicIslandBar", "MediaService.cs");
+
+        Assert.Contains("return repeatInt switch { 2 => 1, 1 => 2, _ => 0 };", mediaService);
+        Assert.Contains("case 1: // Loop All", mediaService);
+        Assert.Contains("repeatMethod.Invoke(session, CreateRepeatArgs(2))", mediaService);
+        Assert.Contains("case 2: // Loop One", mediaService);
+        Assert.Contains("repeatMethod.Invoke(session, CreateRepeatArgs(1))", mediaService);
+    }
+
+    [Fact]
+    public void MainWindow_CenterCardVolumeControlsMusicAppOnly()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("ResolveCenterCardVolumeProcessId()", code);
+        Assert.Contains("OpenCenterCardVolumePopup(sender as UIElement ?? CenterCardVolumeButton);", code);
+        Assert.Contains("CenterCardVolumeButton_MouseEnter", code);
+        Assert.Contains("CenterCardVolumeSlider.IsEnabled = vol >= 0;", code);
+        Assert.Contains("AudioService.SetAppVolume(_volumeControlAppPid, pct);", code);
+        Assert.DoesNotContain("AudioService.SetVolume(pct); // Fallback", code);
+        Assert.DoesNotContain("vol = AudioService.GetVolume(); // Fallback to system volume", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockVolumePopupKeepsDetailsOpenAndUsesVerticalSlider()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+
+        Assert.Contains("x:Name=\"CenterCardSideVolumePanel\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSideVolumeSlider\"", xaml);
+        Assert.Contains("Style=\"{StaticResource SideDockVolumeSliderStyle}\"", xaml);
+        Assert.Contains("Fill=\"#46E0FF\"", xaml);
+        Assert.Contains("ValueChanged=\"CenterCardSideVolumeSlider_ValueChanged\"", xaml);
+        Assert.Contains("Orientation=\"Vertical\"", xaml);
+        Assert.Contains("ToggleCenterCardSideVolumeSlider();", code);
+        Assert.Contains("_isCenterCardSideVolumeSliderPinned", code);
+        Assert.Contains("CenterCardSideVolumePanel.Visibility = _isCenterCardSideVolumeSliderPinned", code);
+        Assert.Contains("CenterCardSideVolumeSlider.Value = vol >= 0 ? vol : 0;", code);
+        Assert.Contains("CenterCardSideVolumeSlider_ValueChanged", code);
+        Assert.Contains("_isCenterCardSideVolumeSliderPinned = false;", code);
+        Assert.Contains("ScheduleCenterCardHoverExit();", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockHoverKeepsCapsuleInNormalLyricsMode()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var capsuleIsHovered = IsSideDockMode ? false : _isCenterCardHovered;", code);
+        Assert.Contains("var sideDetailsState = CenterCardPresentationPolicy.Build(", code);
+        Assert.Contains("CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;", code);
+        Assert.Contains("CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains("CenterCardLyricsDock.VerticalAlignment = VerticalAlignment.Stretch;", code);
+        Assert.Contains("CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;", code);
+        Assert.Contains("CenterCardLeftWave.Visibility = Visibility.Collapsed;", code);
+        Assert.Contains("CenterCardRightWave.Visibility = Visibility.Collapsed;", code);
+    }
+
+    [Fact]
+    public void MainWindow_ResizeHandlesOnlyFadeInWhileCenterCardHovered()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var targetHandleOpacity = _isCenterCardHovered ? 0.42 : 0;", code);
+        Assert.Contains("CenterCardLeftResizeHandle.Opacity = 0;", code);
+        Assert.Contains("CenterCardRightResizeHandle.Opacity = 0;", code);
+    }
+
+    [Fact]
     public void BuildAppsContextMenuState_ShowsOpenForStoppedFavoriteWithKnownPath()
     {
         var entry = new RunningAppEntry(
@@ -27,6 +229,7 @@ public class MainWindowUiLogicTests
     public void GetOverlayFrame_PlacesOverlayBesideIconWithoutChangingIconSlot()
     {
         var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Right,
             iconLeft: 120,
             iconTop: 180,
             iconWidth: 40,
@@ -44,6 +247,7 @@ public class MainWindowUiLogicTests
     public void GetOverlayFrame_ClampsOverlayInsideLayerNearRightEdge()
     {
         var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Right,
             iconLeft: 470,
             iconTop: 180,
             iconWidth: 40,
@@ -55,5 +259,36 @@ public class MainWindowUiLogicTests
 
         Assert.Equal(360, frame.Left);
         Assert.Equal(180, frame.Top);
+    }
+
+    [Fact]
+    public void GetOverlayFrame_PlacesRightDockOverlayOnCapsuleOuterLeftSide()
+    {
+        var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Left,
+            iconLeft: 470,
+            iconTop: 180,
+            iconWidth: 40,
+            iconHeight: 40,
+            overlayWidth: 84,
+            overlayHeight: 116,
+            layerWidth: 540,
+            layerHeight: 400);
+
+        Assert.Equal(380, frame.Left);
+        Assert.Equal(142, frame.Top);
+    }
+
+    private static string ReadProjectFile(params string[] pathParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null &&
+               !File.Exists(Path.Combine(directory.FullName, "DynamicIslandBar", "MainWindow.xaml")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.NotNull(directory);
+        return File.ReadAllText(Path.Combine(new[] { directory!.FullName }.Concat(pathParts).ToArray()));
     }
 }

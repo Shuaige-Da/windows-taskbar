@@ -46,7 +46,7 @@ public class VisualLayerContractTests
         Assert.DoesNotContain("CapsuleBorder.BorderBrush = CreateBrush(_currentTheme.BorderBrush)", code);
         Assert.DoesNotContain("CapsuleBorder.Background = CreateBrush(_currentTheme.CapsuleBackground)", code);
         Assert.Contains("CapsuleBorder.Background = CapsuleAppearanceMapper.BuildBackgroundBrush(_capsuleConfig.GlassOpacityPercent)", code);
-        Assert.Contains("CapsuleBorder.Effect = CapsuleAppearanceMapper.BuildShadowEffect(_capsuleConfig.ShadowPercent)", code);
+        Assert.Contains("CapsuleBorder.Effect = CapsuleAppearanceMapper.BuildShadowEffect(_capsuleConfig.Mode, _capsuleConfig.ShadowPercent)", code);
         Assert.Contains("UpdateCapsuleGlowBrush(null)", code);
         Assert.Contains("CapsuleBorder.BorderThickness = new Thickness(CapsuleAppearanceMapper.MapGlowThickness(_capsuleConfig.GlowThicknessPercent))", code);
     }
@@ -76,7 +76,8 @@ public class VisualLayerContractTests
             "AppsPanel",
             "OverflowAppsPanel",
             "PermissionPromptPanel",
-            "AppHoverOverlayBackground"
+            "AppHoverOverlayBackground",
+            "CenterCardSideDetailsChrome"
         };
 
         foreach (var surface in floatingSurfaces)
@@ -168,8 +169,9 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var capsuleHeight = CapsuleAppearanceMapper.MapCapsuleHeight(", code);
-        Assert.Contains("CapsuleBorder.BeginAnimation(HeightProperty, null);", code);
-        Assert.Contains("CapsuleBorder.Height = capsuleHeight;", code);
+        Assert.Contains("ApplyCapsuleSize(_currentLayoutMetrics.CapsuleWidth, capsuleHeight);", code);
+        Assert.Contains("CapsuleBorder.Width = IsSideDockMode ? capsuleThickness : logicalCapsuleLength;", code);
+        Assert.Contains("CapsuleBorder.Height = IsSideDockMode ? logicalCapsuleLength : capsuleThickness;", code);
         Assert.DoesNotContain("CapsuleBorder.Height = _currentLayoutMetrics.CapsuleHeight;", code);
     }
 
@@ -196,11 +198,17 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"CenterCardRightWave\"", xaml);
         Assert.Contains("x:Name=\"CenterCardTransportControls\"", xaml);
         Assert.Contains("x:Name=\"CenterCardPlayPauseButton\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardPlaybackModeIcon\" Fill=\"{x:Null}\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSidePlaybackModeIcon\" Fill=\"{x:Null}\"", xaml);
+        Assert.Contains("StrokeLineJoin=\"Round\"", xaml);
         Assert.Contains("Click=\"CenterCardPlayPause_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardPrevious_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardNext_Click\"", xaml);
         Assert.Contains("Click=\"CenterCardVolume_Click\"", xaml);
+        Assert.Contains("MouseEnter=\"CenterCardVolumeButton_MouseEnter\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardVolumePanel\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppSelectorButton\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSideAppSelectorButton\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppsPopup\"", xaml);
         Assert.Contains("x:Name=\"CenterCardAppsListPanel\"", xaml);
         Assert.Contains("x:Name=\"CenterCardLeftResizeHandle\"", xaml);
@@ -226,6 +234,7 @@ public class VisualLayerContractTests
         Assert.Contains("CenterCardAppSelector_MouseEnter", code);
         Assert.Contains("CenterCardAppsPanel_MouseLeave", code);
         Assert.Contains("OpenCenterCardAppsPopup", code);
+        Assert.Contains("CenterCardSideAppSelectorButton", code);
         Assert.Contains("RenderCenterCardAppsPanel", code);
         Assert.Contains("ClearCenterCardAppSelectorHighlight", code);
         Assert.DoesNotContain("OpenCenterCardAppSelector", code);
@@ -241,6 +250,206 @@ public class VisualLayerContractTests
         Assert.Contains("FindVisualChildren<Rectangle>(CenterCardRightWave)", code);
         Assert.Contains("ApplyCenterCardLyricsLayout", code);
         Assert.Contains("CenterCardLayoutPolicy.GetLyricsLayout", code);
+    }
+
+    [Fact]
+    public void MainWindow_DeclaresSnapPreviewLayer()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("x:Name=\"CapsuleSnapPreviewLayer\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleSnapPreviewOutline\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CodeBehind_TracksFloatingAndPreviewState()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("_activeSnapPreview", code);
+        Assert.Contains("_snapPreviewOverlayWindow", code);
+        Assert.Contains("EnsureSnapPreviewOverlayWindow(", code);
+        Assert.Contains("UpdateSnapPreview(", code);
+        Assert.Contains("ApplySnapPreview(", code);
+        Assert.Contains("ClearSnapPreview()", code);
+        Assert.Contains("CaptureFloatingPosition()", code);
+        Assert.Contains("CapsuleLayoutManager.BuildSnapPreview(", code);
+        Assert.Contains("CapsuleSnapPreviewGeometry.ComputeOutlineOrigin(", code);
+        Assert.Contains("Canvas.SetLeft(_snapPreviewOverlayOutline, screenOrigin.X);", code);
+        Assert.DoesNotContain("CapsuleGrid.PointFromScreen(", code);
+        Assert.Contains("if (_activeSnapPreview != null)", code);
+        Assert.DoesNotContain("preview.Frame.Left - Left - 10", code);
+        Assert.DoesNotContain("preview.Frame.Top - Top - 10", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockReflowsRealContentInsteadOfRotatingWholeCapsule()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var isSideDock = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
+        Assert.Contains("DockItems.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;", code);
+        Assert.Contains("AppIconsHost.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;", code);
+        Assert.Contains("SystemIconsHost.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;", code);
+        Assert.Contains("CenterCardTransportControls.Orientation = isSideDock ? Orientation.Vertical : Orientation.Horizontal;", code);
+        Assert.DoesNotContain("CapsuleBorder.LayoutTransform = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockLyricsUseVerticalMotionContract()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
+        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(lyric) : lyric", code);
+        Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
+        Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
+        Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
+        Assert.Contains("textBlock.BeginAnimation(Canvas.LeftProperty, animation);", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockCenterCardUsesVerticalContentFlow()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("DockPanel.SetDock(CenterCardLyricsIcon, Dock.Top);", code);
+        Assert.Contains("CenterCardLyricsDock.VerticalAlignment = VerticalAlignment.Stretch;", code);
+        Assert.Contains("CenterCardLyricsIcon.VerticalAlignment = VerticalAlignment.Top;", code);
+        Assert.Contains("CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;", code);
+        Assert.Contains("Grid.SetRow(ActiveAppSummaryIcon, 0);", code);
+        Assert.Contains("Grid.SetRow(CenterCardDetailsTextStack, 1);", code);
+        Assert.Contains("Grid.SetRow(CenterCardTransportControls, 2);", code);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockDetailsPopupUsesGlassCardAndVerticalProgress()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("x:Name=\"CenterCardSideDetailsPanel\"", xaml);
+        Assert.Contains("Width=\"190\"", xaml);
+        Assert.Contains("Height=\"360\"", xaml);
+        Assert.Contains("Background=\"{StaticResource HoverOverlayGlassBrush}\"", xaml);
+        Assert.Contains("ApplyGlassPanelTheme(CenterCardSideDetailsChrome)", ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs"));
+        Assert.Contains("x:Name=\"CenterCardSideVolumePanel\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSideProgressBar\"", xaml);
+        Assert.Contains("Grid.Row=\"1\"", xaml);
+        Assert.Contains("Width=\"6\"", xaml);
+        Assert.Contains("ScaleY=\"{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Value, Converter={StaticResource PercentToScaleConverter}}\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_ResizeHandleChromeUsesSubtleEdgeMountedStyle()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("Opacity=\"0\"", xaml);
+        Assert.Contains("CornerRadius=\"12\"", xaml);
+        Assert.Contains("Background=\"#34FFFFFF\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CapsuleLengthHandlesAreDeclaredOnCapsuleEdge()
+    {
+        var xaml = ReadMainWindowXaml();
+
+        Assert.Contains("x:Name=\"CapsuleStartResizeHandle\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleEndResizeHandle\"", xaml);
+        Assert.Contains("DragDelta=\"CapsuleResizeHandle_DragDelta\"", xaml);
+        Assert.Contains("DragCompleted=\"CapsuleResizeHandle_DragCompleted\"", xaml);
+        Assert.Contains("ToolTip=\"拖动调节胶囊长度\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_CapsuleLengthHandlesReuseCurrentModeLengthConfiguration()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("private void CapsuleResizeHandle_DragDelta", code);
+        Assert.Contains("SetCapsuleLengthPercentForCurrentMode(", code);
+        Assert.Contains("MapCapsuleLengthPercentForCurrentMode(", code);
+        Assert.Contains("CapsuleConfigService.Save(_capsuleConfig);", code);
+    }
+
+    [Fact]
+    public void MainWindow_CapsuleThicknessCanBeDraggedFromCapsuleEdgeWithoutVisibleHandle()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("_isResizingCapsuleThickness", code);
+        Assert.Contains("TryBeginCapsuleThicknessResize(", code);
+        Assert.Contains("UpdateCapsuleThicknessFromDrag(", code);
+        Assert.Contains("UpdateCapsuleThicknessResizeCursor(", code);
+        Assert.Contains("MapCapsuleThicknessPercent(", code);
+        Assert.Contains("CapsuleConfigMutator.SetCapsuleThicknessPercent(_capsuleConfig", code);
+        Assert.Contains("if (_isResizingCapsuleThickness)", code);
+        Assert.Contains("CapsuleBorder.Cursor = IsSideDockMode ? Cursors.SizeWE : Cursors.SizeNS;", code);
+        Assert.Contains("CapsuleBorder.ClearValue(CursorProperty);", code);
+    }
+
+    [Fact]
+    public void MainWindow_PresentationKeepsSideDockDetailsOutsideCapsule()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var stateBuildIndex = code.IndexOf("var state = CenterCardPresentationPolicy.Build(", StringComparison.Ordinal);
+        var lyricsVisibilityIndex = code.IndexOf(
+            "CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;",
+            StringComparison.Ordinal);
+        var detailsVisibilityLine = "CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;";
+        var detailsVisibilityIndex = code.IndexOf(detailsVisibilityLine, StringComparison.Ordinal);
+
+        Assert.Contains("var state = CenterCardPresentationPolicy.Build(", code);
+        Assert.Contains("var sideDetailsState = CenterCardPresentationPolicy.Build(", code);
+        Assert.Contains("CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains(detailsVisibilityLine, code);
+        Assert.Contains("UpdateCenterCardSideDetailsOverlay(app, sideDetailsState);", code);
+        Assert.True(stateBuildIndex >= 0);
+        Assert.True(lyricsVisibilityIndex > stateBuildIndex);
+        Assert.True(detailsVisibilityIndex > lyricsVisibilityIndex);
+
+        var sharedVisibilityBlock = code[stateBuildIndex..(detailsVisibilityIndex + detailsVisibilityLine.Length)];
+        Assert.DoesNotContain("preferLyricsInDetails", sharedVisibilityBlock);
+    }
+
+    [Fact]
+    public void MainWindow_SideDockRoutesPopupsAndHoverDetailsToOuterEdge()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("PopupFlowDirection.Right", code);
+        Assert.Contains("PopupFlowDirection.Left", code);
+        Assert.Contains("PlacementMode.Right", code);
+        Assert.Contains("PlacementMode.Left", code);
+        Assert.Contains("AppHoverOverlayPopup.PlacementTarget = iconHost;", code);
+        Assert.Contains("ApplyAppHoverOverlayPopupPlacement(iconHost);", code);
+        Assert.Contains("ResolveSideDockPopupDirection(_capsuleConfig.Mode)", code);
+    }
+
+    [Fact]
+    public void MainWindow_DraggingClampsCapsuleWindowInsideVisibleScreenBounds()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("CapsuleLayoutManager.ClampWindowOriginToVisibleBounds(", code);
+    }
+
+    [Fact]
+    public void GetOverlayFrame_PlacesRightDockOverlayOnCapsuleOuterLeftSide()
+    {
+        var frame = AppHoverOverlayLayoutPolicy.GetOverlayFrame(
+            PopupFlowDirection.Left,
+            iconLeft: 470,
+            iconTop: 180,
+            iconWidth: 40,
+            iconHeight: 40,
+            overlayWidth: 84,
+            overlayHeight: 116,
+            layerWidth: 540,
+            layerHeight: 400);
+
+        Assert.Equal(380, frame.Left);
+        Assert.Equal(142, frame.Top);
     }
 
     private static string ReadMainWindowXaml()

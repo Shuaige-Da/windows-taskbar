@@ -19,6 +19,18 @@ public class CenterCardLayoutPolicyTests
     }
 
     [Theory]
+    [InlineData(CapsuleMode.LeftDock)]
+    [InlineData(CapsuleMode.RightDock)]
+    public void MapWidth_UsesSameStoredRatioForSideDockModesAsTopIsland(CapsuleMode mode)
+    {
+        const double capsuleWidth = 760;
+        const int percent = 58;
+        var topWidth = CenterCardLayoutPolicy.MapWidth(CapsuleMode.TopIsland, capsuleWidth, percent);
+
+        Assert.Equal(topWidth, CenterCardLayoutPolicy.MapWidth(mode, capsuleWidth, percent), precision: 1);
+    }
+
+    [Theory]
     [InlineData(CapsuleMode.BottomTaskbar, 1920, 590.6, 58)]
     [InlineData(CapsuleMode.BottomTaskbar, 760, 233.8, 58)]
     [InlineData(CapsuleMode.TopIsland, 760, 233.8, 58)]
@@ -70,5 +82,36 @@ public class CenterCardLayoutPolicyTests
         Assert.Equal(expectedHorizontalMargin, layout.HorizontalMargin);
         Assert.Equal(expectedLeftWave, layout.ShowLeftWave);
         Assert.Equal(expectedRightWave, layout.ShowRightWave);
+    }
+
+    [Theory]
+    [InlineData(198, false, false)]
+    [InlineData(360, true, false)]
+    [InlineData(520, true, true)]
+    public void GetLyricsLayout_TogglesWaveDecorationsBasedOnAvailableExtent(
+        double centerCardExtent,
+        bool expectedLeadingWave,
+        bool expectedTrailingWave)
+    {
+        var layout = CenterCardLayoutPolicy.GetLyricsLayout(centerCardExtent);
+
+        Assert.Equal(expectedLeadingWave, layout.ShowLeftWave);
+        Assert.Equal(expectedTrailingWave, layout.ShowRightWave);
+    }
+
+    [Theory]
+    [InlineData(233.8, 320, 233.8)]
+    [InlineData(304, 320, 304)]
+    [InlineData(120, 320, 120)]
+    [InlineData(233.8, 110, 110)]
+    public void MapSideDockExtent_UsesSameConfiguredLengthUntilAvailableHeightBoundary(
+        double mappedTopLength,
+        double availableHeight,
+        double expected)
+    {
+        Assert.Equal(
+            expected,
+            CenterCardLayoutPolicy.MapSideDockExtent(mappedTopLength, availableHeight),
+            precision: 1);
     }
 }

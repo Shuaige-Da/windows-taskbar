@@ -5,8 +5,11 @@ namespace DynamicIslandBar;
 
 public enum CapsuleMode
 {
-    BottomTaskbar,
-    TopIsland
+    BottomTaskbar = 0,
+    TopIsland = 1,
+    LeftDock = 2,
+    RightDock = 3,
+    Floating = 4
 }
 
 public enum CapsuleThemePreset
@@ -19,6 +22,10 @@ public enum CapsuleThemePreset
 public sealed class CapsuleConfig
 {
     public CapsuleMode Mode { get; set; } = CapsuleMode.BottomTaskbar;
+    public double FloatingLeft { get; set; }
+    public double FloatingTop { get; set; }
+    public double LastBottomCapsuleWidth { get; set; }
+    public double LastBottomCapsuleHeight { get; set; } = 80;
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
     public HashSet<string> FavoriteApps { get; } = [];
     public HashSet<string> HiddenApps { get; } = [];
@@ -33,8 +40,10 @@ public sealed class CapsuleConfig
     public int GlowSpeedPercent { get; set; } = 58;
     public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
+    public int TopDockCapsuleLengthPercent { get; set; } = 0;
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
+    public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
 }
 
 public static class CapsuleConfigSerializer
@@ -126,6 +135,11 @@ public static class CapsuleConfigMutator
         config.CapsuleLengthPercent = ClampPercent(percent);
     }
 
+    public static void SetTopDockCapsuleLengthPercent(CapsuleConfig config, int percent)
+    {
+        config.TopDockCapsuleLengthPercent = ClampPercent(percent);
+    }
+
     public static void SetCenterCardWidthPercent(CapsuleConfig config, int percent)
     {
         config.CenterCardWidthPercent = ClampPercent(percent);
@@ -134,6 +148,11 @@ public static class CapsuleConfigMutator
     public static void SetCenterCardApp(CapsuleConfig config, string? appId)
     {
         config.CenterCardAppId = string.IsNullOrWhiteSpace(appId) ? null : appId;
+    }
+
+    public static void SetLyricLanguage(CapsuleConfig config, LyricLanguage language)
+    {
+        config.LyricLanguage = language;
     }
 
     private static int ClampPercent(int percent)
@@ -182,6 +201,10 @@ public static class CapsuleConfigService
 internal sealed class CapsuleConfigStore
 {
     public CapsuleMode Mode { get; set; } = CapsuleMode.BottomTaskbar;
+    public double FloatingLeft { get; set; }
+    public double FloatingTop { get; set; }
+    public double LastBottomCapsuleWidth { get; set; }
+    public double LastBottomCapsuleHeight { get; set; } = 80;
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
     public List<string> FavoriteApps { get; set; } = [];
     public List<string> HiddenApps { get; set; } = [];
@@ -196,14 +219,20 @@ internal sealed class CapsuleConfigStore
     public int GlowSpeedPercent { get; set; } = 58;
     public int CapsuleThicknessPercent { get; set; } = 100;
     public int CapsuleLengthPercent { get; set; } = 100;
+    public int TopDockCapsuleLengthPercent { get; set; } = 0;
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
+    public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
 
     public CapsuleConfig ToConfig()
     {
         var config = new CapsuleConfig
         {
             Mode = Mode,
+            FloatingLeft = FloatingLeft,
+            FloatingTop = FloatingTop,
+            LastBottomCapsuleWidth = LastBottomCapsuleWidth,
+            LastBottomCapsuleHeight = LastBottomCapsuleHeight,
             ThemePreset = ThemePreset,
             BackgroundImagePath = BackgroundImagePath,
             BackgroundImageOpacity = BackgroundImageOpacity,
@@ -215,8 +244,10 @@ internal sealed class CapsuleConfigStore
             GlowSpeedPercent = ClampPercent(GlowSpeedPercent),
             CapsuleThicknessPercent = ClampPercent(CapsuleThicknessPercent),
             CapsuleLengthPercent = ClampPercent(CapsuleLengthPercent),
+            TopDockCapsuleLengthPercent = ClampPercent(TopDockCapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(CenterCardWidthPercent),
-            CenterCardAppId = CenterCardAppId
+            CenterCardAppId = CenterCardAppId,
+            LyricLanguage = LyricLanguage
         };
 
         foreach (var appId in FavoriteApps)
@@ -242,6 +273,10 @@ internal sealed class CapsuleConfigStore
         return new CapsuleConfigStore
         {
             Mode = config.Mode,
+            FloatingLeft = config.FloatingLeft,
+            FloatingTop = config.FloatingTop,
+            LastBottomCapsuleWidth = config.LastBottomCapsuleWidth,
+            LastBottomCapsuleHeight = config.LastBottomCapsuleHeight,
             ThemePreset = config.ThemePreset,
             FavoriteApps = [.. config.FavoriteApps.Order(StringComparer.OrdinalIgnoreCase)],
             HiddenApps = [.. config.HiddenApps.Order(StringComparer.OrdinalIgnoreCase)],
@@ -256,8 +291,10 @@ internal sealed class CapsuleConfigStore
             GlowSpeedPercent = ClampPercent(config.GlowSpeedPercent),
             CapsuleThicknessPercent = ClampPercent(config.CapsuleThicknessPercent),
             CapsuleLengthPercent = ClampPercent(config.CapsuleLengthPercent),
+            TopDockCapsuleLengthPercent = ClampPercent(config.TopDockCapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(config.CenterCardWidthPercent),
-            CenterCardAppId = config.CenterCardAppId
+            CenterCardAppId = config.CenterCardAppId,
+            LyricLanguage = config.LyricLanguage
         };
     }
 
