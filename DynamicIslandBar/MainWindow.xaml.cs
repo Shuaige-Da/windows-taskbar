@@ -105,6 +105,9 @@ namespace DynamicIslandBar
         private bool _isCenterCardLyricsMarqueeActive;
         private string? _activeCenterCardLyricText;
         private TimeSpan _centerCardCurrentLyricDuration = TimeSpan.Zero;
+        private Color _lyricPrimaryColor = Colors.White;
+        private Color _lyricHighlightColor = Color.FromRgb(255, 240, 184);
+        private byte[]? _lastCoverBytes;
         private int _playbackModeIndex;
         private IReadOnlyList<LocalInstalledApp> _installedApps = [];
         private bool _installedAppsLoaded;
@@ -1106,6 +1109,31 @@ namespace DynamicIslandBar
             _centerCardLiveMediaSnapshot = snapshot;
             UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
 
+            // Extract cover colors for lyrics theming
+            if (_mediaService != null && snapshot != null && snapshot.IsMusicApp)
+            {
+                try
+                {
+                    var coverBytes = await _mediaService.GetThumbnailBytesAsync();
+                    if (coverBytes != null && coverBytes.Length > 0
+                        && (_lastCoverBytes == null || !_lastCoverBytes.SequenceEqual(coverBytes)))
+                    {
+                        _lastCoverBytes = coverBytes;
+                        var bitmap = LoadBitmapFromBytes(coverBytes);
+                        if (bitmap != null)
+                        {
+                            var palette = CoverColorExtractor.ExtractColors(bitmap, 3);
+                            if (palette.Count >= 2)
+                            {
+                                _lyricPrimaryColor = palette[0];
+                                _lyricHighlightColor = palette[1];
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
             if (snapshot == null)
             {
                 System.Diagnostics.Debug.WriteLine($"[MediaRefresh] No snapshot for '{app.DisplayName}' (AUMID={app.AppId})");
@@ -1464,6 +1492,22 @@ namespace DynamicIslandBar
             _autoHideTimer.Start();
         }
 
+        private static BitmapImage? LoadBitmapFromBytes(byte[] bytes)
+        {
+            try
+            {
+                var bitmap = new BitmapImage();
+                using var ms = new MemoryStream(bytes);
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.StreamSource = ms;
+                bitmap.EndInit();
+                bitmap.Freeze();
+                return bitmap;
+            }
+            catch { return null; }
+        }
+
         private void FadeCapsuleTo(double targetOpacity)
         {
             var animation = new DoubleAnimation
@@ -1472,7 +1516,9 @@ namespace DynamicIslandBar
                 Duration = TimeSpan.FromMilliseconds(220),
                 EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
             };
-            CapsuleGrid.BeginAnimation(OpacityProperty, animation);
+            // Animate capsule background and system icons, but NOT CenterCardSlot (lyrics stay visible)
+            CapsuleBorder.BeginAnimation(OpacityProperty, animation);
+            SystemIconsHost.BeginAnimation(OpacityProperty, animation);
         }
 
         private static bool TryGetCursorScreenPoint(out Point point)
@@ -2005,6 +2051,7 @@ namespace DynamicIslandBar
             ActiveAppSummaryTitle.Text = state.PrimaryText;
             ActiveAppSummarySubtitle.Text = state.SecondaryText;
             CenterCardLyricMarqueeText.Text = state.PrimaryText;
+            CenterCardLyricMarqueeText.Foreground = new SolidColorBrush(_lyricPrimaryColor);
             CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
             CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;
             CenterCardLyricMarqueeText.Visibility = Visibility.Collapsed;
@@ -2247,11 +2294,18 @@ namespace DynamicIslandBar
                 var textBlock = new TextBlock
                 {
                     Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(lyric) : lyric,
-                    Foreground = Brushes.White,
+                    Foreground = new SolidColorBrush(_lyricPrimaryColor),
                     FontSize = 20,
                     FontWeight = FontWeights.SemiBold,
-                    Opacity = 0.94,
-                    TextTrimming = TextTrimming.None
+                    Opacity = 1.0,
+                    TextTrimming = TextTrimming.None,
+                    Effect = new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        Color = _lyricHighlightColor,
+                        BlurRadius = 12,
+                        ShadowDepth = 0,
+                        Opacity = 0.6
+                    }
                 };
                 textBlock.TextWrapping = TextWrapping.NoWrap;
                 textBlock.TextAlignment = usesVerticalLyricsFlow ? TextAlignment.Center : TextAlignment.Left;
