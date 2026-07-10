@@ -165,51 +165,51 @@ public class LyricsService
             {
                 for (int attempt = 0; attempt <= MaxRetries; attempt++)
                 {
-                try
-                {
-                    var response = await HttpClient.GetAsync(url, ct);
-                    if (!response.IsSuccessStatusCode)
-                        break;
-
-                    var json = await response.Content.ReadAsStringAsync(ct);
-                    using var doc = JsonDocument.Parse(json);
-
-                    foreach (var item in doc.RootElement.EnumerateArray())
+                    try
                     {
-                        var dur = item.TryGetProperty("duration", out var durProp) ? durProp.GetDouble() : 0;
-                        var diff = duration.TotalSeconds > 0 ? Math.Abs(dur - duration.TotalSeconds) : 0;
+                        var response = await HttpClient.GetAsync(url, ct);
+                        if (!response.IsSuccessStatusCode)
+                            break;
 
-                        if (item.TryGetProperty("syncedLyrics", out var syncedProp))
+                        var json = await response.Content.ReadAsStringAsync(ct);
+                        using var doc = JsonDocument.Parse(json);
+
+                        foreach (var item in doc.RootElement.EnumerateArray())
                         {
-                            var synced = syncedProp.GetString();
-                            if (!string.IsNullOrWhiteSpace(synced) && (bestSyncedLrc == null || diff < bestSyncedDiff))
+                            var dur = item.TryGetProperty("duration", out var durProp) ? durProp.GetDouble() : 0;
+                            var diff = duration.TotalSeconds > 0 ? Math.Abs(dur - duration.TotalSeconds) : 0;
+
+                            if (item.TryGetProperty("syncedLyrics", out var syncedProp))
                             {
-                                bestSyncedLrc = synced;
-                                bestSyncedDiff = diff;
+                                var synced = syncedProp.GetString();
+                                if (!string.IsNullOrWhiteSpace(synced) && (bestSyncedLrc == null || diff < bestSyncedDiff))
+                                {
+                                    bestSyncedLrc = synced;
+                                    bestSyncedDiff = diff;
+                                }
                             }
-                        }
 
-                        if (bestSyncedLrc == null && item.TryGetProperty("plainLyrics", out var plainProp))
-                        {
-                            var plain = plainProp.GetString();
-                            if (!string.IsNullOrWhiteSpace(plain) && (bestPlain == null || diff < bestPlainDiff))
+                            if (bestSyncedLrc == null && item.TryGetProperty("plainLyrics", out var plainProp))
                             {
-                                bestPlain = plain;
-                                bestPlainDiff = diff;
+                                var plain = plainProp.GetString();
+                                if (!string.IsNullOrWhiteSpace(plain) && (bestPlain == null || diff < bestPlainDiff))
+                                {
+                                    bestPlain = plain;
+                                    bestPlainDiff = diff;
+                                }
                             }
                         }
                     }
-                }
-                catch
-                {
-                    if (attempt < MaxRetries)
+                    catch
                     {
-                        await Task.Delay(1000 * (attempt + 1), ct);
-                        continue;
+                        if (attempt < MaxRetries)
+                        {
+                            await Task.Delay(1000 * (attempt + 1), ct);
+                            continue;
+                        }
                     }
+                    break; // success or exhausted retries
                 }
-                break; // success or exhausted retries
-                } // for attempt
             }
 
             if (bestSyncedLrc != null)
@@ -437,11 +437,6 @@ public class LyricsService
             }
         }
         return result;
-    }
-
-    private void ParseLrc(string lrcText)
-    {
-        _parsedLyrics = ParseLrcLines(lrcText);
     }
 
     /// <summary>

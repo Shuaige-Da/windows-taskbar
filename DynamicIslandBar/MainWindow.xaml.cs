@@ -105,9 +105,8 @@ namespace DynamicIslandBar
         private bool _isCenterCardLyricsMarqueeActive;
         private string? _activeCenterCardLyricText;
         private TimeSpan _centerCardCurrentLyricDuration = TimeSpan.Zero;
-        private Color _lyricPrimaryColor = Colors.White;
-        private Color _lyricHighlightColor = Color.FromRgb(255, 240, 184);
-        private byte[]? _lastCoverBytes;
+        private Color _lyricPrimaryColor = Color.FromRgb(0x46, 0xE0, 0xFF); // capsule glow cyan
+        private Color _lyricHighlightColor = Color.FromRgb(0xFF, 0x4F, 0xA3); // capsule glow pink
         private int _playbackModeIndex;
         private IReadOnlyList<LocalInstalledApp> _installedApps = [];
         private bool _installedAppsLoaded;
@@ -1109,31 +1108,6 @@ namespace DynamicIslandBar
             _centerCardLiveMediaSnapshot = snapshot;
             UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
 
-            // Extract cover colors for lyrics theming
-            if (_mediaService != null && snapshot != null && snapshot.IsMusicApp)
-            {
-                try
-                {
-                    var coverBytes = await _mediaService.GetThumbnailBytesAsync();
-                    if (coverBytes != null && coverBytes.Length > 0
-                        && (_lastCoverBytes == null || !_lastCoverBytes.SequenceEqual(coverBytes)))
-                    {
-                        _lastCoverBytes = coverBytes;
-                        var bitmap = LoadBitmapFromBytes(coverBytes);
-                        if (bitmap != null)
-                        {
-                            var palette = CoverColorExtractor.ExtractColors(bitmap, 3);
-                            if (palette.Count >= 2)
-                            {
-                                _lyricPrimaryColor = palette[0];
-                                _lyricHighlightColor = palette[1];
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
-
             if (snapshot == null)
             {
                 System.Diagnostics.Debug.WriteLine($"[MediaRefresh] No snapshot for '{app.DisplayName}' (AUMID={app.AppId})");
@@ -1490,22 +1464,6 @@ namespace DynamicIslandBar
         {
             _autoHideTimer.Stop();
             _autoHideTimer.Start();
-        }
-
-        private static BitmapImage? LoadBitmapFromBytes(byte[] bytes)
-        {
-            try
-            {
-                var bitmap = new BitmapImage();
-                using var ms = new MemoryStream(bytes);
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.StreamSource = ms;
-                bitmap.EndInit();
-                bitmap.Freeze();
-                return bitmap;
-            }
-            catch { return null; }
         }
 
         private void FadeCapsuleTo(double targetOpacity)
@@ -2054,6 +2012,7 @@ namespace DynamicIslandBar
             CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;
             CenterCardLyricMarqueeText.Visibility = Visibility.Collapsed;
             CenterCardLyricsDanmakuCanvas.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
+
             CenterCardTransportControls.Visibility = !IsSideDockMode && state.ShowTransportControls ? Visibility.Visible : Visibility.Collapsed;
 
             // Show progress panel when music app + hovered + timeline available.
@@ -2300,9 +2259,9 @@ namespace DynamicIslandBar
                     Effect = new System.Windows.Media.Effects.DropShadowEffect
                     {
                         Color = _lyricHighlightColor,
-                        BlurRadius = 12,
+                        BlurRadius = 16,
                         ShadowDepth = 0,
-                        Opacity = 0.6
+                        Opacity = 0.8
                     }
                 };
                 textBlock.TextWrapping = TextWrapping.NoWrap;
@@ -5046,3 +5005,5 @@ namespace DynamicIslandBar
         }
     }
 }
+
+

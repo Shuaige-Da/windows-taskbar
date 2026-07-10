@@ -582,6 +582,59 @@
                                       Data="M0,0 L5,5 L10,0"/>
                             </Border>
 
+                            <Grid x:Name="CenterCardLyricsLayer"
+                                  Margin="42,0"
+                                  Visibility="Collapsed"
+                                  ClipToBounds="True">
+                                <DockPanel x:Name="CenterCardLyricsDock"
+                                           LastChildFill="True"
+                                           VerticalAlignment="Center">
+                                    <ContentControl x:Name="CenterCardLyricsIcon"
+                                                    Width="28"
+                                                    Height="28"
+                                                    DockPanel.Dock="Left"
+                                                    VerticalAlignment="Center"/>
+                                    <StackPanel x:Name="CenterCardLeftWave"
+                                                Orientation="Horizontal"
+                                                DockPanel.Dock="Left"
+                                                Height="24"
+                                                Margin="10,0,10,0"
+                                                VerticalAlignment="Center">
+                                        <Rectangle Width="3" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="#4AF07A" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="24" RadiusX="1.5" RadiusY="1.5" Fill="#FF5DBB" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="CenterCardRightWave"
+                                                Orientation="Horizontal"
+                                                DockPanel.Dock="Right"
+                                                Height="24"
+                                                Margin="10,0,0,0"
+                                                VerticalAlignment="Center">
+                                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="24" RadiusX="1.5" RadiusY="1.5" Fill="#FF5DBB" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="#4AF07A" Margin="2,0"/>
+                                        <Rectangle Width="3" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
+                                    </StackPanel>
+                                    <Grid x:Name="CenterCardLyricsViewport" ClipToBounds="True">
+                                        <TextBlock x:Name="CenterCardLyricMarqueeText"
+                                                    Text=""
+                                                    Foreground="White"
+                                                    FontSize="21"
+                                                    FontWeight="SemiBold"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="NoWrap"
+                                                    Visibility="Collapsed">
+                                            <TextBlock.RenderTransform>
+                                                <TranslateTransform x:Name="CenterCardLyricMarqueeTranslate"/>
+                                            </TextBlock.RenderTransform>
+                                        </TextBlock>
+                                        <Canvas x:Name="CenterCardLyricsDanmakuCanvas"
+                                                IsHitTestVisible="False"/>
+                                    </Grid>
+                                </DockPanel>
+                            </Grid>
+
                             <Grid x:Name="CenterCardDetailsLayer"
                                   Margin="38,0"
                                   Visibility="Collapsed">
@@ -1402,64 +1455,6 @@
                     </UniformGrid>
                 </StackPanel>
             </Border>
-
-            <!-- Lyrics layer: direct child of CapsuleGrid, NOT inside CapsuleBorder
-                 so it's not affected by CapsuleBorder.Opacity animation -->
-            <Grid x:Name="CenterCardLyricsLayer"
-                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                  Width="500" Height="44"
-                  Margin="18,0"
-                  Visibility="Collapsed"
-                  ClipToBounds="True"
-                  Panel.ZIndex="10">
-                <DockPanel x:Name="CenterCardLyricsDock"
-                           LastChildFill="True"
-                           VerticalAlignment="Center">
-                    <ContentControl x:Name="CenterCardLyricsIcon"
-                                    Width="28"
-                                    Height="28"
-                                    DockPanel.Dock="Left"
-                                    VerticalAlignment="Center"/>
-                    <StackPanel x:Name="CenterCardLeftWave"
-                                Orientation="Horizontal"
-                                DockPanel.Dock="Left"
-                                Height="24"
-                                Margin="10,0,10,0"
-                                VerticalAlignment="Center">
-                        <Rectangle Width="3" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
-                        <Rectangle Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="#4AF07A" Margin="2,0"/>
-                        <Rectangle Width="3" Height="24" RadiusX="1.5" RadiusY="1.5" Fill="#FF5DBB" Margin="2,0"/>
-                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
-                    </StackPanel>
-                    <StackPanel x:Name="CenterCardRightWave"
-                                Orientation="Horizontal"
-                                DockPanel.Dock="Right"
-                                Height="24"
-                                Margin="10,0,0,0"
-                                VerticalAlignment="Center">
-                        <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
-                        <Rectangle Width="3" Height="24" RadiusX="1.5" RadiusY="1.5" Fill="#FF5DBB" Margin="2,0"/>
-                        <Rectangle Width="3" Height="18" RadiusX="1.5" RadiusY="1.5" Fill="#4AF07A" Margin="2,0"/>
-                        <Rectangle Width="3" Height="10" RadiusX="1.5" RadiusY="1.5" Fill="#58E7FF" Margin="2,0"/>
-                    </StackPanel>
-                    <Grid x:Name="CenterCardLyricsViewport" ClipToBounds="True">
-                        <TextBlock x:Name="CenterCardLyricMarqueeText"
-                                    Text=""
-                                    Foreground="White"
-                                    FontSize="21"
-                                    FontWeight="SemiBold"
-                                    VerticalAlignment="Center"
-                                    TextWrapping="NoWrap"
-                                    Visibility="Collapsed">
-                            <TextBlock.RenderTransform>
-                                <TranslateTransform x:Name="CenterCardLyricMarqueeTranslate"/>
-                            </TextBlock.RenderTransform>
-                        </TextBlock>
-                        <Canvas x:Name="CenterCardLyricsDanmakuCanvas"
-                                IsHitTestVisible="False"/>
-                    </Grid>
-                </DockPanel>
-            </Grid>
 
         </Grid>
     </Grid>
