@@ -1516,9 +1516,7 @@ namespace DynamicIslandBar
                 Duration = TimeSpan.FromMilliseconds(220),
                 EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
             };
-            // Animate capsule background and system icons, but NOT CenterCardSlot (lyrics stay visible)
-            CapsuleBorder.BeginAnimation(OpacityProperty, animation);
-            SystemIconsHost.BeginAnimation(OpacityProperty, animation);
+            CapsuleGrid.BeginAnimation(OpacityProperty, animation);
         }
 
         private static bool TryGetCursorScreenPoint(out Point point)
