@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace DynamicIslandBar;
 
@@ -24,11 +25,24 @@ public partial class CapsuleControlCenterWindow : Window
     private sealed record ControlCenterThemeColors(
         Color Accent,
         Color Muted,
-        Color Surface,
-        Color Overlay,
-        Color Sidebar,
-        Color Card,
-        Color CardBorder);
+        Color Overlay);
+
+    private sealed record SectionDescriptor(string Key, string Title, string IconGlyph, FrameworkElement Target);
+
+    private sealed record FeatureSearchEntry(
+        string Title,
+        string Keywords,
+        string PageKey,
+        string SectionKey)
+    {
+        public string Location => $"{PageMetadata[PageKey].Title} / {Title}";
+    }
+
+    private static readonly Uri DefaultLandscapeUri = new(
+        "pack://application:,,,/DynamicIslandBar;component/Assets/ControlCenter-DefaultLandscape.png",
+        UriKind.Absolute);
+
+    private static ImageSource? _defaultLandscapeSource;
 
     private static readonly IReadOnlyDictionary<string, (string Title, string Subtitle)> PageMetadata =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
@@ -51,10 +65,31 @@ public partial class CapsuleControlCenterWindow : Window
             [CapsuleVisualPart.MediaControls] = "媒体控制区"
         };
 
+    private static readonly IReadOnlyList<FeatureSearchEntry> FeatureSearchCatalog =
+    [
+        new("主题预设", "经典 玻璃 绿色 浅色 外观 theme", "Theme", "ThemePresets"),
+        new("实时预览", "胶囊 主题 预览 preview", "Theme", "ThemePreview"),
+        new("控制中心背景", "主页 山水 自定义 透明 图片", "Theme", "ControlCenterBackground"),
+        new("胶囊背景", "胶囊 图片 透明度 填充", "Theme", "CapsuleBackground"),
+        new("系统", "开机自启 启动 控制中心", "Settings", "System"),
+        new("外观", "透明度 阴影 粗细 长度 中心卡片", "Settings", "Appearance"),
+        new("流光", "亮度 粗细 速度 跑马灯", "Settings", "Glow"),
+        new("歌词", "语言 简体 繁体", "Settings", "Lyrics"),
+        new("功能区域", "显示 自动隐藏 透明度 Dock 系统 歌词 详情 媒体", "Settings", "Presentation"),
+        new("配置管理", "导出 导入 恢复默认 备份", "Settings", "Configuration"),
+        new("版本信息", ".NET 系统 架构 版本", "Version", "VersionInfo"),
+        new("诊断中心", "日志 复制 清理 诊断", "Version", "Diagnostics"),
+        new("文字反馈", "建议 问题 功能 反馈", "Feedback", "FeedbackText"),
+        new("图片附件", "上传 图片 拖入 截图", "Feedback", "FeedbackAttachments")
+    ];
+
     private readonly CapsuleSettingsCoordinator _settings;
     private readonly FeedbackDraft _feedbackDraft = new();
     private readonly ApplicationVersionInfo _versionInfo;
     private bool _isInitializing;
+    private bool _isProgrammaticScroll;
+    private string _currentPageKey = "Theme";
+    private string? _selectedSectionKey;
 
     internal CapsuleControlCenterWindow(
         CapsuleConfig config,
@@ -164,6 +199,7 @@ public partial class CapsuleControlCenterWindow : Window
 
     private void ShowPage(string pageKey)
     {
+        _currentPageKey = pageKey;
         ThemePage.Visibility = pageKey == "Theme" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = pageKey == "Settings" ? Visibility.Visible : Visibility.Collapsed;
         VersionPage.Visibility = pageKey == "Version" ? Visibility.Visible : Visibility.Collapsed;
@@ -178,14 +214,154 @@ public partial class CapsuleControlCenterWindow : Window
         foreach (var button in new[] { ThemeNavButton, SettingsNavButton, VersionNavButton, FeedbackNavButton })
         {
             var selected = string.Equals(button.Tag as string, pageKey, StringComparison.Ordinal);
-            var accent = GetThemeAccentColor();
-            button.Background = new SolidColorBrush(selected
-                ? Color.FromArgb(0x58, accent.R, accent.G, accent.B)
-                : Colors.Transparent);
-            button.BorderBrush = new SolidColorBrush(selected
-                ? Color.FromArgb(0xB8, accent.R, accent.G, accent.B)
-                : Colors.Transparent);
-            button.Foreground = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0xC8, 0xD4, 0xE4));
+            button.Background = selected
+                ? (Brush)FindResource("GlassPillBrush")
+                : Brushes.Transparent;
+            button.BorderBrush = selected
+                ? (Brush)FindResource("GlassPillBorderBrush")
+                : Brushes.Transparent;
+            button.Foreground = selected
+                ? new SolidColorBrush(Color.FromRgb(0x2D, 0x72, 0xC7))
+                : new SolidColorBrush(Color.FromRgb(0x36, 0x53, 0x6F));
+        }
+
+        BuildTopSectionNavigation(pageKey);
+    }
+
+    private IReadOnlyList<SectionDescriptor> GetSections(string pageKey) => pageKey switch
+    {
+        "Theme" =>
+        [
+            new("ThemePresets", "主题预设", "\uE790", ThemePresetsSection),
+            new("ThemePreview", "实时预览", "\uE7B3", ThemePreviewSection),
+            new("ControlCenterBackground", "控制中心背景", "\uE91B", ControlCenterBackgroundSection),
+            new("CapsuleBackground", "胶囊背景", "\uE91B", CapsuleBackgroundSection)
+        ],
+        "Settings" =>
+        [
+            new("System", "系统", "\uE713", SystemSection),
+            new("Appearance", "外观", "\uE771", AppearanceSection),
+            new("Glow", "流光", "\uE706", GlowSection),
+            new("Lyrics", "歌词", "\uE8D6", LyricsSection),
+            new("Presentation", "功能区域", "\uECA5", PresentationSection),
+            new("Configuration", "配置管理", "\uE8B7", ConfigurationSection)
+        ],
+        "Version" =>
+        [
+            new("VersionInfo", "版本信息", "\uE946", VersionInfoSection),
+            new("Diagnostics", "诊断中心", "\uE9D9", DiagnosticsSection)
+        ],
+        "Feedback" =>
+        [
+            new("FeedbackText", "文字反馈", "\uE8BD", FeedbackTextSection),
+            new("FeedbackAttachments", "图片附件", "\uEB9F", FeedbackDropZone)
+        ],
+        _ => []
+    };
+
+    private void BuildTopSectionNavigation(string pageKey)
+    {
+        TopSectionNavigationPanel.Children.Clear();
+        foreach (var section in GetSections(pageKey))
+        {
+            var icon = new TextBlock
+            {
+                Text = section.IconGlyph,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 15,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var label = new TextBlock
+            {
+                Text = section.Title,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(icon);
+            content.Children.Add(label);
+            var button = new Button
+            {
+                Tag = section.Key,
+                Content = content,
+                Style = (Style)FindResource("TopSectionButtonStyle")
+            };
+            button.Click += TopSectionButton_Click;
+            TopSectionNavigationPanel.Children.Add(button);
+        }
+
+        SelectTopSection(GetSections(pageKey).FirstOrDefault()?.Key);
+    }
+
+    private void TopSectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string sectionKey })
+        {
+            ScrollToSection(_currentPageKey, sectionKey);
+        }
+    }
+
+    private ScrollViewer GetPageScrollViewer(string pageKey) => pageKey switch
+    {
+        "Settings" => SettingsPage,
+        "Version" => VersionPage,
+        "Feedback" => FeedbackPage,
+        _ => ThemePage
+    };
+
+    private void ScrollToSection(string pageKey, string sectionKey)
+    {
+        var section = GetSections(pageKey).FirstOrDefault(item => item.Key == sectionKey);
+        var scrollViewer = GetPageScrollViewer(pageKey);
+        if (section is null || scrollViewer.Content is not FrameworkElement content)
+        {
+            return;
+        }
+
+        _isProgrammaticScroll = true;
+        var y = section.Target.TranslatePoint(new Point(0, 0), content).Y;
+        scrollViewer.ScrollToVerticalOffset(Math.Max(0, y - 4));
+        SelectTopSection(sectionKey);
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () => _isProgrammaticScroll = false);
+    }
+
+    private void PageScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (_isProgrammaticScroll || sender is not ScrollViewer scrollViewer || scrollViewer.Visibility != Visibility.Visible
+            || scrollViewer.Content is not FrameworkElement content)
+        {
+            return;
+        }
+
+        var sections = GetSections(_currentPageKey);
+        var selected = sections.FirstOrDefault();
+        foreach (var section in sections)
+        {
+            var y = section.Target.TranslatePoint(new Point(0, 0), content).Y;
+            if (y <= scrollViewer.VerticalOffset + 36)
+            {
+                selected = section;
+            }
+        }
+        SelectTopSection(selected?.Key);
+    }
+
+    private void SelectTopSection(string? sectionKey)
+    {
+        _selectedSectionKey = sectionKey;
+        foreach (var button in TopSectionNavigationPanel.Children.OfType<Button>())
+        {
+            var selected = string.Equals(button.Tag as string, sectionKey, StringComparison.Ordinal);
+            button.Background = selected
+                ? (Brush)FindResource("GlassPillBrush")
+                : Brushes.Transparent;
+            button.BorderBrush = selected
+                ? (Brush)FindResource("GlassPillBorderBrush")
+                : Brushes.Transparent;
+            button.BorderThickness = selected ? new Thickness(1) : new Thickness(0);
+            button.Foreground = new SolidColorBrush(selected
+                ? Color.FromRgb(0x2D, 0x72, 0xC7)
+                : Color.FromRgb(0x31, 0x4C, 0x68));
         }
     }
 
@@ -201,6 +377,90 @@ public partial class CapsuleControlCenterWindow : Window
         ApplyControlCenterTheme();
         UpdateThemeSelection();
         ShowPage("Theme");
+    }
+
+    private void SearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        FeatureSearchPopup.IsOpen = true;
+        FeatureSearchTextBox.Text = string.Empty;
+        RefreshFeatureSearchResults();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, FeatureSearchTextBox.Focus);
+    }
+
+    private void FeatureSearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        RefreshFeatureSearchResults();
+    }
+
+    private void RefreshFeatureSearchResults()
+    {
+        if (FeatureSearchResultsList is null || FeatureSearchTextBox is null)
+        {
+            return;
+        }
+
+        var query = FeatureSearchTextBox.Text.Trim();
+        var results = FeatureSearchCatalog
+            .Where(entry => query.Length == 0
+                || entry.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || entry.Keywords.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || PageMetadata[entry.PageKey].Title.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        FeatureSearchResultsList.ItemsSource = results;
+        FeatureSearchEmptyText.Visibility = results.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        FeatureSearchResultsList.SelectedIndex = results.Count > 0 ? 0 : -1;
+    }
+
+    private void FeatureSearchTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            FeatureSearchPopup.IsOpen = false;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
+        {
+            ActivateSelectedSearchResult();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Down && FeatureSearchResultsList.Items.Count > 0)
+        {
+            FeatureSearchResultsList.Focus();
+            e.Handled = true;
+        }
+    }
+
+    private void FeatureSearchResultsList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            ActivateSelectedSearchResult();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            FeatureSearchPopup.IsOpen = false;
+            e.Handled = true;
+        }
+    }
+
+    private void FeatureSearchResultsList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        ActivateSelectedSearchResult();
+    }
+
+    private void ActivateSelectedSearchResult()
+    {
+        if (FeatureSearchResultsList.SelectedItem is not FeatureSearchEntry entry)
+        {
+            return;
+        }
+
+        FeatureSearchPopup.IsOpen = false;
+        ShowPage(entry.PageKey);
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Loaded,
+            () => ScrollToSection(entry.PageKey, entry.SectionKey));
     }
 
     private void RefreshSettingsFromConfig()
@@ -433,16 +693,24 @@ public partial class CapsuleControlCenterWindow : Window
 
     private void UpdateThemeSelection()
     {
-        foreach (var button in new[] { ClassicThemeButton, GreenThemeButton, LightThemeButton })
+        var cards = new[]
+        {
+            (Button: ClassicThemeButton, Badge: ClassicThemeCheckBadge),
+            (Button: GreenThemeButton, Badge: GreenThemeCheckBadge),
+            (Button: LightThemeButton, Badge: LightThemeCheckBadge)
+        };
+        foreach (var card in cards)
         {
             var selected = string.Equals(
-                button.Tag as string,
+                card.Button.Tag as string,
                 _settings.Config.ThemePreset.ToString(),
                 StringComparison.Ordinal);
-            button.BorderBrush = new SolidColorBrush(selected
-                ? GetThemeAccentColor()
-                : Color.FromRgb(0x34, 0x4B, 0x65));
-            button.BorderThickness = new Thickness(selected ? 2 : 1);
+            card.Button.BorderBrush = selected
+                ? new SolidColorBrush(Color.FromRgb(0x4D, 0x8C, 0xFF))
+                : (Brush)FindResource("CardBorderBrush");
+            card.Button.BorderThickness = new Thickness(selected ? 2 : 1);
+            card.Badge.Background = new SolidColorBrush(Color.FromRgb(0x4D, 0x8C, 0xFF));
+            card.Badge.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
@@ -457,22 +725,68 @@ public partial class CapsuleControlCenterWindow : Window
             ? LoadThumbnail(config.BackgroundImagePath!)
             : null;
 
-        var hasControlCenterImage = CapsuleBackgroundImagePolicy.IsSupportedImagePath(
+        var mode = config.ControlCenterBackgroundMode;
+        var customImageIsValid = CapsuleBackgroundImagePolicy.IsSupportedImagePath(
             config.ControlCenterBackgroundImagePath);
-        ControlCenterBackgroundImageFileNameText.Text = hasControlCenterImage
-            ? Path.GetFileName(config.ControlCenterBackgroundImagePath)
-            : "透明玻璃（无图片）";
-        ControlCenterBackgroundImagePreview.Source = hasControlCenterImage
-            ? LoadThumbnail(config.ControlCenterBackgroundImagePath!)
-            : null;
-        ControlCenterBackgroundImage.Source = hasControlCenterImage
-            ? TryLoadControlCenterBackground(config.ControlCenterBackgroundImagePath!)
-            : null;
-        ControlCenterBackgroundImage.Opacity = hasControlCenterImage
-            ? Math.Clamp(config.ControlCenterBackgroundImageOpacity, 0d, 1d)
-            : 0d;
-        ControlCenterBackgroundImage.Stretch = CapsuleBackgroundImagePolicy.MapStretch(
-            config.ControlCenterBackgroundImageStretchMode);
+        var defaultLandscape = LoadDefaultLandscape();
+        ImageSource? effectiveSource;
+        Stretch effectiveStretch;
+        string fileName;
+        string status;
+        var statusIsSuccess = true;
+        switch (mode)
+        {
+            case ControlCenterBackgroundMode.CustomImage when customImageIsValid:
+                effectiveSource = TryLoadControlCenterBackground(config.ControlCenterBackgroundImagePath!);
+                effectiveStretch = CapsuleBackgroundImagePolicy.MapStretch(config.ControlCenterBackgroundImageStretchMode);
+                fileName = Path.GetFileName(config.ControlCenterBackgroundImagePath) ?? "自定义图片";
+                status = "自定义主页背景已启用。";
+                break;
+            case ControlCenterBackgroundMode.CustomImage:
+                effectiveSource = defaultLandscape;
+                effectiveStretch = Stretch.UniformToFill;
+                fileName = "自定义图片不可用 · 已临时回退默认山水";
+                status = defaultLandscape is null
+                    ? "自定义图片与默认资源均无法加载，已降级为透明模式。"
+                    : "找不到自定义图片，当前临时显示默认山水；配置路径保持不变。";
+                statusIsSuccess = false;
+                break;
+            case ControlCenterBackgroundMode.Transparent:
+                effectiveSource = null;
+                effectiveStretch = Stretch.UniformToFill;
+                fileName = "完全透明（无图片）";
+                status = "控制中心使用完全透明背景。";
+                break;
+            default:
+                effectiveSource = defaultLandscape;
+                effectiveStretch = Stretch.UniformToFill;
+                fileName = defaultLandscape is null ? "默认资源加载失败" : "默认山水";
+                status = defaultLandscape is null
+                    ? "默认山水资源无法加载，已降级为透明模式。"
+                    : "默认山水背景已启用。";
+                statusIsSuccess = defaultLandscape is not null;
+                break;
+        }
+
+        if (mode == ControlCenterBackgroundMode.CustomImage && effectiveSource is null)
+        {
+            effectiveSource = defaultLandscape;
+            effectiveStretch = Stretch.UniformToFill;
+            fileName = "自定义图片无法解码 · 已临时回退默认山水";
+            status = defaultLandscape is null
+                ? "自定义图片与默认资源均无法加载，已降级为透明模式。"
+                : "自定义图片无法读取，当前临时显示默认山水；配置路径保持不变。";
+            statusIsSuccess = false;
+        }
+
+        ControlCenterBackgroundImageFileNameText.Text = fileName;
+        ControlCenterBackgroundImagePreview.Source = effectiveSource;
+        ControlCenterBackgroundImage.Source = effectiveSource;
+        ControlCenterBackgroundImage.Opacity = effectiveSource is null
+            ? 0d
+            : Math.Clamp(config.ControlCenterBackgroundImageOpacity, 0d, 1d);
+        ControlCenterBackgroundImage.Stretch = effectiveStretch;
+        SetControlCenterBackgroundImageStatus(status, statusIsSuccess);
         var controlCenterOpacityPercent = (int)Math.Round(
             Math.Clamp(config.ControlCenterBackgroundImageOpacity, 0d, 1d) * 100d);
         ControlCenterBackgroundImageOpacitySlider.Value = controlCenterOpacityPercent;
@@ -484,6 +798,9 @@ public partial class CapsuleControlCenterWindow : Window
             Stretch.Fill => 2,
             _ => 0
         };
+        ControlCenterBackgroundImageOpacitySlider.IsEnabled = mode != ControlCenterBackgroundMode.Transparent;
+        ControlCenterBackgroundImageStretchComboBox.IsEnabled = mode == ControlCenterBackgroundMode.CustomImage;
+        UpdateControlCenterBackgroundModeButtons(mode);
 
         var opacityPercent = (int)Math.Round(Math.Clamp(config.BackgroundImageOpacity, 0d, 1d) * 100d);
         BackgroundImageOpacitySlider.Value = opacityPercent;
@@ -509,50 +826,71 @@ public partial class CapsuleControlCenterWindow : Window
         }
     }
 
+    private static ImageSource? LoadDefaultLandscape()
+    {
+        if (_defaultLandscapeSource is not null)
+        {
+            return _defaultLandscapeSource;
+        }
+
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = DefaultLandscapeUri;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            _defaultLandscapeSource = bitmap;
+            return bitmap;
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.Error("ControlCenterDefaultLandscape", ex);
+            return null;
+        }
+    }
+
+    private void UpdateControlCenterBackgroundModeButtons(ControlCenterBackgroundMode selectedMode)
+    {
+        foreach (var button in new[] { DefaultLandscapeModeButton, CustomImageModeButton, TransparentModeButton })
+        {
+            var selected = Enum.TryParse<ControlCenterBackgroundMode>(button.Tag as string, out var mode)
+                && mode == selectedMode;
+            button.Background = selected
+                ? (Brush)FindResource("GlassPillBrush")
+                : Brushes.Transparent;
+            button.BorderBrush = selected
+                ? (Brush)FindResource("GlassPillBorderBrush")
+                : Brushes.Transparent;
+            button.BorderThickness = selected ? new Thickness(1) : new Thickness(0);
+            button.Foreground = new SolidColorBrush(selected
+                ? Color.FromRgb(0x2D, 0x72, 0xC7)
+                : Color.FromRgb(0x36, 0x53, 0x6F));
+        }
+    }
+
     private void ApplyControlCenterTheme()
     {
         var colors = _settings.Config.ThemePreset switch
         {
             CapsuleThemePreset.GlassGreen => new ControlCenterThemeColors(
                 Color.FromRgb(0x4C, 0xD9, 0x64),
-                Color.FromRgb(0xD8, 0xF1, 0xE2),
-                Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x86, 0xFF, 0xFF, 0xFF)),
+                Color.FromRgb(0x58, 0x74, 0x6D),
+                Color.FromArgb(0x52, 0xFF, 0xFF, 0xFF)),
             CapsuleThemePreset.SoftLight => new ControlCenterThemeColors(
                 Color.FromRgb(0x8A, 0x7D, 0xFF),
-                Color.FromRgb(0xE6, 0xE5, 0xF8),
-                Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x2A, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x36, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF)),
+                Color.FromRgb(0x62, 0x6F, 0x8E),
+                Color.FromArgb(0x58, 0xFF, 0xFF, 0xFF)),
             _ => new ControlCenterThemeColors(
-                Color.FromRgb(0x46, 0xE0, 0xFF),
-                Color.FromRgb(0xD8, 0xE6, 0xF0),
-                Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF),
-                Color.FromArgb(0x86, 0xFF, 0xFF, 0xFF))
+                Color.FromRgb(0x4D, 0x8C, 0xFF),
+                Color.FromRgb(0x61, 0x78, 0x95),
+                Color.FromArgb(0x52, 0xFF, 0xFF, 0xFF))
         };
 
         SetBrushColor("AccentBrush", colors.Accent);
         SetBrushColor("MutedTextBrush", colors.Muted);
-        SetBrushColor("WindowSurfaceBrush", colors.Surface);
         SetBrushColor("WindowOverlayBrush", colors.Overlay);
-        SetBrushColor("SidebarBrush", colors.Sidebar);
-        SetBrushColor("CardBrush", colors.Card);
-        SetBrushColor("CardBorderBrush", colors.CardBorder);
-    }
-
-    private Color GetThemeAccentColor()
-    {
-        return Resources["AccentBrush"] is SolidColorBrush brush
-            ? brush.Color
-            : Color.FromRgb(0x46, 0xE0, 0xFF);
     }
 
     private void SetBrushColor(string resourceKey, Color color)
@@ -560,10 +898,7 @@ public partial class CapsuleControlCenterWindow : Window
         if (Resources[resourceKey] is SolidColorBrush brush && !brush.IsFrozen)
         {
             brush.Color = color;
-            return;
         }
-
-        Resources[resourceKey] = new SolidColorBrush(color);
     }
 
     private void ChooseControlCenterBackgroundImageButton_Click(object sender, RoutedEventArgs e)
@@ -581,9 +916,10 @@ public partial class CapsuleControlCenterWindow : Window
         }
 
         _settings.SetControlCenterBackgroundImage(dialog.FileName);
+        _settings.SetControlCenterBackgroundMode(ControlCenterBackgroundMode.CustomImage);
         if (_settings.Config.ControlCenterBackgroundImageOpacity <= 0)
         {
-            _settings.SetControlCenterBackgroundImageOpacity(45);
+            _settings.SetControlCenterBackgroundImageOpacity(100);
         }
         RefreshSettingsFromConfig();
         SetControlCenterBackgroundImageStatus("主页背景图片已应用。", success: true);
@@ -591,9 +927,26 @@ public partial class CapsuleControlCenterWindow : Window
 
     private void RemoveControlCenterBackgroundImageButton_Click(object sender, RoutedEventArgs e)
     {
-        _settings.SetControlCenterBackgroundImage(null);
+        _settings.SetControlCenterBackgroundMode(ControlCenterBackgroundMode.Transparent);
         RefreshSettingsFromConfig();
         SetControlCenterBackgroundImageStatus("主页已恢复透明液体玻璃。", success: true);
+    }
+
+    private void ControlCenterBackgroundModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string modeName }
+            || !Enum.TryParse<ControlCenterBackgroundMode>(modeName, out var mode))
+        {
+            return;
+        }
+
+        _settings.SetControlCenterBackgroundMode(mode);
+        RefreshSettingsFromConfig();
+        if (mode == ControlCenterBackgroundMode.CustomImage
+            && !CapsuleBackgroundImagePolicy.IsSupportedImagePath(_settings.Config.ControlCenterBackgroundImagePath))
+        {
+            SetControlCenterBackgroundImageStatus("尚未选择有效的自定义图片，当前临时显示默认山水。", success: false);
+        }
     }
 
     private void ControlCenterBackgroundImageOpacitySlider_ValueChanged(
@@ -607,7 +960,10 @@ public partial class CapsuleControlCenterWindow : Window
 
         var percent = (int)Math.Round(ControlCenterBackgroundImageOpacitySlider.Value);
         ControlCenterBackgroundImageOpacityValue.Text = $"{percent}%";
-        ControlCenterBackgroundImage.Opacity = percent / 100d;
+        if (_settings.Config.ControlCenterBackgroundMode != ControlCenterBackgroundMode.Transparent)
+        {
+            ControlCenterBackgroundImage.Opacity = percent / 100d;
+        }
         _settings.SetControlCenterBackgroundImageOpacity(percent);
     }
 

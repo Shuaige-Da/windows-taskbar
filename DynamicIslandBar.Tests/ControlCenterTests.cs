@@ -25,6 +25,7 @@ public class ControlCenterTests
         coordinator.SetPartAutoHideWithCapsule(CapsuleVisualPart.CenterCard, true);
         coordinator.SetControlCenterBackgroundImage(@"C:\Images\home.png");
         coordinator.SetControlCenterBackgroundImageOpacity(48);
+        coordinator.SetControlCenterBackgroundMode(ControlCenterBackgroundMode.CustomImage);
         coordinator.Flush();
 
         Assert.Equal(CapsuleThemePreset.GlassGreen, config.ThemePreset);
@@ -37,6 +38,7 @@ public class ControlCenterTests
         Assert.Equal(100, config.Presentation.Dock.OpacityPercent);
         Assert.Equal(@"C:\Images\home.png", config.ControlCenterBackgroundImagePath);
         Assert.Equal(0.48, config.ControlCenterBackgroundImageOpacity, 2);
+        Assert.Equal(ControlCenterBackgroundMode.CustomImage, config.ControlCenterBackgroundMode);
         Assert.Contains(CapsuleSettingsChangeKind.Theme, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Startup, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Layout, changes);
@@ -178,16 +180,28 @@ public class ControlCenterTests
         Assert.Contains("x:Name=\"BackgroundImageStretchComboBox\"", xaml);
         Assert.Contains("x:Name=\"ControlCenterBackgroundImage\"", xaml);
         Assert.Contains("x:Name=\"ControlCenterBackgroundImagePreview\"", xaml);
-        Assert.Contains("Content=\"退出\"", xaml);
+        Assert.Contains("退出程序", xaml);
         Assert.Contains("AllowsTransparency=\"True\"", xaml);
         Assert.Contains("x:Name=\"WindowGlowRotation\"", xaml);
         Assert.Contains("x:Key=\"EnergyFillBrush\"", xaml);
+        Assert.Contains("x:Key=\"GlassPillBrush\"", xaml);
+        Assert.Contains("x:Key=\"GlassPillBorderBrush\"", xaml);
+        Assert.Contains("x:Key=\"GlassCardStyle\"", xaml);
+        Assert.Contains("CornerRadius=\"29\"", xaml);
+        Assert.Contains("<RadialGradientBrush", xaml);
+        Assert.Contains("<Thumb Width=\"24\" Height=\"24\">", xaml);
         Assert.Contains("<Style TargetType=\"CheckBox\">", xaml);
         Assert.Contains("<Style TargetType=\"Slider\">", xaml);
         Assert.Contains("ApplyControlCenterTheme", code);
         Assert.Contains("ControlCenterWindow_SizeChanged", code);
         Assert.Contains("ExitApplicationButton_Click", code);
         Assert.Contains("[CapsuleVisualPart.CenterCard] = \"中心卡片背景\"", code);
+        Assert.Contains("x:Name=\"TopSectionNavigationPanel\"", xaml);
+        Assert.Contains("x:Name=\"FeatureSearchPopup\"", xaml);
+        Assert.Contains("x:Name=\"DefaultLandscapeModeButton\"", xaml);
+        Assert.Contains("ControlCenter-DefaultLandscape.png", code);
+        Assert.Contains("FeatureSearchCatalog", code);
+        Assert.Contains("PageScrollViewer_ScrollChanged", code);
     }
 
     [Fact]

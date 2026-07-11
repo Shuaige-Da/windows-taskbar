@@ -25,6 +25,13 @@ public enum StartupDisplayMode
     CapsuleOnly
 }
 
+public enum ControlCenterBackgroundMode
+{
+    DefaultLandscape,
+    CustomImage,
+    Transparent
+}
+
 public sealed class CapsuleConfig
 {
     public CapsuleMode Mode { get; set; } = CapsuleMode.BottomTaskbar;
@@ -42,8 +49,10 @@ public sealed class CapsuleConfig
     public double BackgroundImageOpacity { get; set; }
     public string? BackgroundImageStretchMode { get; set; }
     public string? ControlCenterBackgroundImagePath { get; set; }
-    public double ControlCenterBackgroundImageOpacity { get; set; }
+    public double ControlCenterBackgroundImageOpacity { get; set; } = 1d;
     public string? ControlCenterBackgroundImageStretchMode { get; set; }
+    public ControlCenterBackgroundMode ControlCenterBackgroundMode { get; set; } =
+        ControlCenterBackgroundMode.DefaultLandscape;
     public int GlassOpacityPercent { get; set; } = 72;
     public int ShadowPercent { get; set; } = 0;
     public int GlowIntensityPercent { get; set; } = 82;
@@ -97,14 +106,31 @@ public static class CapsuleConfigSerializer
     private static void ApplyLegacyControlCenterBackgroundDefaults(string json, CapsuleConfig config)
     {
         using var document = JsonDocument.Parse(json);
-        if (document.RootElement.TryGetProperty("ControlCenterBackgroundImagePath", out _))
+        if (document.RootElement.TryGetProperty("ControlCenterBackgroundMode", out _))
         {
             return;
         }
 
-        config.ControlCenterBackgroundImagePath = config.BackgroundImagePath;
-        config.ControlCenterBackgroundImageOpacity = config.BackgroundImageOpacity;
-        config.ControlCenterBackgroundImageStretchMode = config.BackgroundImageStretchMode;
+        if (document.RootElement.TryGetProperty("ControlCenterBackgroundImagePath", out _))
+        {
+            config.ControlCenterBackgroundMode = string.IsNullOrWhiteSpace(
+                config.ControlCenterBackgroundImagePath)
+                ? ControlCenterBackgroundMode.Transparent
+                : ControlCenterBackgroundMode.CustomImage;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.BackgroundImagePath))
+        {
+            config.ControlCenterBackgroundImagePath = config.BackgroundImagePath;
+            config.ControlCenterBackgroundImageOpacity = config.BackgroundImageOpacity;
+            config.ControlCenterBackgroundImageStretchMode = config.BackgroundImageStretchMode;
+            config.ControlCenterBackgroundMode = ControlCenterBackgroundMode.CustomImage;
+            return;
+        }
+
+        config.ControlCenterBackgroundMode = ControlCenterBackgroundMode.DefaultLandscape;
+        config.ControlCenterBackgroundImageOpacity = 1d;
     }
 }
 
@@ -126,6 +152,7 @@ public static class CapsuleConfigMutator
         target.ControlCenterBackgroundImagePath = normalized.ControlCenterBackgroundImagePath;
         target.ControlCenterBackgroundImageOpacity = normalized.ControlCenterBackgroundImageOpacity;
         target.ControlCenterBackgroundImageStretchMode = normalized.ControlCenterBackgroundImageStretchMode;
+        target.ControlCenterBackgroundMode = normalized.ControlCenterBackgroundMode;
         target.GlassOpacityPercent = normalized.GlassOpacityPercent;
         target.ShadowPercent = normalized.ShadowPercent;
         target.GlowIntensityPercent = normalized.GlowIntensityPercent;
@@ -227,6 +254,15 @@ public static class CapsuleConfigMutator
     {
         config.ControlCenterBackgroundImageStretchMode =
             CapsuleBackgroundImagePolicy.NormalizeStretchMode(mode);
+    }
+
+    public static void SetControlCenterBackgroundMode(
+        CapsuleConfig config,
+        ControlCenterBackgroundMode mode)
+    {
+        config.ControlCenterBackgroundMode = Enum.IsDefined(mode)
+            ? mode
+            : ControlCenterBackgroundMode.DefaultLandscape;
     }
 
     public static void SetGlassOpacityPercent(CapsuleConfig config, int percent)
@@ -491,8 +527,10 @@ internal sealed class CapsuleConfigStore
     public double BackgroundImageOpacity { get; set; }
     public string? BackgroundImageStretchMode { get; set; }
     public string? ControlCenterBackgroundImagePath { get; set; }
-    public double ControlCenterBackgroundImageOpacity { get; set; }
+    public double ControlCenterBackgroundImageOpacity { get; set; } = 1d;
     public string? ControlCenterBackgroundImageStretchMode { get; set; }
+    public ControlCenterBackgroundMode ControlCenterBackgroundMode { get; set; } =
+        ControlCenterBackgroundMode.DefaultLandscape;
     public int GlassOpacityPercent { get; set; } = 72;
     public int ShadowPercent { get; set; } = 0;
     public int GlowIntensityPercent { get; set; } = 82;
@@ -525,6 +563,9 @@ internal sealed class CapsuleConfigStore
             ControlCenterBackgroundImagePath = ControlCenterBackgroundImagePath,
             ControlCenterBackgroundImageOpacity = Math.Clamp(ControlCenterBackgroundImageOpacity, 0d, 1d),
             ControlCenterBackgroundImageStretchMode = CapsuleBackgroundImagePolicy.NormalizeStretchMode(ControlCenterBackgroundImageStretchMode),
+            ControlCenterBackgroundMode = Enum.IsDefined(ControlCenterBackgroundMode)
+                ? ControlCenterBackgroundMode
+                : ControlCenterBackgroundMode.DefaultLandscape,
             GlassOpacityPercent = ClampPercent(GlassOpacityPercent),
             ShadowPercent = ClampPercent(ShadowPercent),
             GlowIntensityPercent = ClampPercent(GlowIntensityPercent),
@@ -577,6 +618,7 @@ internal sealed class CapsuleConfigStore
             ControlCenterBackgroundImagePath = config.ControlCenterBackgroundImagePath,
             ControlCenterBackgroundImageOpacity = Math.Clamp(config.ControlCenterBackgroundImageOpacity, 0d, 1d),
             ControlCenterBackgroundImageStretchMode = CapsuleBackgroundImagePolicy.NormalizeStretchMode(config.ControlCenterBackgroundImageStretchMode),
+            ControlCenterBackgroundMode = config.ControlCenterBackgroundMode,
             GlassOpacityPercent = ClampPercent(config.GlassOpacityPercent),
             ShadowPercent = ClampPercent(config.ShadowPercent),
             GlowIntensityPercent = ClampPercent(config.GlowIntensityPercent),

@@ -95,6 +95,12 @@ internal sealed class CapsuleSettingsCoordinator : IDisposable
         NotifyChanged(CapsuleSettingsChangeKind.ControlCenterAppearance);
     }
 
+    public void SetControlCenterBackgroundMode(ControlCenterBackgroundMode mode)
+    {
+        CapsuleConfigMutator.SetControlCenterBackgroundMode(_config, mode);
+        NotifyChanged(CapsuleSettingsChangeKind.ControlCenterAppearance);
+    }
+
     public void SetGlassOpacity(int percent) => UpdateAppearance(
         () => CapsuleConfigMutator.SetGlassOpacityPercent(_config, percent));
 

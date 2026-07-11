@@ -63,7 +63,8 @@ public class CapsuleBackgroundImagePolicyTests
             BackgroundImageStretchMode = "Uniform",
             ControlCenterBackgroundImagePath = @"C:\Images\home.png",
             ControlCenterBackgroundImageOpacity = 0.38,
-            ControlCenterBackgroundImageStretchMode = "Fill"
+            ControlCenterBackgroundImageStretchMode = "Fill",
+            ControlCenterBackgroundMode = ControlCenterBackgroundMode.CustomImage
         };
 
         var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
@@ -74,6 +75,7 @@ public class CapsuleBackgroundImagePolicyTests
         Assert.Equal(@"C:\Images\home.png", restored.ControlCenterBackgroundImagePath);
         Assert.Equal(0.38, restored.ControlCenterBackgroundImageOpacity, 2);
         Assert.Equal("Fill", restored.ControlCenterBackgroundImageStretchMode);
+        Assert.Equal(ControlCenterBackgroundMode.CustomImage, restored.ControlCenterBackgroundMode);
     }
 
     [Fact]
@@ -98,9 +100,26 @@ public class CapsuleBackgroundImagePolicyTests
         Assert.Equal(@"C:\Images\legacy.png", legacy.ControlCenterBackgroundImagePath);
         Assert.Equal(0.55, legacy.ControlCenterBackgroundImageOpacity, 2);
         Assert.Equal("Uniform", legacy.ControlCenterBackgroundImageStretchMode);
+        Assert.Equal(ControlCenterBackgroundMode.CustomImage, legacy.ControlCenterBackgroundMode);
         Assert.Null(explicitlyRemoved.ControlCenterBackgroundImagePath);
         Assert.Equal(0.4, explicitlyRemoved.ControlCenterBackgroundImageOpacity, 2);
         Assert.Equal("Fill", explicitlyRemoved.ControlCenterBackgroundImageStretchMode);
+        Assert.Equal(ControlCenterBackgroundMode.Transparent, explicitlyRemoved.ControlCenterBackgroundMode);
+    }
+
+    [Fact]
+    public void ControlCenterBackgroundMode_DefaultsAndRoundTripsAllValues()
+    {
+        Assert.Equal(ControlCenterBackgroundMode.DefaultLandscape, new CapsuleConfig().ControlCenterBackgroundMode);
+
+        foreach (var mode in Enum.GetValues<ControlCenterBackgroundMode>())
+        {
+            var serialized = CapsuleConfigSerializer.Serialize(new CapsuleConfig
+            {
+                ControlCenterBackgroundMode = mode
+            });
+            Assert.Equal(mode, CapsuleConfigSerializer.Deserialize(serialized).ControlCenterBackgroundMode);
+        }
     }
 
     [Fact]
@@ -111,11 +130,13 @@ public class CapsuleBackgroundImagePolicyTests
         CapsuleConfigMutator.SetControlCenterBackgroundImagePath(config, @"C:\Images\home.png");
         CapsuleConfigMutator.SetControlCenterBackgroundImageOpacityPercent(config, 140);
         CapsuleConfigMutator.SetControlCenterBackgroundImageStretchMode(config, "invalid");
+        CapsuleConfigMutator.SetControlCenterBackgroundMode(config, ControlCenterBackgroundMode.CustomImage);
 
         Assert.Equal(@"C:\Images\capsule.png", config.BackgroundImagePath);
         Assert.Equal(@"C:\Images\home.png", config.ControlCenterBackgroundImagePath);
         Assert.Equal(1, config.ControlCenterBackgroundImageOpacity);
         Assert.Equal("UniformToFill", config.ControlCenterBackgroundImageStretchMode);
+        Assert.Equal(ControlCenterBackgroundMode.CustomImage, config.ControlCenterBackgroundMode);
     }
 
     [Fact]

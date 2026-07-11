@@ -10,7 +10,7 @@
         AllowsTransparency="True"
         ResizeMode="CanResize"
         Background="#00000000"
-        Foreground="#F4F8FF"
+        Foreground="#243B58"
         ShowInTaskbar="True"
         SizeChanged="ControlCenterWindow_SizeChanged">
     <shell:WindowChrome.WindowChrome>
@@ -21,29 +21,65 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <SolidColorBrush x:Key="MutedTextBrush" Color="#D8E6F0" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#46E0FF" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#617895" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#4D8CFF" />
         <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#4CD964" />
-        <SolidColorBrush x:Key="WindowSurfaceBrush" Color="#18FFFFFF" />
-        <SolidColorBrush x:Key="WindowOverlayBrush" Color="#0CFFFFFF" />
-        <SolidColorBrush x:Key="SidebarBrush" Color="#24FFFFFF" />
-        <SolidColorBrush x:Key="CardBrush" Color="#2EFFFFFF" />
-        <SolidColorBrush x:Key="CardBorderBrush" Color="#86FFFFFF" />
+        <LinearGradientBrush x:Key="WindowSurfaceBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#82FFFFFF" Offset="0" />
+            <GradientStop Color="#20FFFFFF" Offset="0.34" />
+            <GradientStop Color="#38EAF5FF" Offset="0.72" />
+            <GradientStop Color="#74FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="WindowOverlayBrush" Color="#52FFFFFF" />
+        <LinearGradientBrush x:Key="SidebarBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#D0FFFFFF" Offset="0" />
+            <GradientStop Color="#5AFFFFFF" Offset="0.42" />
+            <GradientStop Color="#86DCEEFF" Offset="0.76" />
+            <GradientStop Color="#C0FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CardBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#C8FFFFFF" Offset="0" />
+            <GradientStop Color="#62FFFFFF" Offset="0.18" />
+            <GradientStop Color="#30F4FBFF" Offset="0.54" />
+            <GradientStop Color="#58DDEEFF" Offset="0.82" />
+            <GradientStop Color="#B8FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CardBorderBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFFFF" Offset="0" />
+            <GradientStop Color="#80FFFFFF" Offset="0.38" />
+            <GradientStop Color="#A882B9F2" Offset="0.72" />
+            <GradientStop Color="#E8FFFFFF" Offset="1" />
+        </LinearGradientBrush>
 
         <LinearGradientBrush x:Key="EnergyFillBrush" StartPoint="0,0.5" EndPoint="1,0.5">
-            <GradientStop Color="#FF1DB8FF" Offset="0" />
-            <GradientStop Color="#FF46E0FF" Offset="0.5" />
-            <GradientStop Color="#FF4CD964" Offset="1" />
+            <GradientStop Color="#FF526DFF" Offset="0" />
+            <GradientStop Color="#FF33C7F4" Offset="0.52" />
+            <GradientStop Color="#FF58D78F" Offset="1" />
         </LinearGradientBrush>
 
         <LinearGradientBrush x:Key="LiquidGlassBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#68FFFFFF" Offset="0" />
-            <GradientStop Color="#26FFFFFF" Offset="0.52" />
-            <GradientStop Color="#42E7F7FF" Offset="1" />
+            <GradientStop Color="#E0FFFFFF" Offset="0" />
+            <GradientStop Color="#7AFFFFFF" Offset="0.18" />
+            <GradientStop Color="#32EDF7FF" Offset="0.58" />
+            <GradientStop Color="#70CFE6FF" Offset="0.82" />
+            <GradientStop Color="#D8FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="GlassPillBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F0FFFFFF" Offset="0" />
+            <GradientStop Color="#86FFFFFF" Offset="0.36" />
+            <GradientStop Color="#50E6F2FF" Offset="0.72" />
+            <GradientStop Color="#D8FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="GlassPillBorderBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFFFF" Offset="0" />
+            <GradientStop Color="#A8FFFFFF" Offset="0.45" />
+            <GradientStop Color="#B05B9CFF" Offset="0.78" />
+            <GradientStop Color="#FFFFFFFF" Offset="1" />
         </LinearGradientBrush>
 
         <Style TargetType="Button">
-            <Setter Property="Foreground" Value="#EAF7FF" />
+            <Setter Property="Foreground" Value="#29435F" />
             <Setter Property="Background" Value="{StaticResource LiquidGlassBrush}" />
             <Setter Property="BorderBrush" Value="#5A6E91A9" />
             <Setter Property="BorderThickness" Value="1" />
@@ -52,16 +88,22 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                        <Grid>
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="18">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#557DA5" BlurRadius="16" ShadowDepth="4" Opacity="0.18" />
+                                </Border.Effect>
+                            </Border>
+                            <Border Margin="1" CornerRadius="17" BorderBrush="#A8FFFFFF" BorderThickness="1,1,0,0" IsHitTestVisible="False" />
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="BorderBrush" Value="#A846E0FF" />
-                                <Setter TargetName="Chrome" Property="Background" Value="#AA1B3346" />
+                                <Setter TargetName="Chrome" Property="Background" Value="#A8FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Chrome" Property="Opacity" Value="0.72" />
@@ -78,7 +120,7 @@
         <Style TargetType="Button" x:Key="WindowButtonStyle">
             <Setter Property="Width" Value="44" />
             <Setter Property="Height" Value="38" />
-            <Setter Property="Foreground" Value="#DDE8F7" />
+            <Setter Property="Foreground" Value="#29435F" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="14" />
@@ -91,7 +133,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#26364A" />
+                                <Setter TargetName="Chrome" Property="Background" Value="#58FFFFFF" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -100,11 +142,11 @@
         </Style>
 
         <Style TargetType="Button" x:Key="NavButtonStyle">
-            <Setter Property="Height" Value="48" />
-            <Setter Property="Margin" Value="0,3" />
-            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="Height" Value="58" />
+            <Setter Property="Margin" Value="0,5" />
+            <Setter Property="Padding" Value="20,0" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
-            <Setter Property="Foreground" Value="#C8D4E4" />
+            <Setter Property="Foreground" Value="#36536F" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -113,22 +155,26 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="11">
-                            <Grid>
-                                <Border Width="3" Margin="5,10,0,10" CornerRadius="2"
-                                        HorizontalAlignment="Left" Background="{TemplateBinding BorderBrush}" />
-                                <ContentPresenter Margin="{TemplateBinding Padding}"
-                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Chrome"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="29">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#5279A0" BlurRadius="18" ShadowDepth="5" Opacity="0.16" />
+                                </Border.Effect>
+                            </Border>
+                            <Border x:Name="InnerHighlight" Margin="1" CornerRadius="28"
+                                    BorderBrush="#B8FFFFFF" BorderThickness="1,1,0,0" IsHitTestVisible="False" />
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#18283A" />
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource GlassPillBrush}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource GlassPillBorderBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -137,9 +183,9 @@
         </Style>
 
         <Style TargetType="Button" x:Key="PrimaryButtonStyle">
-            <Setter Property="Foreground" Value="#06131B" />
-            <Setter Property="Background" Value="{StaticResource EnergyFillBrush}" />
-            <Setter Property="BorderBrush" Value="#805CF2FF" />
+            <Setter Property="Foreground" Value="#2D72C7" />
+            <Setter Property="Background" Value="{StaticResource GlassPillBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource GlassPillBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="18,10" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -147,14 +193,17 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#46E0FF" BlurRadius="12" ShadowDepth="0" Opacity="0.22" />
-                            </Border.Effect>
+                        <Grid>
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="20">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#5279A0" BlurRadius="16" ShadowDepth="4" Opacity="0.18" />
+                                </Border.Effect>
+                            </Border>
+                            <Border Margin="1" CornerRadius="19" BorderBrush="#B8FFFFFF" BorderThickness="1,1,0,0" />
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" />
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Opacity" Value="0.86" />
@@ -177,19 +226,22 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="18">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#000000" BlurRadius="18" ShadowDepth="5" Opacity="0.28" />
-                            </Border.Effect>
+                        <Grid>
+                            <Border x:Name="Chrome"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="22">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#4C7094" BlurRadius="24" ShadowDepth="7" Opacity="0.20" />
+                                </Border.Effect>
+                            </Border>
+                            <Border Margin="1" CornerRadius="21" BorderBrush="#D8FFFFFF" BorderThickness="1.2,1.2,0,0" />
                             <ContentPresenter Margin="{TemplateBinding Padding}" />
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#D31B2A3B" />
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource LiquidGlassBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -198,8 +250,8 @@
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="Foreground" Value="#EFF7FF" />
-            <Setter Property="Background" Value="#34FFFFFF" />
+            <Setter Property="Foreground" Value="#243B58" />
+            <Setter Property="Background" Value="#72FFFFFF" />
             <Setter Property="BorderBrush" Value="#86FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CaretBrush" Value="#46E0FF" />
@@ -207,8 +259,8 @@
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Foreground" Value="#EFF7FF" />
-            <Setter Property="Background" Value="#38FFFFFF" />
+            <Setter Property="Foreground" Value="#243B58" />
+            <Setter Property="Background" Value="#72FFFFFF" />
             <Setter Property="BorderBrush" Value="#86FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="12,8" />
@@ -361,23 +413,27 @@
             <Setter Property="Minimum" Value="0" />
             <Setter Property="Maximum" Value="100" />
             <Setter Property="TickFrequency" Value="1" />
-            <Setter Property="Height" Value="28" />
+            <Setter Property="Height" Value="34" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
-                        <Grid Height="28" Margin="3,0">
-                            <Border Height="12" CornerRadius="6" VerticalAlignment="Center"
-                                    Background="#28FFFFFF" BorderBrush="#72FFFFFF" BorderThickness="1" />
-                            <Track x:Name="PART_Track" Height="10" Margin="1,0" VerticalAlignment="Center"
+                        <Grid Height="34" Margin="0">
+                            <Border Height="12" Margin="11,0" CornerRadius="6" VerticalAlignment="Center"
+                                    Background="#42FFFFFF" BorderBrush="#A8FFFFFF" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#547EA5" BlurRadius="8" ShadowDepth="2" Opacity="0.18" />
+                                </Border.Effect>
+                            </Border>
+                            <Track x:Name="PART_Track" Height="10" Margin="12,0" VerticalAlignment="Center"
                                    Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
                                    Value="{TemplateBinding Value}">
                                 <Track.DecreaseRepeatButton>
                                     <RepeatButton Command="{x:Static Slider.DecreaseLarge}" IsTabStop="False">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Background="{StaticResource EnergyFillBrush}" CornerRadius="5">
+                                                <Border Background="{StaticResource EnergyFillBrush}" CornerRadius="5" Margin="-1,0">
                                                     <Border.Effect>
-                                                        <DropShadowEffect Color="#46E0FF" BlurRadius="9" ShadowDepth="0" Opacity="0.58" />
+                                                        <DropShadowEffect Color="#4D8CFF" BlurRadius="9" ShadowDepth="0" Opacity="0.42" />
                                                     </Border.Effect>
                                                 </Border>
                                             </ControlTemplate>
@@ -392,18 +448,25 @@
                                     </RepeatButton>
                                 </Track.IncreaseRepeatButton>
                                 <Track.Thumb>
-                                    <Thumb Width="15" Height="20">
+                                    <Thumb Width="24" Height="24">
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="Thumb">
-                                                <Border Margin="-3,0,0,0" CornerRadius="8"
-                                                        Background="{StaticResource EnergyFillBrush}"
-                                                        BorderBrush="#D8FFFFFF" BorderThickness="1">
-                                                    <Border.Effect>
-                                                        <DropShadowEffect Color="#46E0FF" BlurRadius="10" ShadowDepth="0" Opacity="0.75" />
-                                                    </Border.Effect>
-                                                    <Ellipse Width="5" Height="5" Fill="#F5FFFFFF"
-                                                             HorizontalAlignment="Right" Margin="0,0,3,0" />
-                                                </Border>
+                                                <Grid>
+                                                    <Ellipse Stroke="#F0FFFFFF" StrokeThickness="1.5">
+                                                        <Ellipse.Fill>
+                                                            <RadialGradientBrush Center="0.32,0.28" GradientOrigin="0.28,0.22" RadiusX="0.74" RadiusY="0.74">
+                                                                <GradientStop Color="#FFFFFFFF" Offset="0" />
+                                                                <GradientStop Color="#D88CD8FF" Offset="0.28" />
+                                                                <GradientStop Color="#D84D8CFF" Offset="0.62" />
+                                                                <GradientStop Color="#D858D78F" Offset="1" />
+                                                            </RadialGradientBrush>
+                                                        </Ellipse.Fill>
+                                                        <Ellipse.Effect>
+                                                            <DropShadowEffect Color="#4D8CFF" BlurRadius="11" ShadowDepth="2" Opacity="0.52" />
+                                                        </Ellipse.Effect>
+                                                    </Ellipse>
+                                                    <Ellipse Width="7" Height="7" Fill="#C8FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,4,0,0" />
+                                                </Grid>
                                             </ControlTemplate>
                                         </Thumb.Template>
                                     </Thumb>
@@ -413,6 +476,94 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style x:Key="FluentIconTextStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="TopSectionButtonStyle" TargetType="Button">
+            <Setter Property="MinWidth" Value="94" />
+            <Setter Property="Height" Value="52" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Foreground" Value="#314C68" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="25"
+                                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#567FA8" BlurRadius="14" ShadowDepth="4" Opacity="0.16" />
+                                </Border.Effect>
+                            </Border>
+                            <Border Margin="1" CornerRadius="24" BorderBrush="#9FFFFFFF" BorderThickness="1,1,0,0" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource GlassPillBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RoundSearchButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="54" />
+            <Setter Property="Height" Value="54" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Foreground" Value="#294B6C" />
+            <Setter Property="Background" Value="{StaticResource GlassPillBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource GlassPillBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="27">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#4E769C" BlurRadius="20" ShadowDepth="6" Opacity="0.22" />
+                                </Border.Effect>
+                            </Border>
+                            <Border Margin="1" CornerRadius="26" BorderBrush="#D8FFFFFF" BorderThickness="1.2,1.2,0,0" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#B8FFFFFF" /></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.72" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="GlassCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1.4" />
+            <Setter Property="CornerRadius" Value="22" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#51799E" BlurRadius="28" ShadowDepth="8" Opacity="0.22" />
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BackgroundModeButtonStyle" TargetType="Button" BasedOn="{StaticResource TopSectionButtonStyle}">
+            <Setter Property="MinWidth" Value="104" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="FontSize" Value="12" />
         </Style>
     </Window.Resources>
 
@@ -461,13 +612,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
-                    <Border Width="30" Height="30" CornerRadius="10" Background="#50324A5E" BorderBrush="#8246E0FF" BorderThickness="1">
-                        <Image Source="pack://application:,,,/DynamicIslandBar;component/Assets/DynamicIslandBar-AppIcon.png"
-                               Width="20" Height="20" Stretch="Uniform" />
-                    </Border>
-                    <TextBlock Text="胶囊控制中心" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold" />
-                </StackPanel>
+                <Border Margin="20,8" Background="Transparent" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,7,8,7">
                     <Button Style="{StaticResource WindowButtonStyle}" Content="—" Click="MinimizeButton_Click" />
                     <Button x:Name="MaximizeButton" Style="{StaticResource WindowButtonStyle}" Content="□" Click="MaximizeButton_Click" />
@@ -481,115 +626,145 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Margin="12,0,8,12" Background="{StaticResource SidebarBrush}" CornerRadius="20" BorderBrush="#7EFFFFFF" BorderThickness="1">
+                <Border Grid.Column="0" Margin="12,0,8,12" Background="{StaticResource SidebarBrush}" CornerRadius="28" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1.2">
                     <Border.Effect>
-                        <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="5" Opacity="0.28" />
+                        <DropShadowEffect Color="#5279A0" BlurRadius="28" ShadowDepth="8" Opacity="0.22" />
                     </Border.Effect>
                     <Grid Margin="12">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <StackPanel Margin="6,12,6,18">
-                            <TextBlock Text="Dynamic Island" FontSize="19" FontWeight="Bold" />
+                        <StackPanel Margin="6,10,6,18">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="34" Height="34" CornerRadius="11" Background="#84FFFFFF" BorderBrush="#A8FFFFFF" BorderThickness="1">
+                                    <Image Source="pack://application:,,,/DynamicIslandBar;component/Assets/DynamicIslandBar-AppIcon.png"
+                                           Width="23" Height="23" Stretch="Uniform" />
+                                </Border>
+                                <TextBlock Text="胶囊控制中心" FontSize="15" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="Dynamic Island" FontSize="19" FontWeight="Bold" Margin="0,25,0,0" />
                             <TextBlock Text="个性化与反馈" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,5,0,0" />
                         </StackPanel>
                         <StackPanel Grid.Row="1">
-                            <Button x:Name="ThemeNavButton" Style="{StaticResource NavButtonStyle}" Tag="Theme" Click="NavigationButton_Click" Content="主题" />
-                            <Button x:Name="SettingsNavButton" Style="{StaticResource NavButtonStyle}" Tag="Settings" Click="NavigationButton_Click" Content="设置" />
-                            <Button x:Name="VersionNavButton" Style="{StaticResource NavButtonStyle}" Tag="Version" Click="NavigationButton_Click" Content="版本信息" />
-                            <Button x:Name="FeedbackNavButton" Style="{StaticResource NavButtonStyle}" Tag="Feedback" Click="NavigationButton_Click" Content="反馈" />
+                            <Button x:Name="ThemeNavButton" Style="{StaticResource NavButtonStyle}" Tag="Theme" Click="NavigationButton_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="主题" Margin="13,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+                            <Button x:Name="SettingsNavButton" Style="{StaticResource NavButtonStyle}" Tag="Settings" Click="NavigationButton_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="设置" Margin="13,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+                            <Button x:Name="VersionNavButton" Style="{StaticResource NavButtonStyle}" Tag="Version" Click="NavigationButton_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE946;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="版本信息" Margin="13,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+                            <Button x:Name="FeedbackNavButton" Style="{StaticResource NavButtonStyle}" Tag="Feedback" Click="NavigationButton_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8BD;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="反馈" Margin="13,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
                         </StackPanel>
-                        <Border Grid.Row="2" Background="#2EFFFFFF" BorderBrush="#72FFFFFF"
-                                BorderThickness="1" CornerRadius="14" Padding="12" Margin="2,8,2,2">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="胶囊正在运行" Foreground="#72F4A4" FontSize="12" />
-                                    <TextBlock x:Name="SidebarVersionText" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,4,0,0" />
-                                </StackPanel>
-                                <Button Grid.Column="1" Content="退出" Padding="11,7" Margin="8,0,0,0"
-                                        Foreground="#FFFFE8E8" BorderBrush="#9AFFFFFF"
-                                        ToolTip="退出胶囊程序" Click="ExitApplicationButton_Click" />
-                            </Grid>
+                        <Button Grid.Row="2" Margin="2,8,2,8" Height="48" Foreground="#E5667C"
+                                BorderBrush="#A8FFFFFF" ToolTip="退出胶囊程序" Click="ExitApplicationButton_Click">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7E8;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="退出程序" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                        </Button>
+                        <Border Grid.Row="3" Style="{StaticResource GlassCardStyle}" CornerRadius="18" Padding="12" Margin="2,0,2,2">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="●  胶囊正在运行" Foreground="#3EBE79" FontSize="12" />
+                                <TextBlock x:Name="SidebarVersionText" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,4,0,0" />
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </Border>
 
                 <Grid Grid.Column="1" Margin="20,6,24,20">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="68" />
                         <RowDefinition Height="72" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <StackPanel VerticalAlignment="Center">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
+                        <Border Background="{StaticResource GlassPillBrush}" BorderBrush="{StaticResource GlassPillBorderBrush}" BorderThickness="1.2" CornerRadius="29" Padding="3" HorizontalAlignment="Center">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#5279A0" BlurRadius="22" ShadowDepth="6" Opacity="0.20" />
+                            </Border.Effect>
+                            <StackPanel x:Name="TopSectionNavigationPanel" Orientation="Horizontal" />
+                        </Border>
+                        <Button x:Name="SearchButton" Grid.Column="1" Style="{StaticResource RoundSearchButtonStyle}" HorizontalAlignment="Right" Click="SearchButton_Click" ToolTip="搜索所有功能">
+                            <TextBlock Text="&#xE721;" Style="{StaticResource FluentIconTextStyle}" FontSize="22" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center">
                         <TextBlock x:Name="PageTitleText" Text="主题" FontSize="28" FontWeight="Bold" />
                         <TextBlock x:Name="PageSubtitleText" Text="选择胶囊的整体视觉风格" Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
                     </StackPanel>
 
-                    <Grid Grid.Row="1">
-                        <ScrollViewer x:Name="ThemePage" VerticalScrollBarVisibility="Auto">
+                    <Grid Grid.Row="2">
+                        <ScrollViewer x:Name="ThemePage" VerticalScrollBarVisibility="Auto" ScrollChanged="PageScrollViewer_ScrollChanged">
                             <StackPanel Margin="0,4,10,20">
-                                <TextBlock Text="主题预设" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14" />
+                                <TextBlock x:Name="ThemePresetsSection" Text="主题预设" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14" />
                                 <UniformGrid Columns="3">
                                     <Button x:Name="ClassicThemeButton" Tag="ClassicDark" Style="{StaticResource ThemeCardStyle}" Margin="0,0,10,0" Click="ThemeButton_Click">
                                         <StackPanel>
+                                            <Border x:Name="ClassicThemeCheckBadge" Width="28" Height="28" CornerRadius="14" Background="#4D8CFF" HorizontalAlignment="Right" Margin="0,-7,-7,-21" Panel.ZIndex="2" Visibility="Collapsed"><TextBlock Text="&#xE73E;" Style="{StaticResource FluentIconTextStyle}" Foreground="White" HorizontalAlignment="Center"/></Border>
                                             <Border Height="112" CornerRadius="14" Background="#A6183144" BorderBrush="#78D8F3FF" BorderThickness="1">
                                                 <Border Height="38" Margin="18" CornerRadius="19" Background="#D8182634" BorderBrush="#8846E0FF" BorderThickness="1">
                                                     <TextBlock Text="CLASSIC" Foreground="#D8F3FF" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" />
                                                 </Border>
                                             </Border>
-                                            <TextBlock Text="Classic Dark" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="0,14,0,0" />
+                                            <TextBlock Text="Classic Dark" FontSize="15" FontWeight="SemiBold" Margin="0,14,0,0" />
                                             <TextBlock Text="深海蓝玻璃与冰蓝边缘" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,5,0,0" />
                                         </StackPanel>
                                     </Button>
                                     <Button x:Name="GreenThemeButton" Tag="GlassGreen" Style="{StaticResource ThemeCardStyle}" Margin="5,0" Click="ThemeButton_Click">
                                         <StackPanel>
+                                            <Border x:Name="GreenThemeCheckBadge" Width="28" Height="28" CornerRadius="14" Background="#4D8CFF" HorizontalAlignment="Right" Margin="0,-7,-7,-21" Panel.ZIndex="2" Visibility="Collapsed"><TextBlock Text="&#xE73E;" Style="{StaticResource FluentIconTextStyle}" Foreground="White" HorizontalAlignment="Center"/></Border>
                                             <Border Height="112" CornerRadius="14" Background="#B814302A" BorderBrush="#554CD964" BorderThickness="1">
                                                 <Border Height="38" Margin="18" CornerRadius="19" Background="#D317211E" BorderBrush="#884CD964" BorderThickness="1">
                                                     <TextBlock Text="GLASS" Foreground="#72F4A4" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" />
                                                 </Border>
                                             </Border>
-                                            <TextBlock Text="Glass Green" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="0,14,0,0" />
+                                            <TextBlock Text="Glass Green" FontSize="15" FontWeight="SemiBold" Margin="0,14,0,0" />
                                             <TextBlock Text="墨绿玻璃与荧光绿强调" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,5,0,0" />
                                         </StackPanel>
                                     </Button>
                                     <Button x:Name="LightThemeButton" Tag="SoftLight" Style="{StaticResource ThemeCardStyle}" Margin="10,0,0,0" Click="ThemeButton_Click">
                                         <StackPanel>
+                                            <Border x:Name="LightThemeCheckBadge" Width="28" Height="28" CornerRadius="14" Background="#4D8CFF" HorizontalAlignment="Right" Margin="0,-7,-7,-21" Panel.ZIndex="2" Visibility="Collapsed"><TextBlock Text="&#xE73E;" Style="{StaticResource FluentIconTextStyle}" Foreground="White" HorizontalAlignment="Center"/></Border>
                                             <Border Height="112" CornerRadius="14" Background="#E6F2F2F2" BorderBrush="#551F8A70" BorderThickness="1">
                                                 <Border Height="38" Margin="18" CornerRadius="19" Background="#F5FFFFFF" BorderBrush="#661F8A70" BorderThickness="1">
                                                     <TextBlock Text="SOFT" Foreground="#1F8A70" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" />
                                                 </Border>
                                             </Border>
-                                            <TextBlock Text="Soft Light" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="0,14,0,0" />
+                                            <TextBlock Text="Soft Light" FontSize="15" FontWeight="SemiBold" Margin="0,14,0,0" />
                                             <TextBlock Text="柔和浅色与青绿点缀" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,5,0,0" />
                                         </StackPanel>
                                     </Button>
                                 </UniformGrid>
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,22,0,0">
-                                    <StackPanel>
+                                <Border x:Name="ThemePreviewSection" Style="{StaticResource GlassCardStyle}" Margin="0,22,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="300"/></Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="实时预览" FontWeight="SemiBold" FontSize="15" />
                                         <TextBlock Text="选择主题后会立即应用到正在运行的胶囊，并自动保存。" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,0" />
                                     </StackPanel>
+                                        <Border Grid.Column="1" Height="46" Margin="18,0,0,0" CornerRadius="23" Background="#D4162A3E" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1.5">
+                                            <Grid Margin="16,0"><TextBlock Text="胶囊实时预览" Foreground="White" VerticalAlignment="Center"/><TextBlock Text="12:54" Foreground="#CDE9FF" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+                                        </Border>
+                                    </Grid>
                                 </Border>
                                 <TextBlock Text="自定义背景" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <Border x:Name="ControlCenterBackgroundSection" Style="{StaticResource GlassCardStyle}">
                                     <StackPanel>
                                         <TextBlock Text="控制中心背景" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,14" />
+                                        <Border Background="{StaticResource GlassPillBrush}" BorderBrush="{StaticResource GlassPillBorderBrush}" BorderThickness="1" CornerRadius="21" Padding="2" HorizontalAlignment="Left" Margin="0,0,0,16">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button x:Name="DefaultLandscapeModeButton" Tag="DefaultLandscape" Content="默认山水" Style="{StaticResource BackgroundModeButtonStyle}" Click="ControlCenterBackgroundModeButton_Click" />
+                                                <Button x:Name="CustomImageModeButton" Tag="CustomImage" Content="自定义图片" Style="{StaticResource BackgroundModeButtonStyle}" Click="ControlCenterBackgroundModeButton_Click" />
+                                                <Button x:Name="TransparentModeButton" Tag="Transparent" Content="完全透明" Style="{StaticResource BackgroundModeButtonStyle}" Click="ControlCenterBackgroundModeButton_Click" />
+                                            </StackPanel>
+                                        </Border>
                                         <Grid>
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <Border Width="134" Height="76" CornerRadius="16" Background="#24FFFFFF" BorderBrush="#86FFFFFF" BorderThickness="1">
+                                            <Border Width="134" Height="76" CornerRadius="16" Background="{StaticResource LiquidGlassBrush}" BorderBrush="{StaticResource GlassPillBorderBrush}" BorderThickness="1.2">
                                                 <Image x:Name="ControlCenterBackgroundImagePreview" Stretch="UniformToFill" />
                                             </Border>
                                             <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
                                                 <TextBlock x:Name="ControlCenterBackgroundImageFileNameText" Text="透明玻璃（无图片）" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="只影响主页；移除图片后恢复透明的 iOS 液体玻璃。" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,5,0,0" />
+                                                <TextBlock Text="只影响控制中心，不会改变胶囊背景。" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,5,0,0" />
                                                 <StackPanel Orientation="Horizontal" Margin="0,11,0,0">
                                                     <Button Content="选择主页图片" Style="{StaticResource PrimaryButtonStyle}" Click="ChooseControlCenterBackgroundImageButton_Click" />
-                                                    <Button Content="恢复透明" Foreground="#FFFFE8E8" Background="#24FFFFFF" BorderBrush="#86FFFFFF" BorderThickness="1" Padding="14,9" Margin="10,0,0,0" Cursor="Hand" Click="RemoveControlCenterBackgroundImageButton_Click" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Grid>
@@ -613,7 +788,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,14,0,0">
+                                <Border x:Name="CapsuleBackgroundSection" Style="{StaticResource GlassCardStyle}" Margin="0,18,0,0">
                                     <StackPanel>
                                         <TextBlock Text="胶囊背景" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,14" />
                                         <Grid>
@@ -630,7 +805,7 @@
                                                 </StackPanel>
                                             </StackPanel>
                                         </Grid>
-                                        <Separator Background="#294056" Margin="0,16" />
+                                        <Separator Background="#5AFFFFFF" Margin="0,16" />
                                         <Grid Margin="0,5">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="图片透明度" VerticalAlignment="Center"/>
@@ -652,10 +827,10 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" ScrollChanged="PageScrollViewer_ScrollChanged">
                             <StackPanel Margin="0,4,10,24">
-                                <TextBlock Text="系统" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <TextBlock x:Name="SystemSection" Text="系统" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+                                <Border Style="{StaticResource GlassCardStyle}">
                                     <StackPanel>
                                         <Grid>
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -667,7 +842,7 @@
                                             <CheckBox x:Name="StartupCheckBox"
                                                       Grid.Column="1"
                                                       Content="启用"
-                                                      Foreground="White"
+                                                      Foreground="#243B58"
                                                       VerticalAlignment="Center"
                                                       Margin="20,0,0,0"
                                                       Checked="StartupCheckBox_Changed"
@@ -690,8 +865,8 @@
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Text="外观" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <TextBlock x:Name="AppearanceSection" Text="外观" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
+                                <Border Style="{StaticResource GlassCardStyle}">
                                     <StackPanel>
                                         <Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions><TextBlock Text="透明度" VerticalAlignment="Center"/><Slider x:Name="GlassOpacitySlider" Grid.Column="1" Tag="GlassOpacity" ValueChanged="SettingSlider_ValueChanged"/><TextBlock x:Name="GlassOpacityValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
                                         <Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions><TextBlock Text="阴影" VerticalAlignment="Center"/><Slider x:Name="ShadowSlider" Grid.Column="1" Tag="Shadow" ValueChanged="SettingSlider_ValueChanged"/><TextBlock x:Name="ShadowValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
@@ -701,8 +876,8 @@
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Text="流光" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <TextBlock x:Name="GlowSection" Text="流光" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
+                                <Border Style="{StaticResource GlassCardStyle}">
                                     <StackPanel>
                                         <Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions><TextBlock Text="亮度" VerticalAlignment="Center"/><Slider x:Name="GlowIntensitySlider" Grid.Column="1" Tag="GlowIntensity" ValueChanged="SettingSlider_ValueChanged"/><TextBlock x:Name="GlowIntensityValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
                                         <Grid Margin="0,7"><Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions><TextBlock Text="粗细" VerticalAlignment="Center"/><Slider x:Name="GlowThicknessSlider" Grid.Column="1" Tag="GlowThickness" ValueChanged="SettingSlider_ValueChanged"/><TextBlock x:Name="GlowThicknessValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
@@ -710,21 +885,21 @@
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Text="歌词语言" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <TextBlock x:Name="LyricsSection" Text="歌词语言" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
+                                <Border Style="{StaticResource GlassCardStyle}">
                                     <ComboBox x:Name="LyricLanguageComboBox" Width="220" HorizontalAlignment="Left" SelectionChanged="LyricLanguageComboBox_SelectionChanged">
                                         <ComboBoxItem Content="简体中文" Tag="Simplified" />
                                         <ComboBoxItem Content="繁體中文" Tag="Traditional" />
                                     </ComboBox>
                                 </Border>
 
-                                <TextBlock Text="功能区域" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <TextBlock x:Name="PresentationSection" Text="功能区域" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
+                                <Border Style="{StaticResource GlassCardStyle}">
                                     <StackPanel x:Name="PresentationSettingsPanel" />
                                 </Border>
 
-                                <TextBlock Text="配置管理" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+                                <TextBlock x:Name="ConfigurationSection" Text="配置管理" FontSize="16" FontWeight="SemiBold" Margin="0,22,0,10" />
+                                <Border Style="{StaticResource GlassCardStyle}">
                                     <StackPanel>
                                         <TextBlock Text="备份或迁移当前主题、布局、应用和功能区域设置。导入前会验证文件，恢复默认不会改变开机自启注册状态。"
                                                    Foreground="{StaticResource MutedTextBrush}"
@@ -748,16 +923,16 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <ScrollViewer x:Name="VersionPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer x:Name="VersionPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" ScrollChanged="PageScrollViewer_ScrollChanged">
                             <StackPanel Margin="0,4,10,20">
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="16" Padding="26">
+                                <Border x:Name="VersionInfoSection" Style="{StaticResource GlassCardStyle}" Padding="26">
                                     <StackPanel>
                                         <Border Width="76" Height="76" CornerRadius="24" Background="#1C3447" BorderBrush="#7246E0FF" BorderThickness="1" HorizontalAlignment="Left">
                                             <TextBlock Text="◆" Foreground="#46E0FF" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                         <TextBlock x:Name="ProductNameText" FontSize="24" FontWeight="Bold" Margin="0,18,0,0" />
                                         <TextBlock x:Name="ProductVersionText" Foreground="#46E0FF" FontSize="14" Margin="0,7,0,0" />
-                                        <Separator Background="#294056" Margin="0,22" />
+                                        <Separator Background="#5AFFFFFF" Margin="0,22" />
                                         <Grid>
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="36"/><RowDefinition Height="36"/></Grid.RowDefinitions>
@@ -769,7 +944,7 @@
                                         <TextBlock x:Name="CopyVersionStatusText" Foreground="#72F4A4" Margin="0,10,0,0" />
                                     </StackPanel>
                                 </Border>
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="16" Padding="22" Margin="0,18,0,0">
+                                <Border x:Name="DiagnosticsSection" Style="{StaticResource GlassCardStyle}" Padding="22" Margin="0,18,0,0">
                                     <StackPanel>
                                         <TextBlock Text="诊断中心" FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock Text="诊断内容不包含歌词、歌曲名、应用列表、用户文件路径或反馈附件。"
@@ -795,15 +970,15 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <ScrollViewer x:Name="FeedbackPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer x:Name="FeedbackPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" ScrollChanged="PageScrollViewer_ScrollChanged">
                             <StackPanel Margin="0,4,10,24">
-                                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="16" Padding="22">
+                                <Border x:Name="FeedbackTextSection" Style="{StaticResource GlassCardStyle}" Padding="22">
                                     <StackPanel>
                                         <TextBlock Text="告诉我们你遇到的问题或希望增加的功能" FontSize="15" FontWeight="SemiBold" />
                                         <TextBox x:Name="FeedbackTextBox" Height="190" Margin="0,14,0,0" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" TextChanged="FeedbackTextBox_TextChanged" />
                                         <TextBlock x:Name="FeedbackCountText" Text="0 字" Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Right" Margin="0,6,0,0" />
 
-                                        <Border x:Name="FeedbackDropZone" Margin="0,18,0,0" Padding="18" CornerRadius="12" Background="#71101B28" BorderBrush="#3D5C76" BorderThickness="1" AllowDrop="True" DragOver="FeedbackDropZone_DragOver" Drop="FeedbackDropZone_Drop">
+                                        <Border x:Name="FeedbackDropZone" Margin="0,18,0,0" Padding="18" CornerRadius="12" Background="#58FFFFFF" BorderBrush="#A8FFFFFF" BorderThickness="1" AllowDrop="True" DragOver="FeedbackDropZone_DragOver" Drop="FeedbackDropZone_Drop">
                                             <Grid>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <StackPanel>
@@ -829,5 +1004,39 @@
             </Grid>
         </Grid>
         </Border>
+
+        <Popup x:Name="FeatureSearchPopup" PlacementTarget="{Binding ElementName=SearchButton}"
+               Placement="Bottom" HorizontalOffset="-330" VerticalOffset="8"
+               AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade">
+            <Border Width="390" MaxHeight="430" Padding="16" CornerRadius="22"
+                    Background="#E9F5FBFF" BorderBrush="#D8FFFFFF" BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect Color="#355B82" BlurRadius="30" ShadowDepth="8" Opacity="0.25" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="搜索控制中心" FontSize="17" FontWeight="Bold" />
+                    <TextBox x:Name="FeatureSearchTextBox" Margin="0,12,0,10" Height="42"
+                             VerticalContentAlignment="Center" TextChanged="FeatureSearchTextBox_TextChanged"
+                             KeyDown="FeatureSearchTextBox_KeyDown" />
+                    <ListBox x:Name="FeatureSearchResultsList" MaxHeight="310" Background="Transparent"
+                             BorderThickness="0" MouseLeftButtonUp="FeatureSearchResultsList_MouseLeftButtonUp"
+                             KeyDown="FeatureSearchResultsList_KeyDown">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="12,10" Margin="0,2" CornerRadius="12" Background="#55FFFFFF">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Location}" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="FeatureSearchEmptyText" Text="没有找到匹配功能" Visibility="Collapsed"
+                               Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" Margin="0,18" />
+                    <TextBlock Text="Enter 定位 · Esc 关闭" Foreground="{StaticResource MutedTextBrush}" FontSize="10" HorizontalAlignment="Right" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </Window>
