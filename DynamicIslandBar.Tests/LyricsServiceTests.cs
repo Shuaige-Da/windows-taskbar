@@ -52,56 +52,29 @@ public class LyricsServiceTests
     }
 
     [Fact]
-    public void GetCurrentLyricWindow_ReturnsFirstSyncedLineWhenPositionIsZero()
+    public void HasLyricsFor_DoesNotExposePreviousSongLyricsUnderNewIdentity()
     {
         var service = new LyricsService();
-        LoadLrc(service, """
-            [00:00.00]第一句
-            [00:08.00]第二句
-            [00:16.00]第三句
-            """);
+        LoadLrc(service, "[00:00.00]旧歌曲歌词");
+        SetLoadedIdentity(service, "旧歌曲", "旧歌手");
 
-        var window = service.GetCurrentLyricWindow(TimeSpan.Zero);
-
-        Assert.NotNull(window);
-        Assert.Equal("第一句", window!.Value.Text);
-        Assert.Equal(TimeSpan.Zero, window.Value.Start);
-        Assert.Equal(TimeSpan.FromSeconds(8), window.Value.End);
-        Assert.True(window.Value.IsSynced);
+        Assert.True(service.HasLyricsFor("旧歌曲", "旧歌手"));
+        Assert.False(service.HasLyricsFor("新歌曲", "新歌手"));
     }
 
     [Fact]
-    public void GetCurrentLyricWindow_ReturnsCurrentTextAndNextTimestampForSyncedLyrics()
+    public void HasLyricsFor_RejectsSameMetadataWhenDurationIndicatesDifferentVersion()
     {
         var service = new LyricsService();
-        LoadLrc(service, """
-            [00:00.00]第一句
-            [00:08.50]第二句
-            [00:12.00]第三句
-            """);
+        LoadLrc(service, "[00:00.00]专辑版歌词");
+        SetLoadedIdentity(service, "同名歌曲", "同一歌手");
+        typeof(LyricsService).GetField("_lastRequestedDuration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, TimeSpan.FromSeconds(210));
+        typeof(LyricsService).GetField("_songDuration", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, TimeSpan.FromSeconds(198));
 
-        var window = service.GetCurrentLyricWindow(TimeSpan.FromSeconds(9));
-
-        Assert.NotNull(window);
-        Assert.Equal("第二句", window!.Value.Text);
-        Assert.Equal(TimeSpan.FromSeconds(8.5), window.Value.Start);
-        Assert.Equal(TimeSpan.FromSeconds(12), window.Value.End);
-        Assert.True(window.Value.IsSynced);
-    }
-
-    [Fact]
-    public void GetCurrentLyricWindow_ReturnsEstimatedWindowForPlainLyrics()
-    {
-        var service = new LyricsService();
-        LoadPlainLyrics(service, ["第一句", "第二句", "第三句"], TimeSpan.FromSeconds(30));
-
-        var window = service.GetCurrentLyricWindow(TimeSpan.FromSeconds(11));
-
-        Assert.NotNull(window);
-        Assert.Equal("第二句", window!.Value.Text);
-        Assert.Equal(TimeSpan.FromSeconds(10), window.Value.Start);
-        Assert.Equal(TimeSpan.FromSeconds(20), window.Value.End);
-        Assert.False(window.Value.IsSynced);
+        Assert.True(service.HasLyricsFor("同名歌曲", "同一歌手", TimeSpan.FromSeconds(210)));
+        Assert.False(service.HasLyricsFor("同名歌曲", "同一歌手", TimeSpan.FromSeconds(300)));
     }
 
     private static void LoadLrc(LyricsService service, string lrc)
@@ -113,18 +86,12 @@ public class LyricsServiceTests
         method!.Invoke(service, [lrc]);
     }
 
-    private static void LoadPlainLyrics(LyricsService service, string[] lines, TimeSpan duration)
+    private static void SetLoadedIdentity(LyricsService service, string title, string artist)
     {
-        var plainField = typeof(LyricsService).GetField(
-            "_plainLyricLines",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        var durationField = typeof(LyricsService).GetField(
-            "_songDuration",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-
-        Assert.NotNull(plainField);
-        Assert.NotNull(durationField);
-        plainField!.SetValue(service, lines);
-        durationField!.SetValue(service, duration);
+        typeof(LyricsService).GetField("_lastTitle", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, title);
+        typeof(LyricsService).GetField("_lastArtist", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, artist);
     }
+
 }

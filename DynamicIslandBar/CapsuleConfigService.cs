@@ -44,6 +44,7 @@ public sealed class CapsuleConfig
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
     public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
+    public CapsulePresentationConfig Presentation { get; set; } = new();
 }
 
 public static class CapsuleConfigSerializer
@@ -155,6 +156,18 @@ public static class CapsuleConfigMutator
         config.LyricLanguage = language;
     }
 
+    public static void SetPartVisibility(CapsuleConfig config, CapsuleVisualPart part, bool isVisible)
+    {
+        config.Presentation ??= new CapsulePresentationConfig();
+        config.Presentation.Get(part).IsVisible = isVisible;
+    }
+
+    public static void SetPartOpacityPercent(CapsuleConfig config, CapsuleVisualPart part, int percent)
+    {
+        config.Presentation ??= new CapsulePresentationConfig();
+        config.Presentation.Get(part).OpacityPercent = ClampPercent(percent);
+    }
+
     private static int ClampPercent(int percent)
     {
         return Math.Clamp(percent, 0, 100);
@@ -223,6 +236,7 @@ internal sealed class CapsuleConfigStore
     public int CenterCardWidthPercent { get; set; } = 58;
     public string? CenterCardAppId { get; set; }
     public LyricLanguage LyricLanguage { get; set; } = LyricLanguage.Simplified;
+    public CapsulePresentationConfig? Presentation { get; set; }
 
     public CapsuleConfig ToConfig()
     {
@@ -247,7 +261,8 @@ internal sealed class CapsuleConfigStore
             TopDockCapsuleLengthPercent = ClampPercent(TopDockCapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(CenterCardWidthPercent),
             CenterCardAppId = CenterCardAppId,
-            LyricLanguage = LyricLanguage
+            LyricLanguage = LyricLanguage,
+            Presentation = (Presentation ?? new CapsulePresentationConfig()).CloneNormalized()
         };
 
         foreach (var appId in FavoriteApps)
@@ -294,7 +309,8 @@ internal sealed class CapsuleConfigStore
             TopDockCapsuleLengthPercent = ClampPercent(config.TopDockCapsuleLengthPercent),
             CenterCardWidthPercent = ClampPercent(config.CenterCardWidthPercent),
             CenterCardAppId = config.CenterCardAppId,
-            LyricLanguage = config.LyricLanguage
+            LyricLanguage = config.LyricLanguage,
+            Presentation = (config.Presentation ?? new CapsulePresentationConfig()).CloneNormalized()
         };
     }
 

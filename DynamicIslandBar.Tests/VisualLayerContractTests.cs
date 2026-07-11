@@ -190,9 +190,10 @@ public class VisualLayerContractTests
     {
         var xaml = ReadMainWindowXaml();
 
-        Assert.Contains("x:Name=\"CenterCardLyricsLayer\"", xaml);
+        Assert.Contains("x:Name=\"LyricsPresenter\"", xaml);
         Assert.Contains("x:Name=\"CenterCardLyricsViewport\"", xaml);
-        Assert.Contains("x:Name=\"CenterCardDetailsLayer\"", xaml);
+        Assert.Contains("x:Name=\"DetailsPresenter\"", xaml);
+        Assert.Contains("x:Name=\"MediaControlsPresenter\"", xaml);
         Assert.Contains("x:Name=\"CenterCardLyricMarqueeText\"", xaml);
         Assert.Contains("x:Name=\"CenterCardLeftWave\"", xaml);
         Assert.Contains("x:Name=\"CenterCardRightWave\"", xaml);
@@ -220,6 +221,29 @@ public class VisualLayerContractTests
         Assert.Contains("Data=\"M0,0 L5,5 L10,0\"", xaml);
         Assert.DoesNotContain("CenterCardAppSelectorButton\"\r\n                                        Grid.Column=\"1\"", xaml);
         Assert.DoesNotContain("x:Name=\"CenterCardAppActions\"", xaml);
+    }
+
+    [Fact]
+    public void MainWindow_UsesSemanticPresentersWithoutOpacityCoupling()
+    {
+        var xaml = ReadMainWindowXaml();
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+        var document = System.Xml.Linq.XDocument.Parse(xaml);
+        System.Xml.Linq.XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var centerCard = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "CenterCardPresenter");
+
+        Assert.Contains("x:Name=\"CapsuleChromePresenter\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleLayoutGrid\"", xaml);
+        Assert.Contains("x:Name=\"DockPresenter\"", xaml);
+        Assert.Contains("x:Name=\"SystemPresenter\"", xaml);
+        Assert.Contains("x:Name=\"OverlayPresenter\"", xaml);
+        Assert.DoesNotContain("x:Name=\"CapsuleContentGrid\"", xaml);
+        Assert.DoesNotContain(
+            centerCard.Ancestors(),
+            ancestor => (string?)ancestor.Attribute(x + "Name") == "CapsuleBorder");
+        Assert.Contains("_presentationController.AnimateAutoHideFactor(", code);
+        Assert.DoesNotContain("CapsuleGrid.BeginAnimation(OpacityProperty", code);
     }
 
     [Fact]
@@ -301,10 +325,10 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
-        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(currentWindow.Text) : currentWindow.Text", code);
+        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(track) : track", code);
         Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
         Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
-        Assert.Contains("CenterCardLyricScrollPolicy.BuildVerticalPlan(", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
         Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
         Assert.Contains("textBlock.BeginAnimation(Canvas.LeftProperty, animation);", code);
     }
@@ -320,7 +344,8 @@ public class VisualLayerContractTests
         Assert.Contains("CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;", code);
         Assert.Contains("Grid.SetRow(ActiveAppSummaryIcon, 0);", code);
         Assert.Contains("Grid.SetRow(CenterCardDetailsTextStack, 1);", code);
-        Assert.Contains("Grid.SetRow(CenterCardTransportControls, 2);", code);
+        Assert.Contains("Grid.SetRow(MediaControlsPresenter, 2);", code);
+        Assert.Contains("Grid.SetRow(CenterCardTransportControls, 0);", code);
     }
 
     [Fact]
@@ -395,14 +420,14 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
         var stateBuildIndex = code.IndexOf("var state = CenterCardPresentationPolicy.Build(", StringComparison.Ordinal);
         var lyricsVisibilityIndex = code.IndexOf(
-            "CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;",
+            "_presentationController.SetRuntimeVisibility(CapsuleVisualPart.Lyrics, state.ShowLyricsMarquee);",
             StringComparison.Ordinal);
-        var detailsVisibilityLine = "CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;";
+        var detailsVisibilityLine = "_presentationController.SetRuntimeVisibility(CapsuleVisualPart.Details, !state.ShowLyricsMarquee);";
         var detailsVisibilityIndex = code.IndexOf(detailsVisibilityLine, StringComparison.Ordinal);
 
         Assert.Contains("var state = CenterCardPresentationPolicy.Build(", code);
         Assert.Contains("var sideDetailsState = CenterCardPresentationPolicy.Build(", code);
-        Assert.Contains("CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains("_presentationController.SetRuntimeVisibility(CapsuleVisualPart.Lyrics, state.ShowLyricsMarquee);", code);
         Assert.Contains(detailsVisibilityLine, code);
         Assert.Contains("UpdateCenterCardSideDetailsOverlay(app, sideDetailsState);", code);
         Assert.True(stateBuildIndex >= 0);

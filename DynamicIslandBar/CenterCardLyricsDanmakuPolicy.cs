@@ -84,7 +84,8 @@ public static class CenterCardLyricsDanmakuPolicy
         }
 
         var multiplier = totalTravelDistance / currentLyricVisibleDistance;
-        return TimeSpan.FromSeconds(currentLyricDuration.TotalSeconds * multiplier);
+        var seconds = currentLyricDuration.TotalSeconds * multiplier;
+        return TimeSpan.FromSeconds(Math.Clamp(seconds, 4d, 10d));
     }
 
     public static bool ShouldRestartMarquee(

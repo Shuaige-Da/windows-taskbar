@@ -1,8 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="Default" />
-  </Configurations>
-  <Project Path="DynamicIslandBar.Setup/DynamicIslandBar.Setup.vdproj" Type="Installer">
-    <Build />
-  </Project>
-</Solution>

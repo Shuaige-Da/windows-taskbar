@@ -19,6 +19,7 @@ public sealed record LyricCandidate(
 public static class LyricMatchingPolicy
 {
     public const double MinimumAcceptedScore = 0.55d;
+    public const double MinimumMetadataScore = MinimumAcceptedScore - 0.08d;
 
     private static readonly string[] VersionPenaltyTerms =
     [
@@ -62,6 +63,16 @@ public static class LyricMatchingPolicy
             return 0d;
         }
 
+        return ScoreMetadata(identity, candidate);
+    }
+
+    public static double ScoreMetadata(LyricSearchIdentity identity, LyricCandidate candidate)
+    {
+        if (candidate.IsNoLyric || candidate.IsUncollected)
+        {
+            return 0d;
+        }
+
         var titleScore = Similarity(Normalize(identity.Title), Normalize(candidate.Title));
         var artistScore = string.IsNullOrWhiteSpace(identity.Artist)
             ? 0.75d
@@ -77,6 +88,30 @@ public static class LyricMatchingPolicy
             + lyricBonus
             - durationPenalty
             - versionPenalty);
+    }
+
+    public static IReadOnlyList<LyricCandidate> RankMetadataCandidates(
+        LyricSearchIdentity identity,
+        IEnumerable<LyricCandidate> candidates,
+        int maximumCount)
+    {
+        if (maximumCount <= 0)
+        {
+            return Array.Empty<LyricCandidate>();
+        }
+
+        return candidates
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Score = ScoreMetadata(identity, candidate)
+            })
+            .Where(result => result.Score >= MinimumMetadataScore)
+            .OrderByDescending(result => result.Score)
+            .ThenBy(result => GetDurationDifference(identity.Duration, result.Candidate.Duration))
+            .Take(maximumCount)
+            .Select(result => result.Candidate)
+            .ToArray();
     }
 
     private static bool CanUse(LyricCandidate candidate)

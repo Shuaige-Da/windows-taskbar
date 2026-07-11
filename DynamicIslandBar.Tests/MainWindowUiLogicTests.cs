@@ -10,28 +10,27 @@ public class MainWindowUiLogicTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
-        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(currentWindow.Text) : currentWindow.Text", code);
+        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(track) : track", code);
         Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
         Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
-        Assert.Contains("CenterCardLyricScrollPolicy.BuildVerticalPlan(", code);
-        Assert.Contains("Canvas.SetTop(textBlock, plan.StartOffset);", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
+        Assert.Contains("Canvas.SetTop(textBlock, startOffset);", code);
         Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
-        Assert.DoesNotContain("EstimateCurrentLyricTextHeight(lyric, textBlock)", code);
-        Assert.DoesNotContain("ScheduleCenterCardLyricsContinuation();", code);
+        Assert.Contains("EstimateCurrentLyricTextHeight(track, textBlock)", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation(scrollGeneration);", code);
     }
 
     [Fact]
-    public void MainWindow_HorizontalLyricsUseSingleCurrentLineInsteadOfContinuousTrack()
+    public void MainWindow_HorizontalLyricsUseContinuousSynchronizedTrack()
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
-        Assert.Contains("var currentWindow = _lyricsService.GetCurrentLyricWindow(position);", code);
-        Assert.Contains("BeginCenterCardSingleLineScroll(currentWindow.Value);", code);
-        Assert.DoesNotContain("_lyricsService.GetCurrentLyricSequence(position, maxLines: 6)", code);
-        Assert.DoesNotContain("CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(sequence)", code);
-        Assert.DoesNotContain("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
-        Assert.DoesNotContain("CenterCardLyricsDanmakuPolicy.ShouldRestartMarquee(", code);
-        Assert.DoesNotContain("ScheduleCenterCardLyricsContinuation();", code);
+        Assert.Contains("_lyricsService.GetCurrentLyricSequence(position, maxLines: 6)", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(sequence)", code);
+        Assert.Contains("BeginCenterCardContinuousTrackScroll(track, forceRestart);", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation(scrollGeneration);", code);
+        Assert.DoesNotContain("BeginCenterCardSingleLineScroll", code);
     }
 
     [Fact]
@@ -41,7 +40,7 @@ public class MainWindowUiLogicTests
 
         Assert.Contains("CenterCardLyricMarqueeText.Visibility = Visibility.Collapsed;", code);
         Assert.Contains("CenterCardLyricsDanmakuCanvas.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
-        Assert.Contains("BeginCenterCardSingleLineScroll(activeWindow);", code);
+        Assert.Contains("BeginCenterCardContinuousTrackScroll(", code);
         Assert.DoesNotContain("CenterCardLyricsDanmakuCanvas.Visibility = Visibility.Collapsed;", code);
     }
 
@@ -50,9 +49,58 @@ public class MainWindowUiLogicTests
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
-        Assert.Contains("var currentWindow = _lyricsService.GetCurrentLyricWindow(info.Position);", code);
-        Assert.Contains("_centerCardLiveMediaSnapshot = snapshot with { Lyric = currentWindow.Value.Text };", code);
+        Assert.Contains("var lyricsAvailable = await _lyricsService.EnsureLyricsAsync(", code);
+        Assert.Contains("ApplyCenterCardLyricAtPosition(info.Position, forceRestart: false)", code);
+        Assert.Contains("_centerCardLiveMediaSnapshot = snapshot with { Lyric = track };", code);
         Assert.Contains("UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));", code);
+    }
+
+    [Fact]
+    public void MainWindow_MediaRefreshKeepsActiveContinuousTrackUntilAnimationCompletes()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("private bool ApplyCenterCardLyricTrack(string track, bool forceRestart)", code);
+        Assert.Contains("&& (forceRestart || !_hasActiveCenterCardLyricScroll)", code);
+        Assert.Contains("if (!forceRestart && _hasActiveCenterCardLyricScroll)", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation(scrollGeneration);", code);
+    }
+
+    [Fact]
+    public void MainWindow_AppIconHoverDoesNotReplaceActiveMusicLyricsSummary()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("ResolveCenterCardSummaryAppDuringIconHover()", code);
+        Assert.Contains("ShouldKeepCenterCardMusicLyricsWhileAppIconHovered()", code);
+        Assert.DoesNotContain("var summaryApp = _hoveredApp ?? GetPrimarySummaryApp();", code);
+    }
+
+    [Fact]
+    public void MainWindow_LyricsFastTimerUpdatesCurrentSongWithoutSongChangeEventGate()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("if (_mediaService == null || !_isMusicPlaying)", code);
+        Assert.DoesNotContain("|| !_mediaService.HasSeenSongChange", code);
+    }
+
+    [Fact]
+    public void MainWindow_SeekForcesLyricWindowResyncAtTargetPosition()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("ApplyCenterCardLyricAtPosition(TimeSpan.FromMilliseconds(targetMs), forceRestart: true);", code);
+    }
+
+    [Fact]
+    public void MainWindow_MediaIdentityChangeClearsOldTrackWithoutDiscardingServiceCache()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("if (HasCenterCardMediaIdentityChanged(previousSnapshot, snapshot))", code);
+        Assert.Contains("ResetCenterCardLyricScrollState(clearActiveTrack: true);", code);
+        Assert.DoesNotContain("_lyricsService.Clear();", code);
     }
 
     [Fact]
@@ -81,16 +129,15 @@ public class MainWindowUiLogicTests
     }
 
     [Fact]
-    public void MainWindow_LyricsPipelineDoesNotUseLoopTimerToRequeueSameLine()
+    public void MainWindow_LyricsPipelineUsesAnimationCompletionInsteadOfLoopTimer()
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.DoesNotContain("private readonly DispatcherTimer _centerCardLyricsLoopTimer;", code);
         Assert.DoesNotContain("CenterCardLyricsLoopTimer_Tick", code);
-        Assert.DoesNotContain("ShouldRestartMarquee(", code);
         Assert.Contains("if (position < TimeSpan.Zero)", code);
-        Assert.Contains("if (_activeCenterCardLyricWindow is { } activeWindow", code);
-        Assert.Contains("BeginCenterCardSingleLineScroll(activeWindow);", code);
+        Assert.Contains("ScheduleCenterCardLyricsContinuation(scrollGeneration);", code);
+        Assert.Contains("BeginCenterCardContinuousTrackScroll(", code);
     }
 
     [Fact]
@@ -138,6 +185,18 @@ public class MainWindowUiLogicTests
     }
 
     [Fact]
+    public void MediaService_UsesDebouncedIdentityAndStablePositionAnchors()
+    {
+        var mediaService = ReadProjectFile("DynamicIslandBar", "MediaService.cs");
+
+        Assert.Contains("IdentityDebounceMilliseconds = 500", mediaService);
+        Assert.Contains("ObserveMediaIdentity(", mediaService);
+        Assert.Contains("SetSmtcAnchorLocked(position, isPlaying);", mediaService);
+        Assert.Contains("_lastSmtcPosition + _smtcTimer.Elapsed", mediaService);
+        Assert.DoesNotContain("// SMTC is reporting position - sync timer", mediaService);
+    }
+
+    [Fact]
     public void MainWindow_CenterCardVolumeControlsMusicAppOnly()
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
@@ -179,8 +238,8 @@ public class MainWindowUiLogicTests
 
         Assert.Contains("var capsuleIsHovered = IsSideDockMode ? false : _isCenterCardHovered;", code);
         Assert.Contains("var sideDetailsState = CenterCardPresentationPolicy.Build(", code);
-        Assert.Contains("CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;", code);
-        Assert.Contains("CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;", code);
+        Assert.Contains("_presentationController.SetRuntimeVisibility(CapsuleVisualPart.Details, !state.ShowLyricsMarquee);", code);
+        Assert.Contains("_presentationController.SetRuntimeVisibility(CapsuleVisualPart.Lyrics, state.ShowLyricsMarquee);", code);
         Assert.Contains("CenterCardLyricsDock.VerticalAlignment = VerticalAlignment.Stretch;", code);
         Assert.Contains("CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;", code);
         Assert.Contains("CenterCardLeftWave.Visibility = Visibility.Collapsed;", code);

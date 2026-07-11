@@ -5,6 +5,21 @@ namespace DynamicIslandBar.Tests;
 public class LyricMatchingPolicyTests
 {
     [Fact]
+    public void RankMetadataCandidates_ScoresBeforeLyricsAreDownloaded()
+    {
+        var identity = new LyricSearchIdentity("晴天", "周杰伦", TimeSpan.FromSeconds(269));
+        var candidates = new[]
+        {
+            new LyricCandidate("netease", "wrong", "晴天 DJ", "其他歌手", TimeSpan.FromSeconds(180), false, false, false, false),
+            new LyricCandidate("netease", "best", "晴天", "周杰伦", TimeSpan.FromSeconds(269), false, false, false, false)
+        };
+
+        var ranked = LyricMatchingPolicy.RankMetadataCandidates(identity, candidates, maximumCount: 3);
+
+        Assert.Equal("best", Assert.Single(ranked).Id);
+    }
+
+    [Fact]
     public void SelectBestCandidate_PrefersExactArtistAndClosestDuration()
     {
         var identity = new LyricSearchIdentity("晴天", "周杰伦", TimeSpan.FromSeconds(269));

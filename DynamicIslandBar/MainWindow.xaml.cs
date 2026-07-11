@@ -51,6 +51,7 @@ namespace DynamicIslandBar
         private readonly DispatcherTimer _centerCardMediaRefreshTimer;
         private readonly DispatcherTimer _progressTimer;
         private readonly DispatcherTimer _lyricsFastTimer;
+        private readonly CapsulePresentationController _presentationController;
         private readonly ICenterCardMediaSnapshotSource _centerCardMediaSource = new WindowsMediaSessionSnapshotSource();
         private Storyboard? _glowSpinStoryboard;
         private Storyboard? _dockExpandStoryboard;
@@ -100,7 +101,11 @@ namespace DynamicIslandBar
         private Panel? _appVolumePanel;
         private LyricsService _lyricsService = new();
         private bool _isCenterCardLyricsMarqueeActive;
-        private CurrentLyricWindow? _activeCenterCardLyricWindow;
+        private TimeSpan _centerCardCurrentLyricDuration = TimeSpan.Zero;
+        private int _centerCardLyricScrollGeneration;
+        private bool _hasActiveCenterCardLyricScroll;
+        private readonly Color _lyricPrimaryColor = Color.FromRgb(0x46, 0xE0, 0xFF);
+        private readonly Color _lyricHighlightColor = Color.FromRgb(0xFF, 0x4F, 0xA3);
         private int _playbackModeIndex;
         private IReadOnlyList<LocalInstalledApp> _installedApps = [];
         private bool _installedAppsLoaded;
@@ -109,6 +114,16 @@ namespace DynamicIslandBar
         public MainWindow()
         {
             InitializeComponent();
+            _presentationController = new CapsulePresentationController(
+                new Dictionary<CapsuleVisualPart, IReadOnlyList<FrameworkElement>>
+                {
+                    [CapsuleVisualPart.Chrome] = [CapsuleChromePresenter],
+                    [CapsuleVisualPart.Dock] = [DockPresenter],
+                    [CapsuleVisualPart.System] = [SystemPresenter],
+                    [CapsuleVisualPart.Lyrics] = [LyricsPresenter],
+                    [CapsuleVisualPart.Details] = [DetailsPresenter],
+                    [CapsuleVisualPart.MediaControls] = [MediaControlsPresenter]
+                });
             _glowStopTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
             _glowStopTimer.Tick += GlowStopTimer_Tick;
             _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -161,6 +176,7 @@ namespace DynamicIslandBar
         {
             PermissionService.Initialize(defaultAllowAll: true);
             _capsuleConfig = CapsuleConfigService.Load();
+            _presentationController.ApplyPreferences(_capsuleConfig.Presentation);
             _currentTheme = CapsuleThemeManager.BuildTheme(
                 _capsuleConfig.ThemePreset,
                 _capsuleConfig.BackgroundImagePath,
@@ -298,6 +314,8 @@ namespace DynamicIslandBar
             CapsuleBorder.VerticalAlignment = _capsuleConfig.Mode == CapsuleMode.TopIsland
                 ? VerticalAlignment.Top
                 : VerticalAlignment.Center;
+            CapsuleChromePresenter.VerticalAlignment = CapsuleBorder.VerticalAlignment;
+            CapsuleLayoutPresenter.VerticalAlignment = CapsuleBorder.VerticalAlignment;
             CapsuleGrid.VerticalAlignment = _capsuleConfig.Mode switch
             {
                 CapsuleMode.TopIsland => VerticalAlignment.Top,
@@ -346,44 +364,43 @@ namespace DynamicIslandBar
             AppIconsHost.Margin = isSideDock ? new Thickness(0, 6, 0, 6) : new Thickness(0, 0, 4, 0);
             SystemIconsHost.Margin = isSideDock ? new Thickness(0, 10, 0, 2) : new Thickness(0, 0, 4, 0);
             OverflowFolderButton.Margin = isSideDock ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0);
-            CapsuleContentGrid.Margin = isSideDock ? new Thickness(8, 12, 8, 12) : new Thickness(14, 0, 14, 0);
+            CapsuleLayoutGrid.Margin = isSideDock ? new Thickness(8, 12, 8, 12) : new Thickness(14, 0, 14, 0);
 
-            CapsuleContentGrid.ColumnDefinitions.Clear();
-            CapsuleContentGrid.RowDefinitions.Clear();
+            CapsuleLayoutGrid.ColumnDefinitions.Clear();
+            CapsuleLayoutGrid.RowDefinitions.Clear();
 
             if (isSideDock)
             {
-                CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                CapsuleLayoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                CapsuleLayoutGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                CapsuleLayoutGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                CapsuleLayoutGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-                Grid.SetColumn(DockItems, 0);
-                Grid.SetRow(DockItems, 0);
-                Grid.SetColumn(CenterCardSlot, 0);
-                Grid.SetRow(CenterCardSlot, 1);
-                Grid.SetColumn(SystemIconsHost, 0);
-                Grid.SetRow(SystemIconsHost, 2);
+                Grid.SetColumn(DockPresenter, 0);
+                Grid.SetRow(DockPresenter, 0);
+                Grid.SetColumn(CenterCardPresenter, 0);
+                Grid.SetRow(CenterCardPresenter, 1);
+                Grid.SetColumn(SystemPresenter, 0);
+                Grid.SetRow(SystemPresenter, 2);
+                CapsuleDividerPresenter.Visibility = Visibility.Collapsed;
             }
             else
             {
-                CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                CapsuleContentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                CapsuleContentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                CapsuleLayoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CapsuleLayoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CapsuleLayoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                CapsuleLayoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CapsuleLayoutGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-                Grid.SetColumn(DockItems, 0);
-                Grid.SetRow(DockItems, 0);
-                Grid.SetColumn(CenterCardSlot, 2);
-                Grid.SetRow(CenterCardSlot, 0);
-                Grid.SetColumn(SystemIconsHost, 3);
-                Grid.SetRow(SystemIconsHost, 0);
-            }
-
-            foreach (var rootSeparator in CapsuleContentGrid.Children.OfType<Rectangle>())
-            {
-                rootSeparator.Visibility = isSideDock ? Visibility.Collapsed : Visibility.Visible;
+                Grid.SetColumn(DockPresenter, 0);
+                Grid.SetRow(DockPresenter, 0);
+                Grid.SetColumn(CenterCardPresenter, 2);
+                Grid.SetRow(CenterCardPresenter, 0);
+                Grid.SetColumn(SystemPresenter, 3);
+                Grid.SetRow(SystemPresenter, 0);
+                Grid.SetColumn(CapsuleDividerPresenter, 1);
+                Grid.SetRow(CapsuleDividerPresenter, 0);
+                CapsuleDividerPresenter.Visibility = Visibility.Visible;
             }
 
             UpdateSystemIconsLayout(isSideDock);
@@ -418,8 +435,10 @@ namespace DynamicIslandBar
             ActiveAppSummarySubtitle.TextWrapping = isSideDock ? TextWrapping.Wrap : TextWrapping.NoWrap;
             CenterCardLyricMarqueeText.TextWrapping = isSideDock ? TextWrapping.Wrap : TextWrapping.NoWrap;
 
-            CenterCardDetailsLayer.ColumnDefinitions.Clear();
-            CenterCardDetailsLayer.RowDefinitions.Clear();
+            CenterCardDetailsLayout.ColumnDefinitions.Clear();
+            CenterCardDetailsLayout.RowDefinitions.Clear();
+            DetailsPresenter.ColumnDefinitions.Clear();
+            DetailsPresenter.RowDefinitions.Clear();
 
             if (isSideDock)
             {
@@ -440,18 +459,28 @@ namespace DynamicIslandBar
                 CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;
                 CenterCardLyricsViewport.HorizontalAlignment = HorizontalAlignment.Stretch;
 
-                CenterCardDetailsLayer.Margin = new Thickness(8, 12, 8, 12);
-                CenterCardDetailsLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                CenterCardDetailsLayer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                CenterCardDetailsLayer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                CenterCardDetailsLayer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                CenterCardDetailsLayout.Margin = new Thickness(8, 12, 8, 12);
+                CenterCardDetailsLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                CenterCardDetailsLayout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                CenterCardDetailsLayout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                CenterCardDetailsLayout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                DetailsPresenter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                DetailsPresenter.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                DetailsPresenter.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+                Grid.SetColumn(DetailsPresenter, 0);
+                Grid.SetRow(DetailsPresenter, 0);
+                Grid.SetColumnSpan(DetailsPresenter, 1);
+                Grid.SetRowSpan(DetailsPresenter, 2);
+                Grid.SetColumn(MediaControlsPresenter, 0);
+                Grid.SetRow(MediaControlsPresenter, 2);
 
                 Grid.SetColumn(ActiveAppSummaryIcon, 0);
                 Grid.SetRow(ActiveAppSummaryIcon, 0);
                 Grid.SetColumn(CenterCardDetailsTextStack, 0);
                 Grid.SetRow(CenterCardDetailsTextStack, 1);
                 Grid.SetColumn(CenterCardTransportControls, 0);
-                Grid.SetRow(CenterCardTransportControls, 2);
+                Grid.SetRow(CenterCardTransportControls, 0);
 
                 ActiveAppSummaryIcon.HorizontalAlignment = HorizontalAlignment.Center;
                 ActiveAppSummaryIcon.VerticalAlignment = VerticalAlignment.Top;
@@ -506,11 +535,21 @@ namespace DynamicIslandBar
                 CenterCardLyricsViewport.VerticalAlignment = VerticalAlignment.Stretch;
                 CenterCardLyricsViewport.HorizontalAlignment = HorizontalAlignment.Stretch;
 
-                CenterCardDetailsLayer.Margin = new Thickness(38, 0, 38, 0);
-                CenterCardDetailsLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                CenterCardDetailsLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                CenterCardDetailsLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                CenterCardDetailsLayer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CenterCardDetailsLayout.Margin = new Thickness(38, 0, 38, 0);
+                CenterCardDetailsLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CenterCardDetailsLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                CenterCardDetailsLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                CenterCardDetailsLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                DetailsPresenter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                DetailsPresenter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                DetailsPresenter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                Grid.SetColumn(DetailsPresenter, 0);
+                Grid.SetRow(DetailsPresenter, 0);
+                Grid.SetColumnSpan(DetailsPresenter, 3);
+                Grid.SetRowSpan(DetailsPresenter, 1);
+                Grid.SetColumn(MediaControlsPresenter, 3);
+                Grid.SetRow(MediaControlsPresenter, 0);
 
                 Grid.SetColumn(CenterCardAppSelectorButton, 0);
                 Grid.SetRow(CenterCardAppSelectorButton, 0);
@@ -518,7 +557,7 @@ namespace DynamicIslandBar
                 Grid.SetRow(ActiveAppSummaryIcon, 0);
                 Grid.SetColumn(CenterCardDetailsTextStack, 2);
                 Grid.SetRow(CenterCardDetailsTextStack, 0);
-                Grid.SetColumn(CenterCardTransportControls, 3);
+                Grid.SetColumn(CenterCardTransportControls, 0);
                 Grid.SetRow(CenterCardTransportControls, 0);
 
                 ActiveAppSummaryIcon.HorizontalAlignment = HorizontalAlignment.Left;
@@ -1051,7 +1090,7 @@ namespace DynamicIslandBar
 
         private void LyricsFastTimer_Tick(object? sender, EventArgs e)
         {
-            if (_mediaService == null || !_isMusicPlaying || !_mediaService.HasSeenSongChange)
+            if (_mediaService == null || !_isMusicPlaying)
                 return;
 
             var snapshot = _centerCardLiveMediaSnapshot;
@@ -1062,30 +1101,7 @@ namespace DynamicIslandBar
             if (position < TimeSpan.Zero)
                 return;
 
-            var currentWindow = _lyricsService.GetCurrentLyricWindow(position);
-            if (currentWindow is null)
-            {
-                return;
-            }
-
-            if (_activeCenterCardLyricWindow is { } activeWindow
-                && activeWindow.Equals(currentWindow.Value))
-            {
-                return;
-            }
-
-            _activeCenterCardLyricWindow = currentWindow.Value;
-            _centerCardLiveMediaSnapshot = snapshot with { Lyric = currentWindow.Value.Text };
-            var app = GetPrimarySummaryApp();
-            if (app != null)
-            {
-                UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
-            }
-
-            if (_isCenterCardLyricsMarqueeActive)
-            {
-                BeginCenterCardSingleLineScroll(currentWindow.Value);
-            }
+            ApplyCenterCardLyricAtPosition(position, forceRestart: false);
         }
 
         private async Task RefreshCenterCardMediaSnapshotAsync()
@@ -1098,10 +1114,16 @@ namespace DynamicIslandBar
             }
 
             var refreshVersion = ++_centerCardMediaRefreshVersion;
+            var previousSnapshot = _centerCardLiveMediaSnapshot;
             var snapshot = await _centerCardMediaSource.TryGetSnapshotAsync(app);
             if (refreshVersion != _centerCardMediaRefreshVersion)
             {
                 return;
+            }
+
+            if (HasCenterCardMediaIdentityChanged(previousSnapshot, snapshot))
+            {
+                ResetCenterCardLyricScrollState(clearActiveTrack: true);
             }
 
             // Preserve lyric from previous snapshot if same song
@@ -1147,6 +1169,10 @@ namespace DynamicIslandBar
                             Artist: info.Artist ?? string.Empty,
                             Lyric: string.Empty,
                             SourceAppUserModelId: null);
+                        if (HasCenterCardMediaIdentityChanged(previousSnapshot, snapshot))
+                        {
+                            ResetCenterCardLyricScrollState(clearActiveTrack: true);
+                        }
                         _centerCardLiveMediaSnapshot = snapshot;
                         UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
                     }
@@ -1171,33 +1197,24 @@ namespace DynamicIslandBar
                     // Fetch lyrics (slow: network call) - display update handled by LyricsFastTimer
                     if (snapshot != null && !string.IsNullOrWhiteSpace(info.Title))
                     {
-                        await _lyricsService.EnsureLyricsAsync(
+                        var lyricsAvailable = await _lyricsService.EnsureLyricsAsync(
                             info.Title ?? string.Empty,
                             info.Artist ?? string.Empty,
                             info.Duration);
 
                         // Pass real duration from lyrics API to MediaService
-                        if (_lyricsService.RealDuration > TimeSpan.Zero)
+                        if (lyricsAvailable && _lyricsService.RealDuration > TimeSpan.Zero)
                             _mediaService.SetRealDuration(_lyricsService.RealDuration);
 
-                        var currentWindow = _lyricsService.GetCurrentLyricWindow(info.Position);
-                        if (currentWindow is null && info.Position <= TimeSpan.Zero)
+                        var lyricApplied = lyricsAvailable
+                            && ApplyCenterCardLyricAtPosition(info.Position, forceRestart: false);
+                        if (!lyricApplied && lyricsAvailable && info.Position <= TimeSpan.Zero)
                         {
-                            currentWindow = _lyricsService.GetCurrentLyricWindow(_mediaService.GetCurrentPosition());
+                            ApplyCenterCardLyricAtPosition(
+                                _mediaService.GetCurrentPosition(),
+                                forceRestart: false);
                         }
-
-                        if (currentWindow is not null && snapshot != null)
-                        {
-                            _activeCenterCardLyricWindow = currentWindow;
-                            _centerCardLiveMediaSnapshot = snapshot with { Lyric = currentWindow.Value.Text };
-                            snapshot = _centerCardLiveMediaSnapshot;
-                            UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
-
-                            if (_isCenterCardLyricsMarqueeActive)
-                            {
-                                BeginCenterCardSingleLineScroll(currentWindow.Value);
-                            }
-                        }
+                        snapshot = _centerCardLiveMediaSnapshot;
                     }
                     else
                     {
@@ -1215,8 +1232,12 @@ namespace DynamicIslandBar
                     UpdatePlaybackModeIcon();
 
                     // Re-update progress panel visibility now that media state is fresh
-                    var showProgress = !IsSideDockMode && _isCenterCardHovered && _mediaDuration.TotalSeconds > 0;
+                    var showProgress = !IsSideDockMode
+                        && _isCenterCardHovered
+                        && _mediaDuration.TotalSeconds > 0
+                        && _presentationController.IsEffectivelyVisible(CapsuleVisualPart.MediaControls);
                     CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
+                    CenterCardProgressPanel.Opacity = _capsuleConfig.Presentation.MediaControls.OpacityPercent / 100d;
                     if (_isCenterCardHovered)
                     {
                         UpdateCenterCardHoverVisual(new CenterCardPresentation(
@@ -1234,7 +1255,7 @@ namespace DynamicIslandBar
         private bool IsRunningAppsRefreshInteractive()
         {
             return _hoveredApp != null
-                || CapsuleBorder.IsMouseOver
+                || IsPointerOverCapsuleSurface()
                 || AppsPopup.IsOpen
                 || OverflowAppsPopup.IsOpen
                 || CenterCardAppsPopup.IsOpen;
@@ -1408,7 +1429,7 @@ namespace DynamicIslandBar
             _autoHideTimer.Stop();
             if (!CapsuleAutoHidePolicy.CanHide(
                     _isDraggingCapsule,
-                    CapsuleBorder.IsMouseOver || _isCenterCardHovered,
+                    IsPointerOverCapsuleSurface() || _isCenterCardHovered,
                     IsAnyPopupOpen()))
             {
                 ResetAutoHideTimer();
@@ -1417,6 +1438,11 @@ namespace DynamicIslandBar
 
             FadeCapsuleTo(AutoHideOpacity);
             _isCapsuleAutoHidden = true;
+        }
+
+        private bool IsPointerOverCapsuleSurface()
+        {
+            return CapsuleChromePresenter.IsMouseOver || CapsuleLayoutPresenter.IsMouseOver;
         }
 
         private void EdgeRevealTimer_Tick(object? sender, EventArgs e)
@@ -1455,7 +1481,7 @@ namespace DynamicIslandBar
 
         private void RestoreCapsuleVisibility()
         {
-            if (!_isCapsuleAutoHidden && CapsuleGrid.Opacity >= 0.99)
+            if (!_isCapsuleAutoHidden && _presentationController.AutoHideFactor >= 0.99)
             {
                 return;
             }
@@ -1472,13 +1498,9 @@ namespace DynamicIslandBar
 
         private void FadeCapsuleTo(double targetOpacity)
         {
-            var animation = new DoubleAnimation
-            {
-                To = targetOpacity,
-                Duration = TimeSpan.FromMilliseconds(220),
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
-            };
-            CapsuleGrid.BeginAnimation(OpacityProperty, animation);
+            _presentationController.AnimateAutoHideFactor(
+                targetOpacity,
+                TimeSpan.FromMilliseconds(220));
         }
 
         private static bool TryGetCursorScreenPoint(out Point point)
@@ -1614,8 +1636,35 @@ namespace DynamicIslandBar
             OverflowFolderButton.Visibility = _runningAppsSnapshot.HasOverflowFolder
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            var summaryApp = _hoveredApp ?? GetPrimarySummaryApp();
-            UpdateActiveAppSummary(summaryApp, _hoveredApp == null ? GetPrimarySummaryStatus(summaryApp) : "正在运行");
+            var summaryApp = ResolveCenterCardSummaryAppDuringIconHover();
+            UpdateActiveAppSummary(summaryApp, ResolveCenterCardSummaryStatusDuringIconHover(summaryApp));
+        }
+
+        private RunningAppEntry? ResolveCenterCardSummaryAppDuringIconHover()
+        {
+            if (_hoveredApp != null && !ShouldKeepCenterCardMusicLyricsWhileAppIconHovered())
+            {
+                return _hoveredApp;
+            }
+
+            return GetPrimarySummaryApp();
+        }
+
+        private string ResolveCenterCardSummaryStatusDuringIconHover(RunningAppEntry? summaryApp)
+        {
+            if (_hoveredApp != null && ReferenceEquals(summaryApp, _hoveredApp))
+            {
+                return "正在运行";
+            }
+
+            return GetPrimarySummaryStatus(summaryApp);
+        }
+
+        private bool ShouldKeepCenterCardMusicLyricsWhileAppIconHovered()
+        {
+            return _hoveredApp != null
+                && _centerCardLiveMediaSnapshot is { IsMusicApp: true } media
+                && !string.IsNullOrWhiteSpace(media.Lyric);
         }
 
         private void RenderOverflowAppsPanel()
@@ -1980,15 +2029,16 @@ namespace DynamicIslandBar
             if (app == null)
             {
                 ActiveAppSummaryPanel.Visibility = Visibility.Collapsed;
+                _presentationController.SetRuntimeVisibility(CapsuleVisualPart.Lyrics, false);
+                _presentationController.SetRuntimeVisibility(CapsuleVisualPart.Details, false);
+                _presentationController.SetRuntimeVisibility(CapsuleVisualPart.MediaControls, false);
                 HideCenterCardSideDetailsOverlay();
                 ActiveAppSummaryIcon.Content = null;
                 CenterCardLyricsIcon.Content = null;
                 ActiveAppSummaryTitle.Text = string.Empty;
                 ActiveAppSummarySubtitle.Text = string.Empty;
                 CenterCardLyricMarqueeText.Text = string.Empty;
-                ClearCenterCardLyricsDanmaku();
                 StopCenterCardLyricsMarquee();
-                _activeCenterCardLyricWindow = null;
                 return;
             }
 
@@ -2011,17 +2061,24 @@ namespace DynamicIslandBar
             ActiveAppSummaryTitle.Text = state.PrimaryText;
             ActiveAppSummarySubtitle.Text = state.SecondaryText;
             CenterCardLyricMarqueeText.Text = state.PrimaryText;
-            CenterCardLyricsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
-            CenterCardDetailsLayer.Visibility = state.ShowLyricsMarquee ? Visibility.Collapsed : Visibility.Visible;
+            CenterCardLyricMarqueeText.Foreground = new SolidColorBrush(_lyricPrimaryColor);
+            _presentationController.SetRuntimeVisibility(CapsuleVisualPart.Lyrics, state.ShowLyricsMarquee);
+            _presentationController.SetRuntimeVisibility(CapsuleVisualPart.Details, !state.ShowLyricsMarquee);
+            _presentationController.SetRuntimeVisibility(
+                CapsuleVisualPart.MediaControls,
+                !IsSideDockMode && state.ShowTransportControls);
             CenterCardLyricMarqueeText.Visibility = Visibility.Collapsed;
             CenterCardLyricsDanmakuCanvas.Visibility = state.ShowLyricsMarquee ? Visibility.Visible : Visibility.Collapsed;
-            CenterCardTransportControls.Visibility = !IsSideDockMode && state.ShowTransportControls ? Visibility.Visible : Visibility.Collapsed;
 
             // Show progress panel when music app + hovered + timeline available.
             var showProgress = !IsSideDockMode
                 && state.ShowTransportControls
                 && _mediaDuration.TotalSeconds > 0;
-            CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
+            CenterCardProgressPanel.Visibility = showProgress
+                && _presentationController.IsEffectivelyVisible(CapsuleVisualPart.MediaControls)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            CenterCardProgressPanel.Opacity = _capsuleConfig.Presentation.MediaControls.OpacityPercent / 100d;
             UpdateCenterCardSideDetailsOverlay(app, sideDetailsState);
 
             ApplyCenterCardTransportDensity();
@@ -2168,14 +2225,14 @@ namespace DynamicIslandBar
 
             if (IsSideDockMode)
             {
-                CenterCardLyricsLayer.Margin = new Thickness(6, 14, 6, 14);
+                LyricsPresenter.Margin = new Thickness(6, 14, 6, 14);
                 CenterCardLeftWave.Margin = new Thickness(0, 0, 0, 8);
                 CenterCardRightWave.Margin = new Thickness(0, 8, 0, 0);
                 CenterCardLeftWave.Visibility = Visibility.Collapsed;
                 CenterCardRightWave.Visibility = Visibility.Collapsed;
                 return;
             }
-            CenterCardLyricsLayer.Margin = new Thickness(layout.HorizontalMargin, 0, layout.HorizontalMargin, 0);
+            LyricsPresenter.Margin = new Thickness(layout.HorizontalMargin, 0, layout.HorizontalMargin, 0);
             CenterCardLeftWave.Margin = new Thickness(10, 0, 10, 0);
             CenterCardRightWave.Margin = new Thickness(10, 0, 0, 0);
             CenterCardLeftWave.Visibility = layout.ShowLeftWave ? Visibility.Visible : Visibility.Collapsed;
@@ -2184,18 +2241,95 @@ namespace DynamicIslandBar
 
         private void ClearCenterCardLyricsDanmaku()
         {
+            _centerCardLyricScrollGeneration++;
+            _hasActiveCenterCardLyricScroll = false;
             CenterCardLyricsDanmakuCanvas.Children.Clear();
         }
 
-        private void BeginCenterCardSingleLineScroll(CurrentLyricWindow currentWindow)
+        private void ResetCenterCardLyricScrollState(bool clearActiveTrack)
         {
-            if (!_isCenterCardLyricsMarqueeActive || string.IsNullOrWhiteSpace(currentWindow.Text))
+            if (clearActiveTrack)
+            {
+                _centerCardCurrentLyricDuration = TimeSpan.Zero;
+            }
+
+            ClearCenterCardLyricsDanmaku();
+        }
+
+        private bool ApplyCenterCardLyricAtPosition(TimeSpan position, bool forceRestart)
+        {
+            if (position < TimeSpan.Zero)
+            {
+                return false;
+            }
+
+            var track = GetCenterCardLyricDisplayText(position);
+            return !string.IsNullOrWhiteSpace(track)
+                && ApplyCenterCardLyricTrack(track, forceRestart);
+        }
+
+        private string? GetCenterCardLyricDisplayText(TimeSpan position)
+        {
+            var snapshot = _centerCardLiveMediaSnapshot;
+            if (snapshot is not { IsMusicApp: true }
+                || !_lyricsService.HasLyricsFor(snapshot.Title, snapshot.Artist, _mediaDuration))
+            {
+                return null;
+            }
+
+            var sequence = _lyricsService.GetCurrentLyricSequence(position, maxLines: 6);
+            _centerCardCurrentLyricDuration = _lyricsService.GetCurrentLyricDuration(position);
+            var track = CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(sequence);
+            return string.IsNullOrWhiteSpace(track)
+                ? _lyricsService.GetCurrentLyric(position)
+                : track;
+        }
+
+        private bool ApplyCenterCardLyricTrack(string track, bool forceRestart)
+        {
+            var snapshot = _centerCardLiveMediaSnapshot;
+            var app = GetPrimarySummaryApp();
+            if (snapshot == null || app == null || string.IsNullOrWhiteSpace(track))
+            {
+                return false;
+            }
+
+            var wasLyricsMarqueeActive = _isCenterCardLyricsMarqueeActive;
+            _centerCardLiveMediaSnapshot = snapshot with { Lyric = track };
+            UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+
+            if (wasLyricsMarqueeActive
+                && _isCenterCardLyricsMarqueeActive
+                && (forceRestart || !_hasActiveCenterCardLyricScroll))
+            {
+                BeginCenterCardContinuousTrackScroll(track, forceRestart);
+            }
+
+            return true;
+        }
+
+        private void BeginCenterCardContinuousTrackScroll(string track, bool forceRestart)
+        {
+            if (!_isCenterCardLyricsMarqueeActive || string.IsNullOrWhiteSpace(track))
             {
                 return;
             }
 
+            if (!forceRestart && _hasActiveCenterCardLyricScroll)
+            {
+                return;
+            }
+
+            var scrollGeneration = ++_centerCardLyricScrollGeneration;
+            _hasActiveCenterCardLyricScroll = true;
+
             Dispatcher.BeginInvoke(() =>
             {
+                if (scrollGeneration != _centerCardLyricScrollGeneration)
+                {
+                    return;
+                }
+
                 var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;
                 var viewportWidth = CenterCardLyricsViewport.ActualWidth > 0
                     ? CenterCardLyricsViewport.ActualWidth
@@ -2205,6 +2339,11 @@ namespace DynamicIslandBar
                     : Math.Max(ActiveAppSummaryPanel.Height - 72, 120);
                 if (viewportWidth <= 0 || viewportHeight <= 0)
                 {
+                    if (scrollGeneration == _centerCardLyricScrollGeneration)
+                    {
+                        _hasActiveCenterCardLyricScroll = false;
+                    }
+
                     return;
                 }
 
@@ -2212,12 +2351,19 @@ namespace DynamicIslandBar
 
                 var textBlock = new TextBlock
                 {
-                    Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(currentWindow.Text) : currentWindow.Text,
-                    Foreground = Brushes.White,
-                    FontSize = usesVerticalLyricsFlow ? 14 : 13,
+                    Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(track) : track,
+                    Foreground = new SolidColorBrush(_lyricPrimaryColor),
+                    FontSize = usesVerticalLyricsFlow ? 14 : 20,
                     FontWeight = FontWeights.SemiBold,
-                    Opacity = 0.94,
-                    TextTrimming = TextTrimming.None
+                    Opacity = 1,
+                    TextTrimming = TextTrimming.None,
+                    Effect = new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        Color = _lyricHighlightColor,
+                        BlurRadius = 16,
+                        ShadowDepth = 0,
+                        Opacity = 0.8
+                    }
                 };
                 textBlock.TextWrapping = TextWrapping.NoWrap;
                 textBlock.TextAlignment = usesVerticalLyricsFlow ? TextAlignment.Center : TextAlignment.Left;
@@ -2228,21 +2374,34 @@ namespace DynamicIslandBar
                 }
 
                 textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var textWidth = Math.Max(textBlock.DesiredSize.Width, 56);
+                var textWidth = Math.Max(textBlock.DesiredSize.Width, 120);
                 var textHeight = Math.Max(textBlock.DesiredSize.Height, 36);
-                var lineLifetime = currentWindow.End - currentWindow.Start;
-                var plan = usesVerticalLyricsFlow
-                    ? CenterCardLyricScrollPolicy.BuildVerticalPlan(viewportHeight, textHeight, lineLifetime)
-                    : CenterCardLyricScrollPolicy.BuildHorizontalPlan(viewportWidth, textWidth, lineLifetime);
+                var fallbackDuration = TimeSpan.FromSeconds(Math.Clamp(
+                    (usesVerticalLyricsFlow ? viewportHeight + textHeight : viewportWidth + textWidth) / 92,
+                    6,
+                    12));
+                var currentLyricVisibleDistance = usesVerticalLyricsFlow
+                    ? viewportHeight + EstimateCurrentLyricTextHeight(track, textBlock)
+                    : viewportWidth + EstimateCurrentLyricTextWidth(track, textBlock);
+                var totalTravelDistance = usesVerticalLyricsFlow
+                    ? viewportHeight + textHeight + 28
+                    : viewportWidth + textWidth + 36;
+                var synchronizedDuration = CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(
+                    _centerCardCurrentLyricDuration,
+                    totalTravelDistance,
+                    currentLyricVisibleDistance,
+                    fallbackDuration);
+                var startOffset = usesVerticalLyricsFlow ? viewportHeight + 2 : viewportWidth;
+                var endOffset = usesVerticalLyricsFlow ? -(textHeight + 28) : -(textWidth + 36);
 
                 if (usesVerticalLyricsFlow)
                 {
                     Canvas.SetLeft(textBlock, 0);
-                    Canvas.SetTop(textBlock, plan.StartOffset);
+                    Canvas.SetTop(textBlock, startOffset);
                 }
                 else
                 {
-                    Canvas.SetLeft(textBlock, plan.StartOffset);
+                    Canvas.SetLeft(textBlock, startOffset);
                     Canvas.SetTop(textBlock, Math.Max((viewportHeight - textHeight) / 2, 0));
                 }
 
@@ -2250,12 +2409,20 @@ namespace DynamicIslandBar
 
                 var animation = new DoubleAnimation
                 {
-                    From = plan.StartOffset,
-                    To = plan.EndOffset,
-                    Duration = plan.Duration,
+                    From = startOffset,
+                    To = endOffset,
+                    Duration = synchronizedDuration,
                     FillBehavior = FillBehavior.Stop
                 };
-                animation.Completed += (_, _) => CenterCardLyricsDanmakuCanvas.Children.Remove(textBlock);
+                animation.Completed += (_, _) =>
+                {
+                    if (scrollGeneration == _centerCardLyricScrollGeneration)
+                    {
+                        CenterCardLyricsDanmakuCanvas.Children.Remove(textBlock);
+                        _hasActiveCenterCardLyricScroll = false;
+                        ScheduleCenterCardLyricsContinuation(scrollGeneration);
+                    }
+                };
 
                 if (usesVerticalLyricsFlow)
                 {
@@ -2266,6 +2433,70 @@ namespace DynamicIslandBar
                     textBlock.BeginAnimation(Canvas.LeftProperty, animation);
                 }
             }, DispatcherPriority.Loaded);
+        }
+
+        private static double EstimateCurrentLyricTextWidth(string track, TextBlock measuredTrack)
+        {
+            var firstLine = track.Split(
+                    CenterCardLyricsDanmakuPolicy.ContinuousTrackGap,
+                    StringSplitOptions.None)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstLine))
+            {
+                return Math.Min(measuredTrack.DesiredSize.Width, 120);
+            }
+
+            var measurement = new TextBlock
+            {
+                Text = firstLine.Trim(),
+                FontSize = measuredTrack.FontSize,
+                FontWeight = measuredTrack.FontWeight,
+                FontFamily = measuredTrack.FontFamily,
+                TextWrapping = TextWrapping.NoWrap
+            };
+            measurement.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Max(measurement.DesiredSize.Width, 24);
+        }
+
+        private static double EstimateCurrentLyricTextHeight(string track, TextBlock measuredTrack)
+        {
+            var firstLine = track.Split(
+                    CenterCardLyricsDanmakuPolicy.ContinuousTrackGap,
+                    StringSplitOptions.None)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstLine))
+            {
+                return Math.Min(measuredTrack.DesiredSize.Height, 120);
+            }
+
+            var measurement = new TextBlock
+            {
+                Text = CenterCardLyricsDanmakuPolicy.FormatVerticalTrack(firstLine.Trim()),
+                FontSize = measuredTrack.FontSize,
+                FontWeight = measuredTrack.FontWeight,
+                FontFamily = measuredTrack.FontFamily,
+                TextWrapping = TextWrapping.NoWrap,
+                LineHeight = measuredTrack.LineHeight
+            };
+            measurement.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Max(measurement.DesiredSize.Height, 24);
+        }
+
+        private async void ScheduleCenterCardLyricsContinuation(int completedGeneration)
+        {
+            await Task.Delay(160);
+            if (completedGeneration != _centerCardLyricScrollGeneration
+                || !_isCenterCardLyricsMarqueeActive
+                || !_presentationController.IsEffectivelyVisible(CapsuleVisualPart.Lyrics)
+                || CenterCardLyricsDanmakuCanvas.Children.Count > 0
+                || string.IsNullOrWhiteSpace(CenterCardLyricMarqueeText.Text))
+            {
+                return;
+            }
+
+            BeginCenterCardContinuousTrackScroll(
+                CenterCardLyricMarqueeText.Text,
+                forceRestart: true);
         }
 
         private static string FormatVerticalLyricColumn(string lyric)
@@ -2326,19 +2557,19 @@ namespace DynamicIslandBar
         private void StartCenterCardLyricsMarquee()
         {
             _isCenterCardLyricsMarqueeActive = true;
-            ClearCenterCardLyricsDanmaku();
-
-            if (_activeCenterCardLyricWindow is { } activeWindow)
+            ResetCenterCardLyricScrollState(clearActiveTrack: false);
+            if (!string.IsNullOrWhiteSpace(CenterCardLyricMarqueeText.Text))
             {
-                BeginCenterCardSingleLineScroll(activeWindow);
+                BeginCenterCardContinuousTrackScroll(
+                    CenterCardLyricMarqueeText.Text,
+                    forceRestart: true);
             }
         }
 
         private void StopCenterCardLyricsMarquee()
         {
             _isCenterCardLyricsMarqueeActive = false;
-            _activeCenterCardLyricWindow = null;
-            ClearCenterCardLyricsDanmaku();
+            ResetCenterCardLyricScrollState(clearActiveTrack: true);
         }
 
         private void StartCenterCardWaveAnimations()
@@ -2458,6 +2689,33 @@ namespace DynamicIslandBar
             return false;
         }
 
+        private static bool HasCenterCardMediaIdentityChanged(
+            CenterCardMediaSnapshot? previousSnapshot,
+            CenterCardMediaSnapshot? currentSnapshot)
+        {
+            if (previousSnapshot is not { IsMusicApp: true }
+                || currentSnapshot is not { IsMusicApp: true })
+            {
+                return false;
+            }
+
+            return !string.Equals(
+                    NormalizeMediaIdentityPart(previousSnapshot.Title),
+                    NormalizeMediaIdentityPart(currentSnapshot.Title),
+                    StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(
+                    NormalizeMediaIdentityPart(previousSnapshot.Artist),
+                    NormalizeMediaIdentityPart(currentSnapshot.Artist),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeMediaIdentityPart(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim();
+        }
+
         private void CenterCardAppSelector_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -2554,6 +2812,7 @@ namespace DynamicIslandBar
         private void CenterCardPrevious_Click(object sender, RoutedEventArgs e)
         {
             SendMediaKey(VirtualKeyMediaPreviousTrack);
+            PrepareCenterCardForTrackTransition();
         }
 
         private void CenterCardPlayPause_Click(object sender, RoutedEventArgs e)
@@ -2564,6 +2823,13 @@ namespace DynamicIslandBar
         private void CenterCardNext_Click(object sender, RoutedEventArgs e)
         {
             SendMediaKey(VirtualKeyMediaNextTrack);
+            PrepareCenterCardForTrackTransition();
+        }
+
+        private void PrepareCenterCardForTrackTransition()
+        {
+            ResetCenterCardLyricScrollState(clearActiveTrack: true);
+            _ = RefreshCenterCardMediaSnapshotAsync();
         }
 
         private async void CenterCardPlaybackMode_Click(object sender, RoutedEventArgs e)
@@ -2862,7 +3128,11 @@ namespace DynamicIslandBar
             try
             {
                 await _mediaService.SeekAsync(targetMs);
-                UpdateCenterCardProgressDisplays(ratio * 100, TimeSpan.FromMilliseconds(targetMs), _mediaDuration);
+                var targetPosition = TimeSpan.FromMilliseconds(targetMs);
+                _lastMediaPosition = targetPosition;
+                _lastMediaUpdateUtc = DateTime.UtcNow;
+                UpdateCenterCardProgressDisplays(ratio * 100, targetPosition, _mediaDuration);
+                ApplyCenterCardLyricAtPosition(TimeSpan.FromMilliseconds(targetMs), forceRestart: true);
             }
             catch { /* Ignore seek errors */ }
         }

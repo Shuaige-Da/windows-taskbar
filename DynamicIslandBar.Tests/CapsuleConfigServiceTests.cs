@@ -18,6 +18,11 @@ public class CapsuleConfigServiceTests
         Assert.Equal(100, config.CapsuleLengthPercent);
         Assert.Equal(58, config.CenterCardWidthPercent);
         Assert.Null(config.CenterCardAppId);
+        foreach (var part in Enum.GetValues<CapsuleVisualPart>())
+        {
+            Assert.True(config.Presentation.Get(part).IsVisible);
+            Assert.Equal(100, config.Presentation.Get(part).OpacityPercent);
+        }
     }
 
     [Fact]
@@ -91,5 +96,21 @@ public class CapsuleConfigServiceTests
             """);
 
         Assert.Equal(CapsuleMode.BottomTaskbar, config.Mode);
+    }
+
+    [Fact]
+    public void Serialize_RoundTripsPresentationSettingsAndClampsOpacity()
+    {
+        var config = new CapsuleConfig();
+
+        CapsuleConfigMutator.SetPartVisibility(config, CapsuleVisualPart.Lyrics, false);
+        CapsuleConfigMutator.SetPartOpacityPercent(config, CapsuleVisualPart.Dock, 140);
+        CapsuleConfigMutator.SetPartOpacityPercent(config, CapsuleVisualPart.System, -10);
+
+        var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
+
+        Assert.False(restored.Presentation.Lyrics.IsVisible);
+        Assert.Equal(100, restored.Presentation.Dock.OpacityPercent);
+        Assert.Equal(0, restored.Presentation.System.OpacityPercent);
     }
 }

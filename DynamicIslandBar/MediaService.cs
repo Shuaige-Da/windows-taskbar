@@ -19,14 +19,14 @@ namespace DynamicIslandBar
         private string? _estimatedTitle;
         private string? _estimatedArtist;
         private readonly System.Diagnostics.Stopwatch _songTimer = new();
+        private TimeSpan _fallbackBasePosition = TimeSpan.Zero;
         private bool _wasPlaying;
-        private bool _firstSongSeen;
+        private readonly object _positionSync = new();
+        private string? _pendingTitle;
+        private string? _pendingArtist;
+        private long _pendingIdentityTimestamp;
+        private const int IdentityDebounceMilliseconds = 500;
 
-        /// <summary>
-        /// Whether at least one song change has been detected via SMTC events.
-        /// Lyrics are only synced after the first song change (timer starts at 0 for new songs).
-        /// </summary>
-        public bool HasSeenSongChange => _firstSongSeen;
         private TimeSpan _realDuration = TimeSpan.Zero;
 
         // SMTC event-based position tracking
@@ -39,7 +39,10 @@ namespace DynamicIslandBar
         /// </summary>
         public void SetRealDuration(TimeSpan duration)
         {
-            _realDuration = duration;
+            lock (_positionSync)
+            {
+                _realDuration = duration;
+            }
         }
 
         public async Task InitializeAsync()
@@ -115,20 +118,23 @@ namespace DynamicIslandBar
             catch { }
         }
 
-        private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+        private async void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, object args)
         {
             try
             {
-                var props = sender.TryGetMediaPropertiesAsync().AsTask().Result;
+                var props = await sender.TryGetMediaPropertiesAsync();
                 var newTitle = props?.Title;
                 var newArtist = props?.Artist;
-                if (newTitle != _estimatedTitle || newArtist != _estimatedArtist)
+                var isPlaying = sender.GetPlaybackInfo()?.PlaybackStatus
+                    == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                ObserveMediaIdentity(newTitle, newArtist, isPlaying, forceCommit: false);
+
+                await Task.Delay(IdentityDebounceMilliseconds);
+                props = await sender.TryGetMediaPropertiesAsync();
+                if (string.Equals(props?.Title, newTitle, StringComparison.Ordinal)
+                    && string.Equals(props?.Artist, newArtist, StringComparison.Ordinal))
                 {
-                    _estimatedTitle = newTitle;
-                    _estimatedArtist = newArtist;
-                    _songTimer.Restart();
-                    _firstSongSeen = true;
-                    _wasPlaying = true;
+                    ObserveMediaIdentity(newTitle, newArtist, isPlaying, forceCommit: true);
                 }
             }
             catch { }
@@ -141,32 +147,136 @@ namespace DynamicIslandBar
                 var pos = sender.GetTimelineProperties()?.Position ?? TimeSpan.Zero;
                 if (pos > TimeSpan.Zero)
                 {
-                    _lastSmtcPosition = pos;
-                    _smtcTimer.Restart();
+                    var isPlaying = sender.GetPlaybackInfo()?.PlaybackStatus
+                        == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                    lock (_positionSync)
+                    {
+                        SetSmtcAnchorLocked(pos, isPlaying);
+                        SetFallbackAnchorLocked(pos, isPlaying);
+                    }
                 }
             }
             catch { }
         }
 
-        private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, object args)
+        private async void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, object args)
         {
             try
             {
                 var status = sender.GetPlaybackInfo()?.PlaybackStatus;
-                if (status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                var isPlaying = status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                lock (_positionSync)
                 {
-                    var props = sender.TryGetMediaPropertiesAsync().AsTask().Result;
-                    if (props?.Title != _estimatedTitle || props?.Artist != _estimatedArtist)
-                    {
-                        _estimatedTitle = props?.Title;
-                        _estimatedArtist = props?.Artist;
-                        _songTimer.Restart();
-                        _firstSongSeen = true;
-                        _wasPlaying = true;
-                    }
+                    UpdatePlaybackStateLocked(isPlaying);
                 }
+
+                var props = await sender.TryGetMediaPropertiesAsync();
+                ObserveMediaIdentity(props?.Title, props?.Artist, isPlaying, forceCommit: false);
             }
             catch { }
+        }
+
+        private bool ObserveMediaIdentity(string? title, string? artist, bool isPlaying, bool forceCommit)
+        {
+            lock (_positionSync)
+            {
+                if (string.Equals(title, _estimatedTitle, StringComparison.Ordinal)
+                    && string.Equals(artist, _estimatedArtist, StringComparison.Ordinal))
+                {
+                    _pendingTitle = null;
+                    _pendingArtist = null;
+                    _pendingIdentityTimestamp = 0;
+                    UpdatePlaybackStateLocked(isPlaying);
+                    return false;
+                }
+
+                var now = Stopwatch.GetTimestamp();
+                if (!string.Equals(title, _pendingTitle, StringComparison.Ordinal)
+                    || !string.Equals(artist, _pendingArtist, StringComparison.Ordinal))
+                {
+                    _pendingTitle = title;
+                    _pendingArtist = artist;
+                    _pendingIdentityTimestamp = now;
+                    return false;
+                }
+
+                var elapsedMilliseconds = (now - _pendingIdentityTimestamp) * 1000d / Stopwatch.Frequency;
+                if (!forceCommit && elapsedMilliseconds < IdentityDebounceMilliseconds)
+                {
+                    return false;
+                }
+
+                _estimatedTitle = title;
+                _estimatedArtist = artist;
+                _pendingTitle = null;
+                _pendingArtist = null;
+                _pendingIdentityTimestamp = 0;
+                _lastSmtcPosition = TimeSpan.Zero;
+                _smtcTimer.Reset();
+                _fallbackBasePosition = TimeSpan.Zero;
+                _songTimer.Reset();
+                _realDuration = TimeSpan.Zero;
+                _wasPlaying = isPlaying;
+                if (isPlaying)
+                {
+                    _songTimer.Start();
+                }
+
+                return true;
+            }
+        }
+
+        private void UpdatePlaybackStateLocked(bool isPlaying)
+        {
+            if (isPlaying == _wasPlaying)
+            {
+                return;
+            }
+
+            if (isPlaying)
+            {
+                if (_lastSmtcPosition > TimeSpan.Zero)
+                {
+                    _smtcTimer.Start();
+                }
+                _songTimer.Start();
+            }
+            else
+            {
+                if (_smtcTimer.IsRunning)
+                {
+                    _lastSmtcPosition += _smtcTimer.Elapsed;
+                    _smtcTimer.Reset();
+                }
+                if (_songTimer.IsRunning)
+                {
+                    _fallbackBasePosition += _songTimer.Elapsed;
+                    _songTimer.Reset();
+                }
+            }
+
+            _wasPlaying = isPlaying;
+        }
+
+        private void SetSmtcAnchorLocked(TimeSpan position, bool isPlaying)
+        {
+            _lastSmtcPosition = position;
+            _smtcTimer.Restart();
+            if (!isPlaying)
+            {
+                _smtcTimer.Stop();
+            }
+        }
+
+        private void SetFallbackAnchorLocked(TimeSpan position, bool isPlaying)
+        {
+            _fallbackBasePosition = position;
+            _songTimer.Restart();
+            if (!isPlaying)
+            {
+                _songTimer.Stop();
+            }
+            _wasPlaying = isPlaying;
         }
 
         /// <summary>
@@ -175,18 +285,22 @@ namespace DynamicIslandBar
         /// </summary>
         public TimeSpan GetCurrentPosition()
         {
-            if (_lastSmtcPosition > TimeSpan.Zero && _smtcTimer.IsRunning)
-                return _lastSmtcPosition + _smtcTimer.Elapsed;
-            if (_firstSongSeen)
+            lock (_positionSync)
             {
-                // Use Elapsed even when timer is stopped (retains last value after pause)
-                var pos = _songTimer.Elapsed;
-                var maxDur = _realDuration > TimeSpan.Zero ? _realDuration : TimeSpan.Zero;
-                if (maxDur > TimeSpan.Zero && pos > maxDur)
-                    return maxDur;
-                return pos;
+                return GetCurrentPositionLocked();
             }
-            return TimeSpan.Zero;
+        }
+
+        private TimeSpan GetCurrentPositionLocked()
+        {
+            var position = _lastSmtcPosition > TimeSpan.Zero
+                ? _lastSmtcPosition + _smtcTimer.Elapsed
+                : _fallbackBasePosition + _songTimer.Elapsed;
+            if (_realDuration > TimeSpan.Zero && position > _realDuration)
+            {
+                return _realDuration;
+            }
+            return position < TimeSpan.Zero ? TimeSpan.Zero : position;
         }
 
         public async Task<(string? Title, string? Artist, bool IsPlaying, TimeSpan Position, TimeSpan Duration)> GetMediaInfoAsync()
@@ -208,56 +322,33 @@ namespace DynamicIslandBar
                 var endTime = timeline?.EndTime ?? TimeSpan.Zero;
                 var isPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
 
-                var duration = endTime;
-
-                // If SMTC timeline position is 0, check if we got position from events
-                if (position == TimeSpan.Zero && _lastSmtcPosition > TimeSpan.Zero && _smtcTimer.IsRunning)
-                {
-                    position = _lastSmtcPosition + _smtcTimer.Elapsed;
-                }
-
-                // Timer-based position estimation for apps that don't report position via SMTC
                 var title = props?.Title;
                 var artist = props?.Artist;
-                if (isPlaying && position == TimeSpan.Zero && !string.IsNullOrWhiteSpace(title))
+                ObserveMediaIdentity(title, artist, isPlaying, forceCommit: false);
+
+                TimeSpan duration;
+                lock (_positionSync)
                 {
-                    if (title != _estimatedTitle || artist != _estimatedArtist)
+                    duration = endTime > TimeSpan.Zero ? endTime : _realDuration;
+                    if (position > TimeSpan.Zero)
                     {
-                        // Song changed - start fresh timer from 0
-                        _estimatedTitle = title;
-                        _estimatedArtist = artist;
-                        _songTimer.Restart();
-                        _wasPlaying = true;
-                        _firstSongSeen = true;
+                        if (_lastSmtcPosition <= TimeSpan.Zero
+                            || Math.Abs((position - _lastSmtcPosition).TotalMilliseconds) >= 50)
+                        {
+                            SetSmtcAnchorLocked(position, isPlaying);
+                            SetFallbackAnchorLocked(position, isPlaying);
+                        }
+                        else
+                        {
+                            UpdatePlaybackStateLocked(isPlaying);
+                        }
+                        position = GetCurrentPositionLocked();
                     }
-                    else if (!_wasPlaying)
+                    else
                     {
-                        _songTimer.Restart();
-                        _wasPlaying = true;
+                        UpdatePlaybackStateLocked(isPlaying);
+                        position = GetCurrentPositionLocked();
                     }
-                    else if (_firstSongSeen)
-                    {
-                        position = _songTimer.Elapsed;
-                        var maxDuration = _realDuration > TimeSpan.Zero ? _realDuration : duration;
-                        if (maxDuration > TimeSpan.Zero && position > maxDuration)
-                            position = maxDuration;
-                    }
-                }
-                else if (!isPlaying)
-                {
-                    _wasPlaying = false;
-                    _songTimer.Stop();
-                }
-                else if (isPlaying && position > TimeSpan.Zero)
-                {
-                    // SMTC is reporting position - sync timer
-                    _songTimer.Restart();
-                    _songTimer.Stop();
-                    // Set the stopwatch elapsed by restarting and immediately stopping won't work
-                    // Instead, track the offset
-                    _estimatedTitle = title;
-                    _estimatedArtist = artist;
-                    _wasPlaying = true;
                 }
 
                 return (title, artist, isPlaying, position, duration);

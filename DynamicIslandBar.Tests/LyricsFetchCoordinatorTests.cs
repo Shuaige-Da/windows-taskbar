@@ -15,4 +15,15 @@ public class LyricsFetchCoordinatorTests
         Assert.False(coordinator.IsCurrent(first));
         Assert.True(coordinator.IsCurrent(second));
     }
+
+    [Fact]
+    public void Invalidate_PreventsPendingRequestFromPublishing()
+    {
+        var coordinator = new LyricsFetchCoordinator();
+        var request = coordinator.Begin("SongA|ArtistA");
+
+        coordinator.Invalidate();
+
+        Assert.False(coordinator.IsCurrent(request));
+    }
 }

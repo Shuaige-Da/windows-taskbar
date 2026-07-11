@@ -18,4 +18,10 @@ public sealed class LyricsFetchCoordinator
         return token.Generation == Volatile.Read(ref _currentGeneration)
             && string.Equals(token.SongKey, _currentSongKey, StringComparison.Ordinal);
     }
+
+    public void Invalidate()
+    {
+        _currentSongKey = string.Empty;
+        Interlocked.Increment(ref _currentGeneration);
+    }
 }
