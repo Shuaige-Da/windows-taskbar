@@ -315,7 +315,7 @@
                        DragCompleted="CapsuleResizeHandle_DragCompleted"
                        ToolTip="拖动调节胶囊长度"
                        Tag="Left"
-                       Opacity="0.34">
+                       Opacity="0">
                     <Thumb.Template>
                         <ControlTemplate TargetType="Thumb">
                             <Border CornerRadius="12"
@@ -335,7 +335,7 @@
                        DragCompleted="CapsuleResizeHandle_DragCompleted"
                        ToolTip="拖动调节胶囊长度"
                        Tag="Right"
-                       Opacity="0.34">
+                       Opacity="0">
                     <Thumb.Template>
                         <ControlTemplate TargetType="Thumb">
                             <Border CornerRadius="12"

@@ -52,6 +52,68 @@ public class LyricsServiceTests
     }
 
     [Fact]
+    public void GetPlaybackWindow_ReturnsOnlyCurrentAndNextTimedLines()
+    {
+        var service = new LyricsService();
+        LoadLrc(service, """
+            [00:04.00]第一句
+            [00:08.00]第二句
+            [00:12.00]第三句
+            """);
+
+        var window = service.GetPlaybackWindow(TimeSpan.FromSeconds(9));
+
+        Assert.NotNull(window);
+        Assert.Equal("第二句", window.Value.CurrentText);
+        Assert.Equal("第三句", window.Value.NextText);
+        Assert.Equal(TimeSpan.FromSeconds(8), window.Value.Start);
+        Assert.Equal(TimeSpan.FromSeconds(12), window.Value.End);
+        Assert.Equal(0.25, window.Value.Progress, 3);
+        Assert.Equal(TimeSpan.FromSeconds(3), window.Value.Remaining);
+    }
+
+    [Fact]
+    public void GetPlaybackWindow_DoesNotShowFirstLyricBeforeItsTimestamp()
+    {
+        var service = new LyricsService();
+        LoadLrc(service, """
+            [00:10.00]第一句
+            [00:14.00]第二句
+            """);
+
+        Assert.Null(service.GetPlaybackWindow(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public void ParseLrc_AcceptsSecondPrecisionAndMultipleTimestamps()
+    {
+        var service = new LyricsService();
+        LoadLrc(service, """
+            [00:03]无小数时间戳
+            [00:07.00][00:11.00]重复句
+            """);
+
+        Assert.Equal("无小数时间戳", service.GetCurrentLyric(TimeSpan.FromSeconds(3)));
+        Assert.Equal("重复句", service.GetCurrentLyric(TimeSpan.FromSeconds(11)));
+    }
+
+    [Fact]
+    public void ParseLrc_AppliesOffsetToPlaybackWindowTiming()
+    {
+        var service = new LyricsService();
+        LoadLrc(service, """
+            [offset:+500]
+            [00:03.00]延后半秒
+            [00:07.00]下一句
+            """);
+
+        Assert.Null(service.GetPlaybackWindow(TimeSpan.FromSeconds(3.2)));
+        Assert.Equal(
+            "延后半秒",
+            service.GetPlaybackWindow(TimeSpan.FromSeconds(3.5))?.CurrentText);
+    }
+
+    [Fact]
     public void HasLyricsFor_DoesNotExposePreviousSongLyricsUnderNewIdentity()
     {
         var service = new LyricsService();
@@ -75,6 +137,16 @@ public class LyricsServiceTests
 
         Assert.True(service.HasLyricsFor("同名歌曲", "同一歌手", TimeSpan.FromSeconds(210)));
         Assert.False(service.HasLyricsFor("同名歌曲", "同一歌手", TimeSpan.FromSeconds(300)));
+    }
+
+    [Fact]
+    public void HasLyricsFor_AcceptsEquivalentDecoratedMetadata()
+    {
+        var service = new LyricsService();
+        LoadLrc(service, "[00:03.00]歌词");
+        SetLoadedIdentity(service, "晴天 (Official Audio)", "周杰伦");
+
+        Assert.True(service.HasLyricsFor("晴天", "周杰伦"));
     }
 
     private static void LoadLrc(LyricsService service, string lrc)

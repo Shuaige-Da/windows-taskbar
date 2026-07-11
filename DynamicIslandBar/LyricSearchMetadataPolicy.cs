@@ -9,7 +9,9 @@ public static class LyricSearchMetadataPolicy
     private static readonly string[] VersionSuffixPatterns =
     [
         @"\s*[（(].*?[)）]\s*$",
-        @"\s*[\[【].*?[】\]]\s*$"
+        @"\s*[\[【].*?[】\]]\s*$",
+        @"\s+(?:feat\.?|ft\.?)\s+.+$",
+        @"\s*[-–—|]\s*(?:official\s*)?(?:music\s*video|lyric\s*video|audio|mv)\s*$"
     ];
 
     private static readonly string[] TitleArtistSeparators =
@@ -26,25 +28,36 @@ public static class LyricSearchMetadataPolicy
         var cleanTitle = CleanTitle(title);
         var cleanArtist = CleanArtist(artist);
 
+        var artistWasDerivedFromTitle = false;
         if (string.IsNullOrWhiteSpace(cleanArtist)
             && TrySplitTitleAndArtist(cleanTitle, out var splitTitle, out var splitArtist))
         {
             cleanTitle = splitTitle;
             cleanArtist = splitArtist;
+            artistWasDerivedFromTitle = true;
         }
 
         return new LyricSearchIdentity(
             string.IsNullOrWhiteSpace(cleanTitle) ? title.Trim() : cleanTitle,
             cleanArtist,
-            duration);
+            duration,
+            artistWasDerivedFromTitle);
     }
 
     public static IReadOnlyList<LyricSearchQuery> BuildQueries(LyricSearchIdentity identity)
     {
         var queries = new List<LyricSearchQuery>();
 
-        AddQuery(queries, identity.Title, identity.Artist);
+        foreach (var artistVariant in BuildArtistVariants(identity.Artist))
+        {
+            AddQuery(queries, identity.Title, artistVariant);
+        }
         AddQuery(queries, identity.Title, string.Empty);
+        if (identity.ArtistWasDerivedFromTitle)
+        {
+            AddQuery(queries, identity.Artist, identity.Title);
+            AddQuery(queries, identity.Artist, string.Empty);
+        }
 
         var cleanedTitle = CleanTitle(identity.Title);
         if (!string.Equals(cleanedTitle, identity.Title, StringComparison.OrdinalIgnoreCase))
@@ -62,6 +75,29 @@ public static class LyricSearchMetadataPolicy
         return queries;
     }
 
+    private static IEnumerable<string> BuildArtistVariants(string artist)
+    {
+        var cleaned = CleanArtist(artist);
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            yield break;
+        }
+
+        yield return cleaned;
+
+        var primaryArtist = Regex.Split(
+                cleaned,
+                @"\s+(?:feat\.?|ft\.?)\s+|[,，/、;&＆]+",
+                RegexOptions.IgnoreCase)
+            .Select(part => part.Trim())
+            .FirstOrDefault(part => !string.IsNullOrWhiteSpace(part));
+        if (!string.IsNullOrWhiteSpace(primaryArtist)
+            && !string.Equals(primaryArtist, cleaned, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return primaryArtist;
+        }
+    }
+
     public static string CleanTitle(string title)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -72,7 +108,7 @@ public static class LyricSearchMetadataPolicy
         var cleaned = title.Trim();
         foreach (var pattern in VersionSuffixPatterns)
         {
-            cleaned = Regex.Replace(cleaned, pattern, string.Empty);
+            cleaned = Regex.Replace(cleaned, pattern, string.Empty, RegexOptions.IgnoreCase);
         }
 
         cleaned = Regex.Replace(cleaned, @"[★☆♪♫♬♩✦✧]", string.Empty);

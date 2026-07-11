@@ -66,4 +66,22 @@ public class LyricMatchingPolicyTests
         Assert.True(albumScore > liveScore);
         Assert.True(albumScore > instrumentalScore);
     }
+
+    [Fact]
+    public void SelectBestCandidate_RejectsExactTitleFromClearlyDifferentArtist()
+    {
+        var identity = new LyricSearchIdentity("唯一", "王菲", TimeSpan.FromSeconds(240));
+        var wrongArtist = new LyricCandidate(
+            "lrclib",
+            "wrong",
+            "唯一",
+            "告五人",
+            TimeSpan.FromSeconds(240),
+            true,
+            false,
+            false,
+            false);
+
+        Assert.Null(LyricMatchingPolicy.SelectBestCandidate(identity, [wrongArtist]));
+    }
 }

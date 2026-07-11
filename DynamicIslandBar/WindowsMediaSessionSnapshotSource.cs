@@ -55,8 +55,22 @@ public sealed class WindowsMediaSessionSnapshotSource : ICenterCardMediaSnapshot
 
             if (session == null)
             {
-                session = manager.GetCurrentSession();
-                if (session == null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))
+                var currentSession = manager.GetCurrentSession();
+                if (currentSession != null)
+                {
+                    var currentSource = currentSession.SourceAppUserModelId;
+                    var currentIsPlaying = currentSession.GetPlaybackInfo()?.PlaybackStatus
+                        == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                    if (CenterCardMediaSnapshotProvider.SourceLooksLikeApp(app, currentSource)
+                        || (currentIsPlaying
+                            && (app.IsForeground || CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app))))
+                    {
+                        session = currentSession;
+                    }
+                }
+
+                if (session == null
+                    && (app.IsForeground || CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)))
                 {
                     foreach (var candidate in sessions)
                     {

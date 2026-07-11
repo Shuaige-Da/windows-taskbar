@@ -8,6 +8,21 @@ namespace DynamicIslandBar;
 
 public record LyricLine(TimeSpan Time, string Text);
 
+public readonly record struct LyricPlaybackWindow(
+    int Index,
+    string CurrentText,
+    string? NextText,
+    TimeSpan Start,
+    TimeSpan End,
+    TimeSpan Position)
+{
+    public TimeSpan Duration => End > Start ? End - Start : TimeSpan.Zero;
+    public TimeSpan Remaining => End > Position ? End - Position : TimeSpan.Zero;
+    public double Progress => Duration <= TimeSpan.Zero
+        ? 0d
+        : Math.Clamp((Position - Start).TotalSeconds / Duration.TotalSeconds, 0d, 1d);
+}
+
 public class LyricsService
 {
     private static readonly HttpClient HttpClient = new(new HttpClientHandler
@@ -19,7 +34,15 @@ public class LyricsService
         Timeout = TimeSpan.FromSeconds(30)
     };
     private const int MaxRetries = 2;
-    private static readonly Regex LrcRegex = new(@"\[(\d{1,2}):(\d{2})[.:](\d{1,3})\](.*)", RegexOptions.Compiled);
+    private static readonly Regex LrcRegex = new(
+        @"\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]",
+        RegexOptions.Compiled);
+    private static readonly Regex EnhancedLrcTimestampRegex = new(
+        @"<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>",
+        RegexOptions.Compiled);
+    private static readonly Regex LrcOffsetRegex = new(
+        @"^\[offset:(?<offset>[+-]?\d+)\]$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private List<LyricLine> _parsedLyrics = new();
     private string _lastTitle = string.Empty;
     private string _lastArtist = string.Empty;
@@ -34,7 +57,7 @@ public class LyricsService
     private readonly Dictionary<string, LyricFetchPayload> _payloadCache = new(StringComparer.Ordinal);
     private readonly Queue<string> _payloadCacheOrder = new();
     private const int PayloadCacheCapacity = 24;
-    private const int MaximumNetEaseLyricCandidates = 6;
+    private const int MaximumNetEaseLyricCandidates = 10;
 
     // Cache original (Traditional) lyrics for language switching
     private List<LyricLine> _parsedLyricsTraditional = new();
@@ -49,9 +72,23 @@ public class LyricsService
 
     public bool HasLyricsFor(string? title, string? artist, TimeSpan? duration = null)
     {
+        var requestedIdentity = LyricSearchMetadataPolicy.BuildIdentity(
+            title ?? string.Empty,
+            artist ?? string.Empty,
+            duration ?? TimeSpan.Zero);
+        var loadedIdentity = LyricSearchMetadataPolicy.BuildIdentity(
+            _lastTitle,
+            _lastArtist,
+            _lastRequestedDuration);
         if (!HasLyrics
-            || !string.Equals(NormalizeIdentityPart(title), NormalizeIdentityPart(_lastTitle), StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(NormalizeIdentityPart(artist), NormalizeIdentityPart(_lastArtist), StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(
+                NormalizeIdentityPart(requestedIdentity.Title),
+                NormalizeIdentityPart(loadedIdentity.Title),
+                StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(
+                NormalizeIdentityPart(requestedIdentity.Artist),
+                NormalizeIdentityPart(loadedIdentity.Artist),
+                StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -250,6 +287,13 @@ public class LyricsService
                         var response = await HttpClient.GetAsync(url, ct);
                         if (!response.IsSuccessStatusCode)
                         {
+                            var statusCode = (int)response.StatusCode;
+                            if (attempt < MaxRetries && (statusCode == 429 || statusCode >= 500))
+                            {
+                                await Task.Delay(700 * (attempt + 1), ct);
+                                continue;
+                            }
+
                             break;
                         }
 
@@ -397,6 +441,15 @@ public class LyricsService
                             Array.Empty<string>(),
                             candidate.Duration);
                     }
+
+                    var plainLyrics = SplitPlainLyrics(lrcText);
+                    if (plainLyrics.Length > 0)
+                    {
+                        return new LyricFetchPayload(
+                            new List<LyricLine>(),
+                            plainLyrics,
+                            candidate.Duration);
+                    }
                 }
                 catch when (!ct.IsCancellationRequested)
                 {
@@ -464,8 +517,16 @@ public class LyricsService
             : plainLyrics
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(line => line.Trim())
-                .Where(line => line.Length > 0)
+                .Where(line => line.Length > 0 && !IsLrcMetadataLine(line))
                 .ToArray();
+    }
+
+    private static bool IsLrcMetadataLine(string line)
+    {
+        return Regex.IsMatch(
+            line,
+            @"^\[(?:ar|ti|al|by|offset|re|ve):.*\]$",
+            RegexOptions.IgnoreCase);
     }
 
     private static string GetStringProperty(JsonElement element, string propertyName)
@@ -533,20 +594,57 @@ public class LyricsService
     private static List<LyricLine> ParseLrcLines(string lrcText)
     {
         var result = new List<LyricLine>();
-        foreach (var line in lrcText.Split('\n', '\r'))
+        var lines = lrcText.Split('\n', '\r');
+        var offsetMilliseconds = lines
+            .Select(line => LrcOffsetRegex.Match(line.Trim()))
+            .Where(match => match.Success)
+            .Select(match => int.TryParse(match.Groups["offset"].Value, out var value) ? value : 0)
+            .FirstOrDefault();
+        var offset = TimeSpan.FromMilliseconds(offsetMilliseconds);
+        foreach (var line in lines)
         {
-            var match = LrcRegex.Match(line.Trim());
-            if (match.Success)
+            var trimmedLine = line.Trim();
+            var offsetMatch = LrcOffsetRegex.Match(trimmedLine);
+            if (offsetMatch.Success)
+            {
+                continue;
+            }
+
+            var matches = LrcRegex.Matches(trimmedLine);
+            if (matches.Count == 0)
+            {
+                continue;
+            }
+
+            var lastTimestamp = matches[^1];
+            var text = EnhancedLrcTimestampRegex
+                .Replace(trimmedLine[(lastTimestamp.Index + lastTimestamp.Length)..], string.Empty)
+                .Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            foreach (Match match in matches)
             {
                 var min = int.Parse(match.Groups[1].Value);
                 var sec = int.Parse(match.Groups[2].Value);
-                var ms = int.Parse(match.Groups[3].Value.PadRight(3, '0'));
-                var text = match.Groups[4].Value.Trim();
-                if (!string.IsNullOrWhiteSpace(text))
-                    result.Add(new LyricLine(new TimeSpan(0, 0, min, sec, ms), text));
+                var fraction = match.Groups[3].Value;
+                var ms = string.IsNullOrEmpty(fraction)
+                    ? 0
+                    : int.Parse(fraction.PadRight(3, '0'));
+                var timestamp = new TimeSpan(0, 0, min, sec, ms) + offset;
+                result.Add(new LyricLine(
+                    timestamp < TimeSpan.Zero ? TimeSpan.Zero : timestamp,
+                    text));
             }
         }
-        return result;
+
+        return result
+            .OrderBy(line => line.Time)
+            .GroupBy(line => line.Time)
+            .Select(group => group.Last())
+            .ToList();
     }
 
     private void ParseLrc(string lrcText)
@@ -620,6 +718,65 @@ public class LyricsService
         }
 
         return Array.Empty<string>();
+    }
+
+    public LyricPlaybackWindow? GetPlaybackWindow(TimeSpan position)
+    {
+        if (_parsedLyrics.Count > 0)
+        {
+            if (position < _parsedLyrics[0].Time)
+            {
+                return null;
+            }
+
+            var index = GetCurrentParsedLyricIndex(position);
+            var current = _parsedLyrics[index];
+            var next = index + 1 < _parsedLyrics.Count ? _parsedLyrics[index + 1] : null;
+            var end = next?.Time
+                ?? (_songDuration > current.Time
+                    ? _songDuration
+                    : current.Time + TimeSpan.FromSeconds(6));
+            if (end <= current.Time)
+            {
+                end = current.Time + TimeSpan.FromSeconds(4);
+            }
+
+            return new LyricPlaybackWindow(
+                index,
+                current.Text,
+                next?.Text,
+                current.Time,
+                end,
+                position);
+        }
+
+        if (_plainLyricLines.Length == 0)
+        {
+            return null;
+        }
+
+        var effectiveDuration = _songDuration > TimeSpan.Zero
+            ? _songDuration
+            : TimeSpan.FromSeconds(_plainLyricLines.Length * 5d);
+        var lineDuration = TimeSpan.FromTicks(Math.Max(
+            TimeSpan.FromSeconds(2).Ticks,
+            effectiveDuration.Ticks / _plainLyricLines.Length));
+        var ratio = Math.Clamp(position.TotalSeconds / effectiveDuration.TotalSeconds, 0d, 0.999999d);
+        var plainIndex = Math.Min(
+            (int)(ratio * _plainLyricLines.Length),
+            _plainLyricLines.Length - 1);
+        var start = TimeSpan.FromTicks(lineDuration.Ticks * plainIndex);
+        var endPosition = plainIndex == _plainLyricLines.Length - 1
+            ? effectiveDuration
+            : TimeSpan.FromTicks(lineDuration.Ticks * (plainIndex + 1));
+
+        return new LyricPlaybackWindow(
+            plainIndex,
+            _plainLyricLines[plainIndex],
+            plainIndex + 1 < _plainLyricLines.Length ? _plainLyricLines[plainIndex + 1] : null,
+            start,
+            endPosition,
+            position);
     }
 
     public TimeSpan GetCurrentLyricDuration(TimeSpan position)

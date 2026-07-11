@@ -11,42 +11,45 @@ public class CenterCardLyricsDanmakuPolicyTests
     }
 
     [Fact]
-    public void RegisterLyric_DoesNotEnqueueRepeatedLyric()
+    public void BuildLineMotionPlan_KeepsCurrentLineMovementGentleForShortText()
     {
-        var state = CenterCardLyricsDanmakuPolicy.RegisterLyric(
-            previousLyric: "第一句",
-            newLyric: "第一句",
-            nextLaneIndex: 0,
-            laneCount: 1);
+        var plan = CenterCardLyricsDanmakuPolicy.BuildLineMotionPlan(
+            viewportExtent: 500,
+            currentTextExtent: 180,
+            nextTextExtent: 160,
+            lineDuration: TimeSpan.FromSeconds(8),
+            progress: 0.25);
 
-        Assert.False(state.ShouldEnqueue);
+        Assert.Equal(310, plan.CurrentStartOffset, 2);
+        Assert.Equal(230, plan.CurrentEndOffset, 2);
+        Assert.Equal(TimeSpan.FromSeconds(6), plan.RemainingDuration);
     }
 
     [Fact]
-    public void BuildContinuousTrack_JoinsCurrentAndUpcomingLinesWithReadableGap()
+    public void BuildLineMotionPlan_RevealsNextLineOnlyNearCurrentLineEnd()
     {
-        var track = CenterCardLyricsDanmakuPolicy.BuildContinuousTrack(
-            ["第一句", "第二句", "第三句"]);
+        var plan = CenterCardLyricsDanmakuPolicy.BuildLineMotionPlan(
+            viewportExtent: 500,
+            currentTextExtent: 180,
+            nextTextExtent: 160,
+            lineDuration: TimeSpan.FromSeconds(8),
+            progress: 0.8);
 
-        Assert.Equal(
-            $"第一句{CenterCardLyricsDanmakuPolicy.ContinuousTrackGap}第二句{CenterCardLyricsDanmakuPolicy.ContinuousTrackGap}第三句",
-            track);
+        Assert.InRange(plan.NextRevealDelay.TotalSeconds, 0.09, 0.11);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), plan.NextRevealDuration);
+        Assert.True(plan.NextStartOffset > plan.NextEndOffset);
     }
 
-    [Theory]
-    [InlineData(0.4, 4)]
-    [InlineData(4, 8)]
-    [InlineData(30, 10)]
-    public void CalculateSynchronizedTrackDuration_ClampsExtremeSpeeds(
-        double lyricSeconds,
-        double expectedSeconds)
+    [Fact]
+    public void BuildLineMotionPlan_ScrollsLongCurrentLineFarEnoughToReadItsEnd()
     {
-        var duration = CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(
-            TimeSpan.FromSeconds(lyricSeconds),
-            totalTravelDistance: 400,
-            currentLyricVisibleDistance: 200,
-            fallbackDuration: TimeSpan.FromSeconds(6));
+        var plan = CenterCardLyricsDanmakuPolicy.BuildLineMotionPlan(
+            viewportExtent: 320,
+            currentTextExtent: 520,
+            nextTextExtent: 180,
+            lineDuration: TimeSpan.FromSeconds(6),
+            progress: 0);
 
-        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), duration);
+        Assert.Equal(-212, plan.CurrentEndOffset, 2);
     }
 }

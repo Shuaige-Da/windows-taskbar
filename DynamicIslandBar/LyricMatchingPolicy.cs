@@ -3,7 +3,8 @@ namespace DynamicIslandBar;
 public readonly record struct LyricSearchIdentity(
     string Title,
     string Artist,
-    TimeSpan Duration);
+    TimeSpan Duration,
+    bool ArtistWasDerivedFromTitle = false);
 
 public sealed record LyricCandidate(
     string Provider,
@@ -77,6 +78,11 @@ public static class LyricMatchingPolicy
         var artistScore = string.IsNullOrWhiteSpace(identity.Artist)
             ? 0.75d
             : Similarity(Normalize(identity.Artist), Normalize(candidate.Artist));
+        var artistMismatchPenalty = !string.IsNullOrWhiteSpace(identity.Artist)
+            && !string.IsNullOrWhiteSpace(candidate.Artist)
+            && artistScore < 0.2d
+                ? 0.25d
+                : 0d;
         var durationPenalty = CalculateDurationPenalty(identity.Duration, candidate.Duration);
         var versionPenalty = ContainsVersionPenalty(candidate.Title) ? 0.18d : 0d;
         var lyricBonus = candidate.HasSyncedLyrics ? 0.08d : candidate.HasPlainLyrics ? 0.03d : 0d;
@@ -87,7 +93,8 @@ public static class LyricMatchingPolicy
             + (artistScore * 0.35d)
             + lyricBonus
             - durationPenalty
-            - versionPenalty);
+            - versionPenalty
+            - artistMismatchPenalty);
     }
 
     public static IReadOnlyList<LyricCandidate> RankMetadataCandidates(
@@ -184,8 +191,30 @@ public static class LyricMatchingPolicy
             return 0.92d;
         }
 
-        var overlap = left.Intersect(right).Count();
         var longest = Math.Max(left.Length, right.Length);
-        return longest == 0 ? 0d : Math.Min((double)overlap / longest, 0.72d);
+        return longest == 0
+            ? 0d
+            : Math.Clamp(1d - ((double)CalculateEditDistance(left, right) / longest), 0d, 0.88d);
+    }
+
+    private static int CalculateEditDistance(string left, string right)
+    {
+        var previous = Enumerable.Range(0, right.Length + 1).ToArray();
+        var current = new int[right.Length + 1];
+        for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
+        {
+            current[0] = leftIndex;
+            for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
+            {
+                var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
+                current[rightIndex] = Math.Min(
+                    Math.Min(current[rightIndex - 1] + 1, previous[rightIndex] + 1),
+                    previous[rightIndex - 1] + substitutionCost);
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[right.Length];
     }
 }

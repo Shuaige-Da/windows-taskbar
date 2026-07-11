@@ -1,47 +1,17 @@
 namespace DynamicIslandBar;
 
-public readonly record struct LyricsDanmakuRegistration(
-    bool ShouldEnqueue,
-    int LaneIndex,
-    int NextLaneIndex);
+public readonly record struct LyricLineMotionPlan(
+    double CurrentStartOffset,
+    double CurrentOffset,
+    double CurrentEndOffset,
+    double NextStartOffset,
+    double NextEndOffset,
+    TimeSpan RemainingDuration,
+    TimeSpan NextRevealDelay,
+    TimeSpan NextRevealDuration);
 
 public static class CenterCardLyricsDanmakuPolicy
 {
-    public const string ContinuousTrackGap = "\u3000\u3000\u3000\u3000";
-
-    public static LyricsDanmakuRegistration RegisterLyric(
-        string? previousLyric,
-        string? newLyric,
-        int nextLaneIndex,
-        int laneCount)
-    {
-        if (laneCount <= 0 || string.IsNullOrWhiteSpace(newLyric))
-        {
-            return new LyricsDanmakuRegistration(false, -1, Math.Max(0, nextLaneIndex));
-        }
-
-        if (string.Equals(previousLyric, newLyric, StringComparison.Ordinal))
-        {
-            return new LyricsDanmakuRegistration(false, -1, Math.Max(0, nextLaneIndex));
-        }
-
-        var laneIndex = Math.Clamp(nextLaneIndex, 0, laneCount - 1);
-        return new LyricsDanmakuRegistration(
-            true,
-            laneIndex,
-            (laneIndex + 1) % laneCount);
-    }
-
-    public static string BuildContinuousTrack(IEnumerable<string?> lyricLines)
-    {
-        var lines = lyricLines
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(line => line!.Trim())
-            .ToArray();
-
-        return string.Join(ContinuousTrackGap, lines);
-    }
-
     public static string FormatVerticalTrack(string lyric)
     {
         if (string.IsNullOrWhiteSpace(lyric))
@@ -49,12 +19,7 @@ public static class CenterCardLyricsDanmakuPolicy
             return string.Empty;
         }
 
-        var lines = lyric.Split(ContinuousTrackGap, StringSplitOptions.None)
-            .Select(FormatVerticalLine)
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .ToArray();
-
-        return string.Join(CreateVerticalGap(4), lines);
+        return FormatVerticalLine(lyric);
     }
 
     private static string FormatVerticalLine(string lyric)
@@ -65,51 +30,44 @@ public static class CenterCardLyricsDanmakuPolicy
         return string.Join(Environment.NewLine, characters);
     }
 
-    private static string CreateVerticalGap(int blankLineCount)
+    public static LyricLineMotionPlan BuildLineMotionPlan(
+        double viewportExtent,
+        double currentTextExtent,
+        double nextTextExtent,
+        TimeSpan lineDuration,
+        double progress)
     {
-        return string.Concat(Enumerable.Repeat(Environment.NewLine, blankLineCount + 1));
-    }
+        var viewport = Math.Max(viewportExtent, 1d);
+        var currentExtent = Math.Max(currentTextExtent, 1d);
+        var nextExtent = Math.Max(nextTextExtent, 1d);
+        var normalizedProgress = Math.Clamp(progress, 0d, 1d);
+        var currentStart = Math.Max(12d, viewport * 0.62d);
+        var availableExtent = Math.Max(viewport - 24d, 1d);
+        var currentEnd = currentExtent > availableExtent
+            ? viewport - currentExtent - 12d
+            : Math.Max(12d, currentStart - Math.Min(viewport * 0.28d, 80d));
+        var currentOffset = currentStart + ((currentEnd - currentStart) * normalizedProgress);
 
-    public static TimeSpan CalculateSynchronizedTrackDuration(
-        TimeSpan currentLyricDuration,
-        double totalTravelDistance,
-        double currentLyricVisibleDistance,
-        TimeSpan fallbackDuration)
-    {
-        if (currentLyricDuration <= TimeSpan.Zero
-            || totalTravelDistance <= 0
-            || currentLyricVisibleDistance <= 0)
-        {
-            return fallbackDuration;
-        }
+        var duration = lineDuration > TimeSpan.Zero ? lineDuration : TimeSpan.FromSeconds(4);
+        var remainingSeconds = Math.Max(0.15d, duration.TotalSeconds * (1d - normalizedProgress));
+        var revealLeadSeconds = Math.Clamp(duration.TotalSeconds * 0.28d, 0.8d, 1.5d);
+        var revealDelaySeconds = Math.Max(0d, remainingSeconds - revealLeadSeconds);
+        var revealDurationSeconds = Math.Max(
+            0.2d,
+            Math.Min(revealLeadSeconds, remainingSeconds));
+        var nextStart = viewport + 12d;
+        var nextEnd = Math.Max(
+            viewport * 0.62d,
+            viewport - Math.Min(nextExtent, viewport * 0.34d) - 12d);
 
-        var multiplier = totalTravelDistance / currentLyricVisibleDistance;
-        var seconds = currentLyricDuration.TotalSeconds * multiplier;
-        return TimeSpan.FromSeconds(Math.Clamp(seconds, 4d, 10d));
-    }
-
-    public static bool ShouldRestartMarquee(
-        bool isActive,
-        bool usesVerticalLyricsFlow,
-        int activeTrackCount,
-        string? activeText,
-        string? nextText)
-    {
-        if (string.IsNullOrWhiteSpace(nextText))
-        {
-            return false;
-        }
-
-        if (!isActive)
-        {
-            return true;
-        }
-
-        if (string.Equals(activeText, nextText, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return activeTrackCount <= 0;
+        return new LyricLineMotionPlan(
+            currentStart,
+            currentOffset,
+            currentEnd,
+            nextStart,
+            nextEnd,
+            TimeSpan.FromSeconds(remainingSeconds),
+            TimeSpan.FromSeconds(revealDelaySeconds),
+            TimeSpan.FromSeconds(revealDurationSeconds));
     }
 }

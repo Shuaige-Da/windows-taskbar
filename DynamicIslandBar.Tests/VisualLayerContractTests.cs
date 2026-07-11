@@ -325,12 +325,11 @@ public class VisualLayerContractTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var usesVerticalLyricsFlow = _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;", code);
-        Assert.Contains("Text = usesVerticalLyricsFlow ? FormatVerticalLyricColumn(track) : track", code);
-        Assert.Contains("textBlock.TextWrapping = TextWrapping.NoWrap;", code);
+        Assert.Contains("FormatVerticalLyricColumn(window.CurrentText)", code);
+        Assert.Contains("TextWrapping = TextWrapping.NoWrap", code);
         Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Clear();", code);
-        Assert.Contains("CenterCardLyricsDanmakuPolicy.CalculateSynchronizedTrackDuration(", code);
-        Assert.Contains("textBlock.BeginAnimation(Canvas.TopProperty, animation);", code);
-        Assert.Contains("textBlock.BeginAnimation(Canvas.LeftProperty, animation);", code);
+        Assert.Contains("CenterCardLyricsDanmakuPolicy.BuildLineMotionPlan(", code);
+        Assert.Contains("usesVerticalLyricsFlow ? Canvas.TopProperty : Canvas.LeftProperty", code);
     }
 
     [Fact]
@@ -376,15 +375,23 @@ public class VisualLayerContractTests
     }
 
     [Fact]
-    public void MainWindow_CapsuleLengthHandlesAreDeclaredOnCapsuleEdge()
+    public void MainWindow_CapsuleLengthHandlesKeepEdgeHitTargetsWithoutVisibleChrome()
     {
         var xaml = ReadMainWindowXaml();
+        var document = System.Xml.Linq.XDocument.Parse(xaml);
+        System.Xml.Linq.XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var startHandle = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "CapsuleStartResizeHandle");
+        var endHandle = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "CapsuleEndResizeHandle");
 
         Assert.Contains("x:Name=\"CapsuleStartResizeHandle\"", xaml);
         Assert.Contains("x:Name=\"CapsuleEndResizeHandle\"", xaml);
         Assert.Contains("DragDelta=\"CapsuleResizeHandle_DragDelta\"", xaml);
         Assert.Contains("DragCompleted=\"CapsuleResizeHandle_DragCompleted\"", xaml);
         Assert.Contains("ToolTip=\"拖动调节胶囊长度\"", xaml);
+        Assert.Equal("0", (string?)startHandle.Attribute("Opacity"));
+        Assert.Equal("0", (string?)endHandle.Attribute("Opacity"));
     }
 
     [Fact]

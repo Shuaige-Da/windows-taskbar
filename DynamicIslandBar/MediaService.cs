@@ -10,8 +10,10 @@ namespace DynamicIslandBar
     /// Wraps Windows GlobalSystemMediaTransportControlsSessionManager to provide
     /// media session info, playback state, timeline, and transport controls.
     /// </summary>
-    public class MediaService
+    public class MediaService : IDisposable
     {
+        private static readonly string[] KnownMusicProcessNames =
+            ["cloudmusic", "qqmusic", "kugou", "kuwo", "spotify", "foobar2000", "MusicBee"];
         private GlobalSystemMediaTransportControlsSessionManager? _manager;
         private string? _targetSessionAumid;
 
@@ -33,6 +35,7 @@ namespace DynamicIslandBar
         private TimeSpan _lastSmtcPosition = TimeSpan.Zero;
         private readonly System.Diagnostics.Stopwatch _smtcTimer = new();
         private GlobalSystemMediaTransportControlsSession? _subscribedSession;
+        private bool _disposed;
 
         /// <summary>
         /// Set the real duration from external source (e.g. lyrics API) for better position estimation.
@@ -47,6 +50,7 @@ namespace DynamicIslandBar
 
         public async Task InitializeAsync()
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         }
 
@@ -100,6 +104,7 @@ namespace DynamicIslandBar
 
         private void SubscribeToSessionEvents(GlobalSystemMediaTransportControlsSession session)
         {
+            if (_disposed) return;
             if (_subscribedSession == session) return;
             try
             {
@@ -435,33 +440,76 @@ namespace DynamicIslandBar
 
                 foreach (var name in searchNames)
                 {
-                    var procs = Process.GetProcessesByName(name);
-                    if (procs.Length > 0) return procs[0].Id;
+                    var processId = FindFirstProcessIdByName(name);
+                    if (processId > 0) return processId;
                 }
 
                 var aumidLower = aumid.ToLowerInvariant();
-                foreach (var proc in Process.GetProcesses())
+                var matchingProcessId = FindFirstProcessId(processName =>
+                    processName.Length > 2 && aumidLower.Contains(processName));
+                if (matchingProcessId > 0)
                 {
-                    try
-                    {
-                        var procName = proc.ProcessName.ToLowerInvariant();
-                        if (aumidLower.Contains(procName) && procName.Length > 2)
-                            return proc.Id;
-                    }
-                    catch { }
+                    return matchingProcessId;
                 }
 
-                var musicProcessNames = new[] { "cloudmusic", "qqmusic", "kugou", "kuwo", "spotify", "foobar2000", "MusicBee" };
-                foreach (var name in musicProcessNames)
+                foreach (var name in KnownMusicProcessNames)
                 {
-                    var procs = Process.GetProcessesByName(name);
-                    if (procs.Length > 0) return procs[0].Id;
+                    var processId = FindFirstProcessIdByName(name);
+                    if (processId > 0) return processId;
                 }
 
                 return AudioService.GetActiveAudioSessionPid();
             }
             catch { }
             return 0;
+        }
+
+        private static int FindFirstProcessIdByName(string processName)
+        {
+            var processes = Process.GetProcessesByName(processName);
+            try
+            {
+                return processes.Length > 0 ? processes[0].Id : 0;
+            }
+            finally
+            {
+                foreach (var process in processes)
+                {
+                    process.Dispose();
+                }
+            }
+        }
+
+        private static int FindFirstProcessId(Func<string, bool> predicate)
+        {
+            var processes = Process.GetProcesses();
+            try
+            {
+                foreach (var process in processes)
+                {
+                    try
+                    {
+                        var processName = process.ProcessName.ToLowerInvariant();
+                        if (predicate(processName))
+                        {
+                            return process.Id;
+                        }
+                    }
+                    catch
+                    {
+                        // A process can exit or become inaccessible during enumeration.
+                    }
+                }
+
+                return 0;
+            }
+            finally
+            {
+                foreach (var process in processes)
+                {
+                    process.Dispose();
+                }
+            }
         }
 
         // ─── Playback Mode (Sequential / Loop All / Loop One / Shuffle) ───
@@ -576,6 +624,42 @@ namespace DynamicIslandBar
                 default:
                     return false;
             }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            try
+            {
+                if (_subscribedSession != null)
+                {
+                    _subscribedSession.TimelinePropertiesChanged -= OnTimelineChanged;
+                    _subscribedSession.PlaybackInfoChanged -= OnPlaybackInfoChanged;
+                    _subscribedSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
+                }
+            }
+            catch
+            {
+                // The WinRT session may already have been torn down.
+            }
+
+            _subscribedSession = null;
+            _manager = null;
+            _targetSessionAumid = null;
+            lock (_positionSync)
+            {
+                _songTimer.Reset();
+                _smtcTimer.Reset();
+                _pendingTitle = null;
+                _pendingArtist = null;
+            }
+
+            GC.SuppressFinalize(this);
         }
     }
 }
