@@ -779,6 +779,56 @@ public class LyricsService
             position);
     }
 
+    public LyricPlaybackWindow? GetSongIntroductionWindow(
+        string title,
+        string artist,
+        TimeSpan duration,
+        TimeSpan position)
+    {
+        if (position < TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var introductionText = BuildSongInformationText(title, artist);
+        if (string.IsNullOrWhiteSpace(introductionText))
+        {
+            return null;
+        }
+
+        var hasMatchingLyrics = HasLyricsFor(title, artist, duration);
+        var firstTimedLine = hasMatchingLyrics && _parsedLyrics.Count > 0
+            ? _parsedLyrics[0]
+            : null;
+        var introductionEnd = firstTimedLine?.Time ?? TimeSpan.FromSeconds(6);
+        if (introductionEnd <= TimeSpan.Zero || position >= introductionEnd)
+        {
+            return null;
+        }
+
+        return new LyricPlaybackWindow(
+            Index: -1,
+            CurrentText: introductionText,
+            NextText: firstTimedLine?.Text,
+            Start: TimeSpan.Zero,
+            End: introductionEnd,
+            Position: position);
+    }
+
+    public static string BuildSongInformationText(string? title, string? artist)
+    {
+        var safeTitle = title?.Trim() ?? string.Empty;
+        var safeArtist = artist?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(safeArtist))
+        {
+            return safeTitle;
+        }
+
+        return string.IsNullOrWhiteSpace(safeTitle)
+            ? safeArtist
+            : $"{safeTitle} · {safeArtist}";
+    }
+
     public TimeSpan GetCurrentLyricDuration(TimeSpan position)
     {
         if (_parsedLyrics.Count < 2)

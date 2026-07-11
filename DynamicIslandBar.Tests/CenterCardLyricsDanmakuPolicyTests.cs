@@ -52,4 +52,19 @@ public class CenterCardLyricsDanmakuPolicyTests
 
         Assert.Equal(-212, plan.CurrentEndOffset, 2);
     }
+
+    [Fact]
+    public void BuildLineMotionPlan_KeepsCurrentLineMovingPastTimestampUntilItLeavesViewport()
+    {
+        var plan = CenterCardLyricsDanmakuPolicy.BuildLineMotionPlan(
+            viewportExtent: 500,
+            currentTextExtent: 180,
+            nextTextExtent: 160,
+            lineDuration: TimeSpan.FromSeconds(8),
+            progress: 0.75);
+
+        Assert.True(plan.CurrentExitOffset < -180);
+        Assert.InRange(plan.CurrentExitDuration.TotalSeconds, 0.8, 1.6);
+        Assert.True(plan.CurrentExitOffset < plan.CurrentEndOffset);
+    }
 }

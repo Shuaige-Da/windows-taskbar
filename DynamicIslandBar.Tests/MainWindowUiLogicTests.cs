@@ -24,12 +24,23 @@ public class MainWindowUiLogicTests
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("_lyricsService.GetPlaybackWindow(position)", code);
-        Assert.Contains("BeginCenterCardLyricWindowAnimation(window);", code);
+        Assert.Contains("BeginCenterCardLyricWindowAnimation(window, forceRestart);", code);
         Assert.Contains("window.CurrentText", code);
         Assert.Contains("window.NextText", code);
         Assert.Contains("BeginTime = plan.NextRevealDelay", code);
         Assert.DoesNotContain("GetCurrentLyricSequence(position, maxLines: 6)", code);
         Assert.DoesNotContain("BuildContinuousTrack", code);
+    }
+
+    [Fact]
+    public void MainWindow_ShowsSongInformationBeforeFirstLyricWithoutClearingTheHandoff()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("_lyricsService.GetSongIntroductionWindow(", code);
+        Assert.Contains("previous.NextText, window.NextText", code);
+        Assert.Contains("FindCenterCardLyricBlock(window.Index)", code);
+        Assert.Contains("ApplyCenterCardLyricAtPosition(position, forceRestart: false);", code);
     }
 
     [Fact]
@@ -64,7 +75,10 @@ public class MainWindowUiLogicTests
         Assert.Contains("previous.Index == window.Index", code);
         Assert.Contains("forceRestart", code);
         Assert.Contains("|| !isSameWindow", code);
-        Assert.Contains("BeginCenterCardLyricWindowAnimation(window);", code);
+        Assert.Contains("BeginCenterCardLyricWindowAnimation(window, forceRestart);", code);
+        Assert.Contains("FindCenterCardLyricBlock(window.Index)", code);
+        Assert.Contains("GetLyricBlockPrimaryOffset(currentBlock, usesVerticalLyricsFlow)", code);
+        Assert.Contains("CenterCardLyricsDanmakuCanvas.Children.Remove(currentBlock);", code);
     }
 
     [Fact]

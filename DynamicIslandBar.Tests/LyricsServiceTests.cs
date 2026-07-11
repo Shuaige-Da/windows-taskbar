@@ -149,6 +149,54 @@ public class LyricsServiceTests
         Assert.True(service.HasLyricsFor("晴天", "周杰伦"));
     }
 
+    [Fact]
+    public void GetSongIntroductionWindow_ShowsSongInformationUntilFirstTimedLyric()
+    {
+        var service = new LyricsService();
+        LoadLrc(service, """
+            [00:08.00]第一句
+            [00:12.00]第二句
+            """);
+        SetLoadedIdentity(service, "晴天", "周杰伦");
+
+        var introduction = service.GetSongIntroductionWindow(
+            "晴天",
+            "周杰伦",
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromSeconds(2));
+
+        Assert.NotNull(introduction);
+        Assert.Equal(-1, introduction.Value.Index);
+        Assert.Equal("晴天 · 周杰伦", introduction.Value.CurrentText);
+        Assert.Equal("第一句", introduction.Value.NextText);
+        Assert.Equal(TimeSpan.FromSeconds(8), introduction.Value.End);
+        Assert.Null(service.GetSongIntroductionWindow(
+            "晴天",
+            "周杰伦",
+            TimeSpan.FromMinutes(4),
+            TimeSpan.FromSeconds(8)));
+    }
+
+    [Fact]
+    public void GetSongIntroductionWindow_UsesShortFallbackWhileLyricsAreLoading()
+    {
+        var service = new LyricsService();
+
+        var introduction = service.GetSongIntroductionWindow(
+            "新歌曲",
+            "新歌手",
+            TimeSpan.FromMinutes(3),
+            TimeSpan.FromSeconds(1));
+
+        Assert.Equal("新歌曲 · 新歌手", introduction?.CurrentText);
+        Assert.Equal(TimeSpan.FromSeconds(6), introduction?.End);
+        Assert.Null(service.GetSongIntroductionWindow(
+            "新歌曲",
+            "新歌手",
+            TimeSpan.FromMinutes(3),
+            TimeSpan.FromSeconds(6)));
+    }
+
     private static void LoadLrc(LyricsService service, string lrc)
     {
         var method = typeof(LyricsService).GetMethod(

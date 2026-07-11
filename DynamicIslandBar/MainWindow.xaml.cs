@@ -1202,7 +1202,8 @@ namespace DynamicIslandBar
             var snapshot = _centerCardLiveMediaSnapshot;
             var shouldTrackLyrics = _isMusicPlaying
                 && snapshot is { IsMusicApp: true }
-                && _lyricsService.HasLyricsFor(snapshot.Title, snapshot.Artist, _mediaDuration);
+                && (_lyricsService.HasLyricsFor(snapshot.Title, snapshot.Artist, _mediaDuration)
+                    || _activeCenterCardLyricWindow is { Index: -1 });
             if (shouldTrackLyrics)
             {
                 if (!_lyricsFastTimer.IsEnabled)
@@ -1356,11 +1357,10 @@ namespace DynamicIslandBar
                         }
                         UpdateMediaTimerState();
 
-                        var lyricApplied = lyricsAvailable
-                            && ApplyCenterCardLyricAtPosition(
-                                info.Position,
-                                forceRestart: playbackStateChanged);
-                        if (!lyricApplied && lyricsAvailable && info.Position <= TimeSpan.Zero)
+                        var lyricApplied = ApplyCenterCardLyricAtPosition(
+                            info.Position,
+                            forceRestart: playbackStateChanged);
+                        if (!lyricApplied && info.Position <= TimeSpan.Zero)
                         {
                             ApplyCenterCardLyricAtPosition(
                                 _mediaService.GetCurrentPosition(),
@@ -1464,7 +1464,7 @@ namespace DynamicIslandBar
 
                 UpdateMediaTimerState();
                 var position = _mediaService?.GetCurrentPosition() ?? TimeSpan.Zero;
-                ApplyCenterCardLyricAtPosition(position, forceRestart: true);
+                ApplyCenterCardLyricAtPosition(position, forceRestart: false);
             }
             finally
             {
@@ -2515,6 +2515,12 @@ namespace DynamicIslandBar
             ClearCenterCardLyricsDanmaku();
         }
 
+        private sealed class CenterCardLyricBlockState
+        {
+            public required int Index { get; init; }
+            public bool IsCurrent { get; set; }
+        }
+
         private bool ApplyCenterCardLyricAtPosition(TimeSpan position, bool forceRestart)
         {
             if (position < TimeSpan.Zero)
@@ -2523,13 +2529,23 @@ namespace DynamicIslandBar
             }
 
             var snapshot = _centerCardLiveMediaSnapshot;
-            if (snapshot is not { IsMusicApp: true }
-                || !_lyricsService.HasLyricsFor(snapshot.Title, snapshot.Artist, _mediaDuration))
+            if (snapshot is not { IsMusicApp: true })
             {
                 return false;
             }
 
-            var window = _lyricsService.GetPlaybackWindow(position);
+            var hasMatchingLyrics = _lyricsService.HasLyricsFor(
+                snapshot.Title,
+                snapshot.Artist,
+                _mediaDuration);
+            var window = hasMatchingLyrics
+                ? _lyricsService.GetPlaybackWindow(position)
+                : null;
+            window ??= _lyricsService.GetSongIntroductionWindow(
+                snapshot.Title,
+                snapshot.Artist,
+                _mediaDuration,
+                position);
             return window is { } playbackWindow
                 && ApplyCenterCardLyricWindow(playbackWindow, forceRestart);
         }
@@ -2549,6 +2565,8 @@ namespace DynamicIslandBar
             var isSameWindow = previousWindow is { } previous
                 && previous.Index == window.Index
                 && previous.Start == window.Start
+                && previous.End == window.End
+                && string.Equals(previous.NextText, window.NextText, StringComparison.Ordinal)
                 && string.Equals(previous.CurrentText, window.CurrentText, StringComparison.Ordinal);
             _activeCenterCardLyricWindow = window;
 
@@ -2564,13 +2582,15 @@ namespace DynamicIslandBar
                     || (!_hasActiveCenterCardLyricScroll
                         && CenterCardLyricsDanmakuCanvas.Children.Count == 0)))
             {
-                BeginCenterCardLyricWindowAnimation(window);
+                BeginCenterCardLyricWindowAnimation(window, forceRestart);
             }
 
             return true;
         }
 
-        private void BeginCenterCardLyricWindowAnimation(LyricPlaybackWindow window)
+        private void BeginCenterCardLyricWindowAnimation(
+            LyricPlaybackWindow window,
+            bool forceRestart)
         {
             if (!_isCenterCardLyricsMarqueeActive
                 || string.IsNullOrWhiteSpace(window.CurrentText))
@@ -2578,7 +2598,10 @@ namespace DynamicIslandBar
                 return;
             }
 
-            ClearCenterCardLyricsDanmaku();
+            if (forceRestart)
+            {
+                ClearCenterCardLyricsDanmaku();
+            }
             var scrollGeneration = _centerCardLyricScrollGeneration;
             _hasActiveCenterCardLyricScroll = true;
 
@@ -2602,11 +2625,18 @@ namespace DynamicIslandBar
                     return;
                 }
 
-                var currentText = usesVerticalLyricsFlow
-                    ? FormatVerticalLyricColumn(window.CurrentText)
-                    : window.CurrentText;
-                var currentBlock = CreateCenterCardLyricTextBlock(
-                    currentText,
+                var currentBlock = FindCenterCardLyricBlock(window.Index);
+                var isPromotingPreview = currentBlock != null;
+                currentBlock ??= CreateCenterCardLyricTextBlock(
+                    usesVerticalLyricsFlow
+                        ? FormatVerticalLyricColumn(window.CurrentText)
+                        : window.CurrentText,
+                    usesVerticalLyricsFlow,
+                    isPreview: false,
+                    viewportWidth,
+                    window.Index);
+                ConfigureCenterCardLyricTextBlock(
+                    currentBlock,
                     usesVerticalLyricsFlow,
                     isPreview: false,
                     viewportWidth);
@@ -2622,11 +2652,13 @@ namespace DynamicIslandBar
                     var nextText = usesVerticalLyricsFlow
                         ? FormatVerticalLyricColumn(window.NextText)
                         : window.NextText;
-                    nextBlock = CreateCenterCardLyricTextBlock(
+                    nextBlock = FindCenterCardLyricBlock(window.Index + 1);
+                    nextBlock ??= CreateCenterCardLyricTextBlock(
                         nextText,
                         usesVerticalLyricsFlow,
                         isPreview: true,
-                        viewportWidth);
+                        viewportWidth,
+                        window.Index + 1);
                     nextBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                     nextExtent = usesVerticalLyricsFlow
                         ? Math.Max(nextBlock.DesiredSize.Height, 36)
@@ -2640,13 +2672,23 @@ namespace DynamicIslandBar
                     window.Duration,
                     window.Progress);
 
-                PositionLyricBlock(
-                    currentBlock,
-                    usesVerticalLyricsFlow,
-                    plan.CurrentOffset,
-                    viewportWidth,
-                    viewportHeight);
-                CenterCardLyricsDanmakuCanvas.Children.Add(currentBlock);
+                var currentState = (CenterCardLyricBlockState)currentBlock.Tag;
+                var currentOffset = isPromotingPreview
+                    ? GetLyricBlockPrimaryOffset(currentBlock, usesVerticalLyricsFlow)
+                    : plan.CurrentOffset;
+                if (!isPromotingPreview)
+                {
+                    PositionLyricBlock(
+                        currentBlock,
+                        usesVerticalLyricsFlow,
+                        currentOffset,
+                        viewportWidth,
+                        viewportHeight);
+                    CenterCardLyricsDanmakuCanvas.Children.Add(currentBlock);
+                }
+
+                currentBlock.BeginAnimation(OpacityProperty, null);
+                currentBlock.Opacity = 1;
 
                 if (!_isMusicPlaying)
                 {
@@ -2654,55 +2696,57 @@ namespace DynamicIslandBar
                     return;
                 }
 
-                var currentAnimation = new DoubleAnimation
+                if (!currentState.IsCurrent)
                 {
-                    From = plan.CurrentOffset,
-                    To = plan.CurrentEndOffset,
-                    Duration = plan.RemainingDuration,
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
-                };
-                currentAnimation.Completed += (_, _) =>
-                {
-                    if (scrollGeneration == _centerCardLyricScrollGeneration)
+                    currentState.IsCurrent = true;
+                    var currentAnimation = BuildCurrentLyricMotionAnimation(currentOffset, plan);
+                    currentAnimation.Completed += (_, _) =>
                     {
-                        _hasActiveCenterCardLyricScroll = false;
-                    }
-                };
-                currentBlock.BeginAnimation(
-                    usesVerticalLyricsFlow ? Canvas.TopProperty : Canvas.LeftProperty,
-                    currentAnimation);
+                        if (scrollGeneration == _centerCardLyricScrollGeneration)
+                        {
+                            CenterCardLyricsDanmakuCanvas.Children.Remove(currentBlock);
+                            _hasActiveCenterCardLyricScroll = CenterCardLyricsDanmakuCanvas.Children.Count > 0;
+                        }
+                    };
+                    currentBlock.BeginAnimation(
+                        usesVerticalLyricsFlow ? Canvas.TopProperty : Canvas.LeftProperty,
+                        currentAnimation);
+                }
 
                 if (nextBlock == null)
                 {
                     return;
                 }
 
-                PositionLyricBlock(
-                    nextBlock,
-                    usesVerticalLyricsFlow,
-                    plan.NextStartOffset,
-                    viewportWidth,
-                    viewportHeight);
-                CenterCardLyricsDanmakuCanvas.Children.Add(nextBlock);
+                if (nextBlock.Parent == null)
+                {
+                    PositionLyricBlock(
+                        nextBlock,
+                        usesVerticalLyricsFlow,
+                        plan.NextStartOffset,
+                        viewportWidth,
+                        viewportHeight);
+                    CenterCardLyricsDanmakuCanvas.Children.Add(nextBlock);
 
-                var previewOffsetAnimation = new DoubleAnimation
-                {
-                    From = plan.NextStartOffset,
-                    To = plan.NextEndOffset,
-                    BeginTime = plan.NextRevealDelay,
-                    Duration = plan.NextRevealDuration,
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                };
-                nextBlock.BeginAnimation(
-                    usesVerticalLyricsFlow ? Canvas.TopProperty : Canvas.LeftProperty,
-                    previewOffsetAnimation);
-                nextBlock.BeginAnimation(OpacityProperty, new DoubleAnimation
-                {
-                    From = 0,
-                    To = 0.62,
-                    BeginTime = plan.NextRevealDelay,
-                    Duration = TimeSpan.FromMilliseconds(260)
-                });
+                    var previewOffsetAnimation = new DoubleAnimation
+                    {
+                        From = plan.NextStartOffset,
+                        To = plan.NextEndOffset,
+                        BeginTime = plan.NextRevealDelay,
+                        Duration = plan.NextRevealDuration,
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    };
+                    nextBlock.BeginAnimation(
+                        usesVerticalLyricsFlow ? Canvas.TopProperty : Canvas.LeftProperty,
+                        previewOffsetAnimation);
+                    nextBlock.BeginAnimation(OpacityProperty, new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 0.62,
+                        BeginTime = plan.NextRevealDelay,
+                        Duration = TimeSpan.FromMilliseconds(260)
+                    });
+                }
                 currentBlock.BeginAnimation(OpacityProperty, new DoubleAnimation
                 {
                     To = 0.38,
@@ -2716,27 +2760,77 @@ namespace DynamicIslandBar
             string text,
             bool usesVerticalLyricsFlow,
             bool isPreview,
-            double viewportWidth)
+            double viewportWidth,
+            int lyricIndex)
         {
             var textBlock = new TextBlock
             {
                 Text = text,
-                Foreground = isPreview ? LyricPreviewBrush : LyricPrimaryBrush,
-                FontSize = usesVerticalLyricsFlow ? 14 : (isPreview ? 17 : 20),
-                FontWeight = isPreview ? FontWeights.Medium : FontWeights.SemiBold,
                 Opacity = isPreview ? 0 : 1,
                 TextTrimming = TextTrimming.None,
                 TextWrapping = TextWrapping.NoWrap,
                 TextAlignment = usesVerticalLyricsFlow ? TextAlignment.Center : TextAlignment.Left,
-                Effect = isPreview ? LyricPreviewEffect : LyricPrimaryEffect
+                Tag = new CenterCardLyricBlockState { Index = lyricIndex }
             };
+            ConfigureCenterCardLyricTextBlock(textBlock, usesVerticalLyricsFlow, isPreview, viewportWidth);
+
+            return textBlock;
+        }
+
+        private TextBlock? FindCenterCardLyricBlock(int lyricIndex)
+        {
+            return CenterCardLyricsDanmakuCanvas.Children
+                .OfType<TextBlock>()
+                .FirstOrDefault(block => block.Tag is CenterCardLyricBlockState state
+                    && state.Index == lyricIndex);
+        }
+
+        private static void ConfigureCenterCardLyricTextBlock(
+            TextBlock textBlock,
+            bool usesVerticalLyricsFlow,
+            bool isPreview,
+            double viewportWidth)
+        {
+            textBlock.Foreground = isPreview ? LyricPreviewBrush : LyricPrimaryBrush;
+            textBlock.FontSize = usesVerticalLyricsFlow ? 14 : (isPreview ? 17 : 20);
+            textBlock.FontWeight = isPreview ? FontWeights.Medium : FontWeights.SemiBold;
+            textBlock.Effect = isPreview ? LyricPreviewEffect : LyricPrimaryEffect;
             if (usesVerticalLyricsFlow)
             {
                 textBlock.Width = Math.Max(viewportWidth, 36);
                 textBlock.LineHeight = 19;
             }
+        }
 
-            return textBlock;
+        private static double GetLyricBlockPrimaryOffset(TextBlock textBlock, bool usesVerticalLyricsFlow)
+        {
+            var value = (double)textBlock.GetValue(
+                usesVerticalLyricsFlow ? Canvas.TopProperty : Canvas.LeftProperty);
+            return double.IsNaN(value) ? 0d : value;
+        }
+
+        private static DoubleAnimationUsingKeyFrames BuildCurrentLyricMotionAnimation(
+            double startOffset,
+            LyricLineMotionPlan plan)
+        {
+            var exitTime = plan.RemainingDuration + plan.CurrentExitDuration;
+            var animation = new DoubleAnimationUsingKeyFrames
+            {
+                Duration = exitTime,
+                FillBehavior = FillBehavior.Stop
+            };
+            animation.KeyFrames.Add(new LinearDoubleKeyFrame(
+                startOffset,
+                KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            animation.KeyFrames.Add(new EasingDoubleKeyFrame(
+                plan.CurrentEndOffset,
+                KeyTime.FromTimeSpan(plan.RemainingDuration),
+                new QuadraticEase { EasingMode = EasingMode.EaseInOut }));
+            animation.KeyFrames.Add(new EasingDoubleKeyFrame(
+                plan.CurrentExitOffset,
+                KeyTime.FromTimeSpan(exitTime),
+                new CubicEase { EasingMode = EasingMode.EaseIn }));
+            return animation;
         }
 
         private static void PositionLyricBlock(
