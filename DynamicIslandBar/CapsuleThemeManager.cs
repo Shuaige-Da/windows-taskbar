@@ -16,6 +16,7 @@ public static class CapsuleThemeManager
         string? backgroundImagePath = null,
         double backgroundImageOpacity = 0)
     {
+        backgroundImageOpacity = Math.Clamp(backgroundImageOpacity, 0d, 1d);
         return preset switch
         {
             CapsuleThemePreset.GlassGreen => new CapsuleTheme(

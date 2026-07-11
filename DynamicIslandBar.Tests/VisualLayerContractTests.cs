@@ -193,6 +193,7 @@ public class VisualLayerContractTests
         Assert.Contains("x:Name=\"LyricsPresenter\"", xaml);
         Assert.Contains("x:Name=\"CenterCardPresenter\"", xaml);
         Assert.Contains("x:Name=\"CenterCardSurface\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleBackgroundImageSurface\"", xaml);
         Assert.Contains("x:Name=\"CenterCardLyricsViewport\"", xaml);
         Assert.Contains("x:Name=\"DetailsPresenter\"", xaml);
         Assert.Contains("x:Name=\"MediaControlsPresenter\"", xaml);

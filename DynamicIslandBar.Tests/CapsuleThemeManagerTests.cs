@@ -29,6 +29,19 @@ public class CapsuleThemeManagerTests
         Assert.Equal(0.65, theme.BackgroundImageOpacity);
     }
 
+    [Theory]
+    [InlineData(-0.5, 0)]
+    [InlineData(0.4, 0.4)]
+    [InlineData(2, 1)]
+    public void BuildTheme_ClampsBackgroundImageOpacity(double input, double expected)
+    {
+        var theme = CapsuleThemeManager.BuildTheme(
+            CapsuleThemePreset.ClassicDark,
+            backgroundImageOpacity: input);
+
+        Assert.Equal(expected, theme.BackgroundImageOpacity);
+    }
+
     [Fact]
     public void BuildTheme_ClassicDarkUsesTranslucentGlassBackground()
     {

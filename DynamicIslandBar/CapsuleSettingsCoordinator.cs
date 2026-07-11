@@ -12,7 +12,8 @@ internal enum CapsuleSettingsChangeKind
     Presentation = 8,
     Lyrics = 16,
     Startup = 32,
-    All = Theme | Appearance | Layout | Presentation | Lyrics | Startup
+    ControlCenterAppearance = 64,
+    All = Theme | Appearance | Layout | Presentation | Lyrics | Startup | ControlCenterAppearance
 }
 
 internal sealed class CapsuleSettingsCoordinator : IDisposable
@@ -56,6 +57,42 @@ internal sealed class CapsuleSettingsCoordinator : IDisposable
     {
         CapsuleConfigMutator.SetStartupDisplayMode(_config, mode);
         NotifyChanged(CapsuleSettingsChangeKind.Startup);
+    }
+
+    public void SetBackgroundImage(string? path)
+    {
+        CapsuleConfigMutator.SetBackgroundImagePath(_config, path);
+        NotifyChanged(CapsuleSettingsChangeKind.Appearance);
+    }
+
+    public void SetBackgroundImageOpacity(int percent)
+    {
+        CapsuleConfigMutator.SetBackgroundImageOpacityPercent(_config, percent);
+        NotifyChanged(CapsuleSettingsChangeKind.Appearance);
+    }
+
+    public void SetBackgroundImageStretchMode(string mode)
+    {
+        CapsuleConfigMutator.SetBackgroundImageStretchMode(_config, mode);
+        NotifyChanged(CapsuleSettingsChangeKind.Appearance);
+    }
+
+    public void SetControlCenterBackgroundImage(string? path)
+    {
+        CapsuleConfigMutator.SetControlCenterBackgroundImagePath(_config, path);
+        NotifyChanged(CapsuleSettingsChangeKind.ControlCenterAppearance);
+    }
+
+    public void SetControlCenterBackgroundImageOpacity(int percent)
+    {
+        CapsuleConfigMutator.SetControlCenterBackgroundImageOpacityPercent(_config, percent);
+        NotifyChanged(CapsuleSettingsChangeKind.ControlCenterAppearance);
+    }
+
+    public void SetControlCenterBackgroundImageStretchMode(string mode)
+    {
+        CapsuleConfigMutator.SetControlCenterBackgroundImageStretchMode(_config, mode);
+        NotifyChanged(CapsuleSettingsChangeKind.ControlCenterAppearance);
     }
 
     public void SetGlassOpacity(int percent) => UpdateAppearance(
@@ -106,6 +143,12 @@ internal sealed class CapsuleSettingsCoordinator : IDisposable
     public void SetPartOpacity(CapsuleVisualPart part, int percent)
     {
         CapsuleConfigMutator.SetPartOpacityPercent(_config, part, percent);
+        NotifyChanged(CapsuleSettingsChangeKind.Presentation);
+    }
+
+    public void SetPartAutoHideWithCapsule(CapsuleVisualPart part, bool autoHideWithCapsule)
+    {
+        CapsuleConfigMutator.SetPartAutoHideWithCapsule(_config, part, autoHideWithCapsule);
         NotifyChanged(CapsuleSettingsChangeKind.Presentation);
     }
 

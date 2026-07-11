@@ -22,4 +22,8 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\DynamicIslandBar-AppIcon.png" />
+  </ItemGroup>
+
 </Project>

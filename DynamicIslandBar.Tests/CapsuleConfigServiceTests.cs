@@ -132,6 +132,9 @@ public class CapsuleConfigServiceTests
         {
             Assert.True(config.Presentation.Get(part).IsVisible);
             Assert.Equal(100, config.Presentation.Get(part).OpacityPercent);
+            Assert.Equal(
+                CapsulePresentationPolicy.GetDefaultAutoHideWithCapsule(part),
+                config.Presentation.Get(part).AutoHideWithCapsule);
         }
     }
 
@@ -216,12 +219,46 @@ public class CapsuleConfigServiceTests
         CapsuleConfigMutator.SetPartVisibility(config, CapsuleVisualPart.Lyrics, false);
         CapsuleConfigMutator.SetPartOpacityPercent(config, CapsuleVisualPart.Dock, 140);
         CapsuleConfigMutator.SetPartOpacityPercent(config, CapsuleVisualPart.System, -10);
+        CapsuleConfigMutator.SetPartAutoHideWithCapsule(config, CapsuleVisualPart.Lyrics, true);
+        CapsuleConfigMutator.SetPartAutoHideWithCapsule(config, CapsuleVisualPart.Chrome, false);
 
         var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
 
         Assert.False(restored.Presentation.Lyrics.IsVisible);
         Assert.Equal(100, restored.Presentation.Dock.OpacityPercent);
         Assert.Equal(0, restored.Presentation.System.OpacityPercent);
+        Assert.True(restored.Presentation.Lyrics.AutoHideWithCapsule);
+        Assert.False(restored.Presentation.Chrome.AutoHideWithCapsule);
+    }
+
+    [Fact]
+    public void Deserialize_AppliesLegacyAutoHideDefaultsButPreservesExplicitFalse()
+    {
+        var legacy = CapsuleConfigSerializer.Deserialize("""
+            {
+              "Presentation": {
+                "Chrome": { "IsVisible": true, "OpacityPercent": 90 },
+                "Lyrics": { "IsVisible": true, "OpacityPercent": 80 }
+              }
+            }
+            """);
+        var explicitPreference = CapsuleConfigSerializer.Deserialize("""
+            {
+              "Presentation": {
+                "Chrome": {
+                  "IsVisible": true,
+                  "OpacityPercent": 90,
+                  "AutoHideWithCapsule": false
+                }
+              }
+            }
+            """);
+
+        Assert.True(legacy.Presentation.Chrome.AutoHideWithCapsule);
+        Assert.True(legacy.Presentation.Dock.AutoHideWithCapsule);
+        Assert.False(legacy.Presentation.Lyrics.AutoHideWithCapsule);
+        Assert.False(legacy.Presentation.CenterCard.AutoHideWithCapsule);
+        Assert.False(explicitPreference.Presentation.Chrome.AutoHideWithCapsule);
     }
 
     [Fact]

@@ -18,22 +18,24 @@ public sealed class CapsulePartPresentationConfig
 {
     public bool IsVisible { get; set; } = true;
     public int OpacityPercent { get; set; } = 100;
+    public bool AutoHideWithCapsule { get; set; }
 
     internal CapsulePartPresentationConfig CloneNormalized()
     {
         return new CapsulePartPresentationConfig
         {
             IsVisible = IsVisible,
-            OpacityPercent = Math.Clamp(OpacityPercent, 0, 100)
+            OpacityPercent = Math.Clamp(OpacityPercent, 0, 100),
+            AutoHideWithCapsule = AutoHideWithCapsule
         };
     }
 }
 
 public sealed class CapsulePresentationConfig
 {
-    public CapsulePartPresentationConfig Chrome { get; set; } = new();
-    public CapsulePartPresentationConfig Dock { get; set; } = new();
-    public CapsulePartPresentationConfig System { get; set; } = new();
+    public CapsulePartPresentationConfig Chrome { get; set; } = new() { AutoHideWithCapsule = true };
+    public CapsulePartPresentationConfig Dock { get; set; } = new() { AutoHideWithCapsule = true };
+    public CapsulePartPresentationConfig System { get; set; } = new() { AutoHideWithCapsule = true };
     public CapsulePartPresentationConfig Lyrics { get; set; } = new();
     public CapsulePartPresentationConfig Details { get; set; } = new();
     public CapsulePartPresentationConfig MediaControls { get; set; } = new();
@@ -58,19 +60,34 @@ public sealed class CapsulePresentationConfig
     {
         return new CapsulePresentationConfig
         {
-            Chrome = (Chrome ?? new()).CloneNormalized(),
-            Dock = (Dock ?? new()).CloneNormalized(),
-            System = (System ?? new()).CloneNormalized(),
+            Chrome = (Chrome ?? CreateDefault(CapsuleVisualPart.Chrome)).CloneNormalized(),
+            Dock = (Dock ?? CreateDefault(CapsuleVisualPart.Dock)).CloneNormalized(),
+            System = (System ?? CreateDefault(CapsuleVisualPart.System)).CloneNormalized(),
             Lyrics = (Lyrics ?? new()).CloneNormalized(),
             Details = (Details ?? new()).CloneNormalized(),
             MediaControls = (MediaControls ?? new()).CloneNormalized(),
             CenterCard = (CenterCard ?? new()).CloneNormalized()
         };
     }
+
+    private static CapsulePartPresentationConfig CreateDefault(CapsuleVisualPart part)
+    {
+        return new CapsulePartPresentationConfig
+        {
+            AutoHideWithCapsule = CapsulePresentationPolicy.GetDefaultAutoHideWithCapsule(part)
+        };
+    }
 }
 
 public static class CapsulePresentationPolicy
 {
+    public static bool GetDefaultAutoHideWithCapsule(CapsuleVisualPart part)
+    {
+        return part is CapsuleVisualPart.Chrome
+            or CapsuleVisualPart.Dock
+            or CapsuleVisualPart.System;
+    }
+
     public static bool IsEffectivelyVisible(bool preferredVisible, bool runtimeVisible)
     {
         return preferredVisible && runtimeVisible;
@@ -89,13 +106,6 @@ public static class CapsulePresentationPolicy
 
 internal sealed class CapsulePresentationController
 {
-    private static readonly HashSet<CapsuleVisualPart> AutoHideParts =
-    [
-        CapsuleVisualPart.Chrome,
-        CapsuleVisualPart.Dock,
-        CapsuleVisualPart.System
-    ];
-
     private readonly IReadOnlyDictionary<CapsuleVisualPart, IReadOnlyList<FrameworkElement>> _targets;
     private readonly Dictionary<CapsuleVisualPart, PartState> _states = [];
     private double _autoHideFactor = 1;
@@ -122,15 +132,24 @@ internal sealed class CapsulePresentationController
         foreach (var part in Enum.GetValues<CapsuleVisualPart>())
         {
             var preference = preferences.Get(part);
-            SetPreference(part, preference.IsVisible, preference.OpacityPercent);
+            SetPreference(
+                part,
+                preference.IsVisible,
+                preference.OpacityPercent,
+                preference.AutoHideWithCapsule);
         }
     }
 
-    public void SetPreference(CapsuleVisualPart part, bool isVisible, int opacityPercent)
+    public void SetPreference(
+        CapsuleVisualPart part,
+        bool isVisible,
+        int opacityPercent,
+        bool autoHideWithCapsule)
     {
         var state = _states[part];
         state.PreferredVisible = isVisible;
         state.OpacityPercent = Math.Clamp(opacityPercent, 0, 100);
+        state.AutoHideWithCapsule = autoHideWithCapsule;
         ApplyPart(part);
     }
 
@@ -152,9 +171,12 @@ internal sealed class CapsulePresentationController
     public void AnimateAutoHideFactor(double targetFactor, TimeSpan duration)
     {
         _autoHideFactor = Math.Clamp(targetFactor, 0, 1);
-        foreach (var part in AutoHideParts)
+        foreach (var part in Enum.GetValues<CapsuleVisualPart>())
         {
-            ApplyPart(part, duration);
+            if (_states[part].AutoHideWithCapsule)
+            {
+                ApplyPart(part, duration);
+            }
         }
     }
 
@@ -167,7 +189,7 @@ internal sealed class CapsulePresentationController
         var opacity = CapsulePresentationPolicy.GetEffectiveOpacity(
             state.OpacityPercent,
             _autoHideFactor,
-            AutoHideParts.Contains(part));
+            state.AutoHideWithCapsule);
 
         foreach (var target in _targets[part])
         {
@@ -193,5 +215,6 @@ internal sealed class CapsulePresentationController
         public bool PreferredVisible { get; set; } = true;
         public bool RuntimeVisible { get; set; } = true;
         public int OpacityPercent { get; set; } = 100;
+        public bool AutoHideWithCapsule { get; set; }
     }
 }

@@ -296,6 +296,9 @@
                     <StaticResource ResourceKey="CapsuleInnerDepthBrush"/>
                 </Border.Background>
                 <Grid>
+                    <Border x:Name="CapsuleBackgroundImageSurface"
+                            CornerRadius="{Binding CornerRadius, ElementName=CapsuleBorder}"
+                            IsHitTestVisible="False" />
                     <Border CornerRadius="36"
                             Height="32"
                             Margin="22,3,22,0"

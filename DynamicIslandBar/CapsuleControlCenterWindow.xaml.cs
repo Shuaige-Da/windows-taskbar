@@ -11,6 +11,25 @@ namespace DynamicIslandBar;
 
 public partial class CapsuleControlCenterWindow : Window
 {
+    private enum PresentationControlKind
+    {
+        Visibility,
+        AutoHide
+    }
+
+    private sealed record PresentationControlTag(
+        CapsuleVisualPart Part,
+        PresentationControlKind Kind);
+
+    private sealed record ControlCenterThemeColors(
+        Color Accent,
+        Color Muted,
+        Color Surface,
+        Color Overlay,
+        Color Sidebar,
+        Color Card,
+        Color CardBorder);
+
     private static readonly IReadOnlyDictionary<string, (string Title, string Subtitle)> PageMetadata =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
         {
@@ -98,6 +117,35 @@ public partial class CapsuleControlCenterWindow : Window
         Close();
     }
 
+    private void ExitApplicationButton_Click(object sender, RoutedEventArgs e)
+    {
+        var confirmation = MessageBox.Show(
+            this,
+            "确定要退出胶囊程序吗？",
+            "退出程序",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirmation == MessageBoxResult.Yes)
+        {
+            Application.Current.Shutdown();
+        }
+    }
+
+    private void ControlCenterWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (ControlCenterRoot == null
+            || ControlCenterRoot.ActualWidth <= 0
+            || ControlCenterRoot.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        ControlCenterRoot.Clip = new RectangleGeometry(
+            new Rect(0, 0, ControlCenterRoot.ActualWidth, ControlCenterRoot.ActualHeight),
+            radiusX: 18,
+            radiusY: 18);
+    }
+
     private void ToggleMaximizedState()
     {
         WindowState = WindowState == WindowState.Maximized
@@ -130,11 +178,12 @@ public partial class CapsuleControlCenterWindow : Window
         foreach (var button in new[] { ThemeNavButton, SettingsNavButton, VersionNavButton, FeedbackNavButton })
         {
             var selected = string.Equals(button.Tag as string, pageKey, StringComparison.Ordinal);
+            var accent = GetThemeAccentColor();
             button.Background = new SolidColorBrush(selected
-                ? Color.FromArgb(0xC8, 0x17, 0x32, 0x46)
+                ? Color.FromArgb(0x58, accent.R, accent.G, accent.B)
                 : Colors.Transparent);
             button.BorderBrush = new SolidColorBrush(selected
-                ? Color.FromArgb(0x88, 0x46, 0xE0, 0xFF)
+                ? Color.FromArgb(0xB8, accent.R, accent.G, accent.B)
                 : Colors.Transparent);
             button.Foreground = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(0xC8, 0xD4, 0xE4));
         }
@@ -149,7 +198,9 @@ public partial class CapsuleControlCenterWindow : Window
         }
 
         _settings.SetTheme(preset);
+        ApplyControlCenterTheme();
         UpdateThemeSelection();
+        ShowPage("Theme");
     }
 
     private void RefreshSettingsFromConfig()
@@ -181,7 +232,9 @@ public partial class CapsuleControlCenterWindow : Window
             SetSlider(GlowThicknessSlider, GlowThicknessValue, config.GlowThicknessPercent);
             SetSlider(GlowSpeedSlider, GlowSpeedValue, config.GlowSpeedPercent);
             LyricLanguageComboBox.SelectedIndex = config.LyricLanguage == LyricLanguage.Traditional ? 1 : 0;
+            ApplyControlCenterTheme();
             UpdateThemeSelection();
+            RefreshBackgroundImageSettings();
             RefreshPresentationSettings();
         }
         finally
@@ -387,20 +440,311 @@ public partial class CapsuleControlCenterWindow : Window
                 _settings.Config.ThemePreset.ToString(),
                 StringComparison.Ordinal);
             button.BorderBrush = new SolidColorBrush(selected
-                ? Color.FromRgb(0x46, 0xE0, 0xFF)
+                ? GetThemeAccentColor()
                 : Color.FromRgb(0x34, 0x4B, 0x65));
             button.BorderThickness = new Thickness(selected ? 2 : 1);
         }
     }
 
+    private void RefreshBackgroundImageSettings()
+    {
+        var config = _settings.Config;
+        var hasCapsuleImage = CapsuleBackgroundImagePolicy.IsSupportedImagePath(config.BackgroundImagePath);
+        BackgroundImageFileNameText.Text = hasCapsuleImage
+            ? Path.GetFileName(config.BackgroundImagePath)
+            : "未选择图片";
+        BackgroundImagePreview.Source = hasCapsuleImage
+            ? LoadThumbnail(config.BackgroundImagePath!)
+            : null;
+
+        var hasControlCenterImage = CapsuleBackgroundImagePolicy.IsSupportedImagePath(
+            config.ControlCenterBackgroundImagePath);
+        ControlCenterBackgroundImageFileNameText.Text = hasControlCenterImage
+            ? Path.GetFileName(config.ControlCenterBackgroundImagePath)
+            : "透明玻璃（无图片）";
+        ControlCenterBackgroundImagePreview.Source = hasControlCenterImage
+            ? LoadThumbnail(config.ControlCenterBackgroundImagePath!)
+            : null;
+        ControlCenterBackgroundImage.Source = hasControlCenterImage
+            ? TryLoadControlCenterBackground(config.ControlCenterBackgroundImagePath!)
+            : null;
+        ControlCenterBackgroundImage.Opacity = hasControlCenterImage
+            ? Math.Clamp(config.ControlCenterBackgroundImageOpacity, 0d, 1d)
+            : 0d;
+        ControlCenterBackgroundImage.Stretch = CapsuleBackgroundImagePolicy.MapStretch(
+            config.ControlCenterBackgroundImageStretchMode);
+        var controlCenterOpacityPercent = (int)Math.Round(
+            Math.Clamp(config.ControlCenterBackgroundImageOpacity, 0d, 1d) * 100d);
+        ControlCenterBackgroundImageOpacitySlider.Value = controlCenterOpacityPercent;
+        ControlCenterBackgroundImageOpacityValue.Text = $"{controlCenterOpacityPercent}%";
+        ControlCenterBackgroundImageStretchComboBox.SelectedIndex = CapsuleBackgroundImagePolicy.MapStretch(
+            config.ControlCenterBackgroundImageStretchMode) switch
+        {
+            Stretch.Uniform => 1,
+            Stretch.Fill => 2,
+            _ => 0
+        };
+
+        var opacityPercent = (int)Math.Round(Math.Clamp(config.BackgroundImageOpacity, 0d, 1d) * 100d);
+        BackgroundImageOpacitySlider.Value = opacityPercent;
+        BackgroundImageOpacityValue.Text = $"{opacityPercent}%";
+        BackgroundImageStretchComboBox.SelectedIndex = CapsuleBackgroundImagePolicy.MapStretch(
+            config.BackgroundImageStretchMode) switch
+        {
+            Stretch.Uniform => 1,
+            Stretch.Fill => 2,
+            _ => 0
+        };
+    }
+
+    private static ImageSource? TryLoadControlCenterBackground(string path)
+    {
+        try
+        {
+            return CapsuleBackgroundImagePolicy.LoadFrozenImageSource(path);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void ApplyControlCenterTheme()
+    {
+        var colors = _settings.Config.ThemePreset switch
+        {
+            CapsuleThemePreset.GlassGreen => new ControlCenterThemeColors(
+                Color.FromRgb(0x4C, 0xD9, 0x64),
+                Color.FromRgb(0xD8, 0xF1, 0xE2),
+                Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x86, 0xFF, 0xFF, 0xFF)),
+            CapsuleThemePreset.SoftLight => new ControlCenterThemeColors(
+                Color.FromRgb(0x8A, 0x7D, 0xFF),
+                Color.FromRgb(0xE6, 0xE5, 0xF8),
+                Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x2A, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x36, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF)),
+            _ => new ControlCenterThemeColors(
+                Color.FromRgb(0x46, 0xE0, 0xFF),
+                Color.FromRgb(0xD8, 0xE6, 0xF0),
+                Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x86, 0xFF, 0xFF, 0xFF))
+        };
+
+        SetBrushColor("AccentBrush", colors.Accent);
+        SetBrushColor("MutedTextBrush", colors.Muted);
+        SetBrushColor("WindowSurfaceBrush", colors.Surface);
+        SetBrushColor("WindowOverlayBrush", colors.Overlay);
+        SetBrushColor("SidebarBrush", colors.Sidebar);
+        SetBrushColor("CardBrush", colors.Card);
+        SetBrushColor("CardBorderBrush", colors.CardBorder);
+    }
+
+    private Color GetThemeAccentColor()
+    {
+        return Resources["AccentBrush"] is SolidColorBrush brush
+            ? brush.Color
+            : Color.FromRgb(0x46, 0xE0, 0xFF);
+    }
+
+    private void SetBrushColor(string resourceKey, Color color)
+    {
+        if (Resources[resourceKey] is SolidColorBrush brush && !brush.IsFrozen)
+        {
+            brush.Color = color;
+            return;
+        }
+
+        Resources[resourceKey] = new SolidColorBrush(color);
+    }
+
+    private void ChooseControlCenterBackgroundImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = CreateBackgroundImageDialog("选择控制中心背景图片");
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        if (!TryValidateBackgroundImage(dialog.FileName, out var error))
+        {
+            SetControlCenterBackgroundImageStatus(error, success: false);
+            return;
+        }
+
+        _settings.SetControlCenterBackgroundImage(dialog.FileName);
+        if (_settings.Config.ControlCenterBackgroundImageOpacity <= 0)
+        {
+            _settings.SetControlCenterBackgroundImageOpacity(45);
+        }
+        RefreshSettingsFromConfig();
+        SetControlCenterBackgroundImageStatus("主页背景图片已应用。", success: true);
+    }
+
+    private void RemoveControlCenterBackgroundImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.SetControlCenterBackgroundImage(null);
+        RefreshSettingsFromConfig();
+        SetControlCenterBackgroundImageStatus("主页已恢复透明液体玻璃。", success: true);
+    }
+
+    private void ControlCenterBackgroundImageOpacitySlider_ValueChanged(
+        object sender,
+        RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isInitializing)
+        {
+            return;
+        }
+
+        var percent = (int)Math.Round(ControlCenterBackgroundImageOpacitySlider.Value);
+        ControlCenterBackgroundImageOpacityValue.Text = $"{percent}%";
+        ControlCenterBackgroundImage.Opacity = percent / 100d;
+        _settings.SetControlCenterBackgroundImageOpacity(percent);
+    }
+
+    private void ControlCenterBackgroundImageStretchComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (_isInitializing
+            || ControlCenterBackgroundImageStretchComboBox.SelectedItem
+                is not ComboBoxItem { Tag: string stretchMode })
+        {
+            return;
+        }
+
+        ControlCenterBackgroundImage.Stretch = CapsuleBackgroundImagePolicy.MapStretch(stretchMode);
+        _settings.SetControlCenterBackgroundImageStretchMode(stretchMode);
+    }
+
+    private void SetControlCenterBackgroundImageStatus(string message, bool success)
+    {
+        ControlCenterBackgroundImageStatusText.Text = message;
+        ControlCenterBackgroundImageStatusText.Foreground = new SolidColorBrush(success
+            ? Color.FromRgb(0x72, 0xF4, 0xA4)
+            : Color.FromRgb(0xFF, 0x8A, 0x8A));
+    }
+
+    private void ChooseBackgroundImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = CreateBackgroundImageDialog("选择胶囊背景图片");
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        if (!TryValidateBackgroundImage(dialog.FileName, out var error))
+        {
+            SetBackgroundImageStatus(error, success: false);
+            return;
+        }
+
+        _settings.SetBackgroundImage(dialog.FileName);
+        if (_settings.Config.BackgroundImageOpacity <= 0)
+        {
+            _settings.SetBackgroundImageOpacity(45);
+        }
+        RefreshSettingsFromConfig();
+        SetBackgroundImageStatus("背景图片已应用。", success: true);
+    }
+
+    private static OpenFileDialog CreateBackgroundImageDialog(string title)
+    {
+        return new OpenFileDialog
+        {
+            Title = title,
+            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp|所有文件|*.*",
+            Multiselect = false
+        };
+    }
+
+    private static bool TryValidateBackgroundImage(string path, out string error)
+    {
+        if (!CapsuleBackgroundImagePolicy.IsSupportedImagePath(path))
+        {
+            error = "图片格式不受支持或文件无法读取。";
+            return false;
+        }
+        if (LoadThumbnail(path) == null)
+        {
+            error = "图片内容无法解码，请选择其他图片。";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private void RemoveBackgroundImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.SetBackgroundImage(null);
+        RefreshSettingsFromConfig();
+        SetBackgroundImageStatus("背景图片已移除，主题底色保持不变。", success: true);
+    }
+
+    private void BackgroundImageOpacitySlider_ValueChanged(
+        object sender,
+        RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isInitializing)
+        {
+            return;
+        }
+
+        var percent = (int)Math.Round(BackgroundImageOpacitySlider.Value);
+        BackgroundImageOpacityValue.Text = $"{percent}%";
+        _settings.SetBackgroundImageOpacity(percent);
+    }
+
+    private void BackgroundImageStretchComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isInitializing
+            || BackgroundImageStretchComboBox.SelectedItem is not ComboBoxItem { Tag: string stretchMode })
+        {
+            return;
+        }
+
+        _settings.SetBackgroundImageStretchMode(stretchMode);
+    }
+
+    private void SetBackgroundImageStatus(string message, bool success)
+    {
+        BackgroundImageStatusText.Text = message;
+        BackgroundImageStatusText.Foreground = new SolidColorBrush(success
+            ? Color.FromRgb(0x72, 0xF4, 0xA4)
+            : Color.FromRgb(0xFF, 0x8A, 0x8A));
+    }
+
     private void BuildPresentationSettings()
     {
         PresentationSettingsPanel.Children.Clear();
+        var header = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(125) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+        AddPresentationHeader(header, "区域", 0, HorizontalAlignment.Left);
+        AddPresentationHeader(header, "显示", 1, HorizontalAlignment.Center);
+        AddPresentationHeader(header, "自动隐藏", 2, HorizontalAlignment.Center);
+        AddPresentationHeader(header, "能量 / 透明度", 3, HorizontalAlignment.Left);
+        PresentationSettingsPanel.Children.Add(header);
+
         foreach (var part in Enum.GetValues<CapsuleVisualPart>())
         {
             var row = new Grid { Margin = new Thickness(0, 8, 0, 8), Tag = part };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(125) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
 
@@ -412,19 +756,31 @@ public partial class CapsuleControlCenterWindow : Window
 
             var visibilityCheckBox = new CheckBox
             {
-                Content = "显示",
-                Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
-                Tag = part
+                HorizontalAlignment = HorizontalAlignment.Center,
+                ToolTip = $"控制{PartDisplayNames[part]}是否显示",
+                Tag = new PresentationControlTag(part, PresentationControlKind.Visibility)
             };
             visibilityCheckBox.Checked += PresentationVisibility_Changed;
             visibilityCheckBox.Unchecked += PresentationVisibility_Changed;
             Grid.SetColumn(visibilityCheckBox, 1);
             row.Children.Add(visibilityCheckBox);
 
+            var autoHideCheckBox = new CheckBox
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                ToolTip = $"控制{PartDisplayNames[part]}是否随胶囊隐藏（自动隐藏）",
+                Tag = new PresentationControlTag(part, PresentationControlKind.AutoHide)
+            };
+            autoHideCheckBox.Checked += PresentationAutoHide_Changed;
+            autoHideCheckBox.Unchecked += PresentationAutoHide_Changed;
+            Grid.SetColumn(autoHideCheckBox, 2);
+            row.Children.Add(autoHideCheckBox);
+
             var opacitySlider = new Slider { Tag = part };
             opacitySlider.ValueChanged += PresentationOpacity_ValueChanged;
-            Grid.SetColumn(opacitySlider, 2);
+            Grid.SetColumn(opacitySlider, 3);
             row.Children.Add(opacitySlider);
 
             var opacityText = new TextBlock
@@ -433,10 +789,28 @@ public partial class CapsuleControlCenterWindow : Window
                 VerticalAlignment = VerticalAlignment.Center,
                 Tag = "Value"
             };
-            Grid.SetColumn(opacityText, 3);
+            Grid.SetColumn(opacityText, 4);
             row.Children.Add(opacityText);
             PresentationSettingsPanel.Children.Add(row);
         }
+    }
+
+    private static void AddPresentationHeader(
+        Grid header,
+        string text,
+        int column,
+        HorizontalAlignment alignment)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x91, 0xA8, 0xBC)),
+            FontSize = 11,
+            HorizontalAlignment = alignment,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(label, column);
+        header.Children.Add(label);
     }
 
     private void RefreshPresentationSettings()
@@ -449,23 +823,69 @@ public partial class CapsuleControlCenterWindow : Window
             }
 
             var preference = _settings.Config.Presentation.Get(part);
-            var checkBox = row.Children.OfType<CheckBox>().Single();
+            var visibilityCheckBox = FindPresentationCheckBox(
+                row,
+                part,
+                PresentationControlKind.Visibility);
+            var autoHideCheckBox = FindPresentationCheckBox(
+                row,
+                part,
+                PresentationControlKind.AutoHide);
             var slider = row.Children.OfType<Slider>().Single();
             var valueText = row.Children.OfType<TextBlock>().Single(text => Equals(text.Tag, "Value"));
-            checkBox.IsChecked = preference.IsVisible;
+            visibilityCheckBox.IsChecked = preference.IsVisible;
+            autoHideCheckBox.IsChecked = preference.AutoHideWithCapsule;
             slider.Value = preference.OpacityPercent;
             valueText.Text = $"{preference.OpacityPercent}%";
         }
     }
 
+    private static CheckBox FindPresentationCheckBox(
+        Grid row,
+        CapsuleVisualPart part,
+        PresentationControlKind kind)
+    {
+        return row.Children
+            .OfType<CheckBox>()
+            .Single(checkBox => checkBox.Tag is PresentationControlTag tag
+                && tag.Part == part
+                && tag.Kind == kind);
+    }
+
     private void PresentationVisibility_Changed(object sender, RoutedEventArgs e)
     {
-        if (_isInitializing || sender is not CheckBox { Tag: CapsuleVisualPart part } checkBox)
+        if (_isInitializing
+            || sender is not CheckBox
+            {
+                Tag: PresentationControlTag
+                {
+                    Part: var part,
+                    Kind: PresentationControlKind.Visibility
+                }
+            } checkBox)
         {
             return;
         }
 
         _settings.SetPartVisibility(part, checkBox.IsChecked == true);
+    }
+
+    private void PresentationAutoHide_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing
+            || sender is not CheckBox
+            {
+                Tag: PresentationControlTag
+                {
+                    Part: var part,
+                    Kind: PresentationControlKind.AutoHide
+                }
+            } checkBox)
+        {
+            return;
+        }
+
+        _settings.SetPartAutoHideWithCapsule(part, checkBox.IsChecked == true);
     }
 
     private void PresentationOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

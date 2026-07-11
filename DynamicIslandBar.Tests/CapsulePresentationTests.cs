@@ -5,6 +5,21 @@ namespace DynamicIslandBar.Tests;
 public class CapsulePresentationTests
 {
     [Theory]
+    [InlineData(CapsuleVisualPart.Chrome, true)]
+    [InlineData(CapsuleVisualPart.Dock, true)]
+    [InlineData(CapsuleVisualPart.System, true)]
+    [InlineData(CapsuleVisualPart.CenterCard, false)]
+    [InlineData(CapsuleVisualPart.Lyrics, false)]
+    [InlineData(CapsuleVisualPart.Details, false)]
+    [InlineData(CapsuleVisualPart.MediaControls, false)]
+    public void AutoHideDefault_PreservesExistingCapsuleBehavior(
+        CapsuleVisualPart part,
+        bool expected)
+    {
+        Assert.Equal(expected, CapsulePresentationPolicy.GetDefaultAutoHideWithCapsule(part));
+    }
+
+    [Theory]
     [InlineData(true, true, true)]
     [InlineData(true, false, false)]
     [InlineData(false, true, false)]

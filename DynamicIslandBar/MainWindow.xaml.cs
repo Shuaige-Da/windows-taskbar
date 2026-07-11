@@ -89,6 +89,9 @@ namespace DynamicIslandBar
         private readonly Dictionary<string, Color> _accentCache = new(StringComparer.OrdinalIgnoreCase);
         private CapsuleConfig _capsuleConfig = new();
         private CapsuleTheme _currentTheme = CapsuleThemeManager.BuildTheme(CapsuleThemePreset.ClassicDark);
+        private string? _cachedCapsuleBackgroundImagePath;
+        private DateTime _cachedCapsuleBackgroundImageWriteUtc;
+        private ImageSource? _cachedCapsuleBackgroundImageSource;
         private LayoutMetrics _currentLayoutMetrics;
         private RunningAppsSnapshot _runningAppsSnapshot = new([], [], [], false);
         private bool _isDraggingCapsule;
@@ -1139,6 +1142,7 @@ namespace DynamicIslandBar
                 _capsuleConfig.BackgroundImageOpacity);
 
             CapsuleBorder.Background = CapsuleAppearanceMapper.BuildBackgroundBrush(_capsuleConfig.GlassOpacityPercent);
+            ApplyCapsuleBackgroundImage();
             UpdateCapsuleGlowBrush(null);
             CapsuleBorder.BorderThickness = new Thickness(CapsuleAppearanceMapper.MapGlowThickness(_capsuleConfig.GlowThicknessPercent));
             ApplyCapsuleShadow();
@@ -1153,6 +1157,53 @@ namespace DynamicIslandBar
             ApplyGlassPanelTheme(AppHoverOverlayBackground);
             ApplyGlassPanelTheme(CenterCardSideDetailsChrome);
             ApplyGlassPanelTheme(CenterCardVolumePanel);
+        }
+
+        private void ApplyCapsuleBackgroundImage()
+        {
+            var path = _capsuleConfig.BackgroundImagePath;
+            if (!CapsuleBackgroundImagePolicy.IsSupportedImagePath(path))
+            {
+                CapsuleBackgroundImageSurface.Background = null;
+                _cachedCapsuleBackgroundImagePath = null;
+                _cachedCapsuleBackgroundImageWriteUtc = DateTime.MinValue;
+                _cachedCapsuleBackgroundImageSource = null;
+                return;
+            }
+
+            try
+            {
+                var fullPath = System.IO.Path.GetFullPath(path!);
+                var lastWriteUtc = File.GetLastWriteTimeUtc(fullPath);
+                if (!string.Equals(
+                        _cachedCapsuleBackgroundImagePath,
+                        fullPath,
+                        StringComparison.OrdinalIgnoreCase)
+                    || _cachedCapsuleBackgroundImageWriteUtc != lastWriteUtc
+                    || _cachedCapsuleBackgroundImageSource == null)
+                {
+                    _cachedCapsuleBackgroundImagePath = fullPath;
+                    _cachedCapsuleBackgroundImageWriteUtc = lastWriteUtc;
+                    _cachedCapsuleBackgroundImageSource =
+                        CapsuleBackgroundImagePolicy.LoadFrozenImageSource(fullPath);
+                }
+
+                var brush = new ImageBrush(_cachedCapsuleBackgroundImageSource)
+                {
+                    Stretch = CapsuleBackgroundImagePolicy.MapStretch(
+                        _capsuleConfig.BackgroundImageStretchMode),
+                    AlignmentX = AlignmentX.Center,
+                    AlignmentY = AlignmentY.Center,
+                    Opacity = Math.Clamp(_capsuleConfig.BackgroundImageOpacity, 0d, 1d)
+                };
+                brush.Freeze();
+                CapsuleBackgroundImageSurface.Background = brush;
+            }
+            catch (Exception ex)
+            {
+                CapsuleBackgroundImageSurface.Background = null;
+                AppDiagnostics.Error("BackgroundImage", ex);
+            }
         }
 
         private static Brush CreateBrush(string color)

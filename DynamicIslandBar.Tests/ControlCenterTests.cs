@@ -22,6 +22,9 @@ public class ControlCenterTests
         coordinator.SetPartOpacity(CapsuleVisualPart.Dock, 140);
         coordinator.SetPartVisibility(CapsuleVisualPart.CenterCard, false);
         coordinator.SetPartOpacity(CapsuleVisualPart.CenterCard, 72);
+        coordinator.SetPartAutoHideWithCapsule(CapsuleVisualPart.CenterCard, true);
+        coordinator.SetControlCenterBackgroundImage(@"C:\Images\home.png");
+        coordinator.SetControlCenterBackgroundImageOpacity(48);
         coordinator.Flush();
 
         Assert.Equal(CapsuleThemePreset.GlassGreen, config.ThemePreset);
@@ -30,15 +33,29 @@ public class ControlCenterTests
         Assert.False(config.Presentation.Lyrics.IsVisible);
         Assert.False(config.Presentation.CenterCard.IsVisible);
         Assert.Equal(72, config.Presentation.CenterCard.OpacityPercent);
+        Assert.True(config.Presentation.CenterCard.AutoHideWithCapsule);
         Assert.Equal(100, config.Presentation.Dock.OpacityPercent);
+        Assert.Equal(@"C:\Images\home.png", config.ControlCenterBackgroundImagePath);
+        Assert.Equal(0.48, config.ControlCenterBackgroundImageOpacity, 2);
         Assert.Contains(CapsuleSettingsChangeKind.Theme, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Startup, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Layout, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Presentation, changes);
+        Assert.Contains(CapsuleSettingsChangeKind.ControlCenterAppearance, changes);
         Assert.Equal(1, saveCount);
 
         coordinator.Flush();
         Assert.Equal(1, saveCount);
+    }
+
+    [Fact]
+    public void ControlCenter_OffersIndependentAutoHideOptionForPresentationParts()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "CapsuleControlCenterWindow.xaml.cs");
+
+        Assert.Contains("随胶囊隐藏", code);
+        Assert.Contains("PresentationAutoHide_Changed", code);
+        Assert.Contains("SetPartAutoHideWithCapsule", code);
     }
 
     [Fact]
@@ -156,6 +173,20 @@ public class ControlCenterTests
         Assert.Contains("Content=\"复制诊断信息\"", xaml);
         Assert.Contains("Content=\"打开日志目录\"", xaml);
         Assert.Contains("Content=\"清理日志\"", xaml);
+        Assert.Contains("x:Name=\"BackgroundImagePreview\"", xaml);
+        Assert.Contains("x:Name=\"BackgroundImageOpacitySlider\"", xaml);
+        Assert.Contains("x:Name=\"BackgroundImageStretchComboBox\"", xaml);
+        Assert.Contains("x:Name=\"ControlCenterBackgroundImage\"", xaml);
+        Assert.Contains("x:Name=\"ControlCenterBackgroundImagePreview\"", xaml);
+        Assert.Contains("Content=\"退出\"", xaml);
+        Assert.Contains("AllowsTransparency=\"True\"", xaml);
+        Assert.Contains("x:Name=\"WindowGlowRotation\"", xaml);
+        Assert.Contains("x:Key=\"EnergyFillBrush\"", xaml);
+        Assert.Contains("<Style TargetType=\"CheckBox\">", xaml);
+        Assert.Contains("<Style TargetType=\"Slider\">", xaml);
+        Assert.Contains("ApplyControlCenterTheme", code);
+        Assert.Contains("ControlCenterWindow_SizeChanged", code);
+        Assert.Contains("ExitApplicationButton_Click", code);
         Assert.Contains("[CapsuleVisualPart.CenterCard] = \"中心卡片背景\"", code);
     }
 
