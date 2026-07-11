@@ -13,7 +13,17 @@ public static class Program
 
         StartupEnvironment.EnsureWindowsFontEnvironment();
 
-        var app = new App();
-        app.Run();
+        if (!SingleInstanceCoordinator.TryAcquire(out var singleInstance))
+        {
+            SingleInstanceCoordinator.SignalExistingInstance();
+            return;
+        }
+
+        using (singleInstance)
+        {
+            var app = new App();
+            app.AttachSingleInstance(singleInstance!);
+            app.Run();
+        }
     }
 }

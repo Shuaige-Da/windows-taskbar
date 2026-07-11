@@ -191,6 +191,8 @@ public class VisualLayerContractTests
         var xaml = ReadMainWindowXaml();
 
         Assert.Contains("x:Name=\"LyricsPresenter\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardPresenter\"", xaml);
+        Assert.Contains("x:Name=\"CenterCardSurface\"", xaml);
         Assert.Contains("x:Name=\"CenterCardLyricsViewport\"", xaml);
         Assert.Contains("x:Name=\"DetailsPresenter\"", xaml);
         Assert.Contains("x:Name=\"MediaControlsPresenter\"", xaml);
@@ -232,6 +234,10 @@ public class VisualLayerContractTests
         System.Xml.Linq.XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var centerCard = document.Descendants()
             .Single(element => (string?)element.Attribute(x + "Name") == "CenterCardPresenter");
+        var centerCardSurface = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "CenterCardSurface");
+        var lyricsPresenter = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "LyricsPresenter");
 
         Assert.Contains("x:Name=\"CapsuleChromePresenter\"", xaml);
         Assert.Contains("x:Name=\"CapsuleLayoutGrid\"", xaml);
@@ -243,6 +249,9 @@ public class VisualLayerContractTests
             centerCard.Ancestors(),
             ancestor => (string?)ancestor.Attribute(x + "Name") == "CapsuleBorder");
         Assert.Contains("_presentationController.AnimateAutoHideFactor(", code);
+        Assert.Contains("[CapsuleVisualPart.CenterCard] = [CenterCardSurface]", code);
+        Assert.DoesNotContain("[CapsuleVisualPart.CenterCard] = [CenterCardPresenter]", code);
+        Assert.DoesNotContain(centerCardSurface, lyricsPresenter.Ancestors());
         Assert.DoesNotContain("CapsuleGrid.BeginAnimation(OpacityProperty", code);
     }
 

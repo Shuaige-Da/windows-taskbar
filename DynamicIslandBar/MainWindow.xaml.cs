@@ -103,6 +103,7 @@ namespace DynamicIslandBar
         private CapsuleSnapPreview? _activeSnapPreview;
         private Window? _snapPreviewOverlayWindow;
         private Border? _snapPreviewOverlayOutline;
+        private CapsuleControlCenterWindow? _controlCenterWindow;
         private string? _lastPrimaryActivatedAppId;
         private DateTime _lastPrimaryActivatedAtUtc;
         private RunningAppEntry? _hoveredApp;
@@ -148,6 +149,7 @@ namespace DynamicIslandBar
                     [CapsuleVisualPart.Chrome] = [CapsuleChromePresenter],
                     [CapsuleVisualPart.Dock] = [DockPresenter],
                     [CapsuleVisualPart.System] = [SystemPresenter],
+                    [CapsuleVisualPart.CenterCard] = [CenterCardSurface],
                     [CapsuleVisualPart.Lyrics] = [LyricsPresenter],
                     [CapsuleVisualPart.Details] = [DetailsPresenter],
                     [CapsuleVisualPart.MediaControls] = [MediaControlsPresenter]
@@ -185,10 +187,103 @@ namespace DynamicIslandBar
             _lyricsRefreshCancellation?.Dispose();
             _lyricsRefreshCancellation = null;
             _mediaService?.Dispose();
+            _controlCenterWindow?.Close();
+            _controlCenterWindow = null;
             _snapPreviewOverlayWindow?.Close();
             _snapPreviewOverlayWindow = null;
             _snapPreviewOverlayOutline = null;
             base.OnClosed(e);
+        }
+
+        internal void OpenControlCenter()
+        {
+            if (_controlCenterWindow is { IsVisible: true })
+            {
+                if (_controlCenterWindow.WindowState == WindowState.Minimized)
+                {
+                    _controlCenterWindow.WindowState = WindowState.Normal;
+                }
+
+                _controlCenterWindow.Activate();
+                return;
+            }
+
+            var window = new CapsuleControlCenterWindow(_capsuleConfig, ApplyControlCenterChange);
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_controlCenterWindow, window))
+                {
+                    _controlCenterWindow = null;
+                }
+            };
+            _controlCenterWindow = window;
+            window.Show();
+            window.Activate();
+        }
+
+        internal bool ShouldOpenControlCenterOnStartup =>
+            _capsuleConfig.StartupDisplayMode == StartupDisplayMode.CapsuleAndControlCenter;
+
+        internal bool IsCapsuleVisible => IsVisible;
+
+        internal void ToggleCapsuleVisibility()
+        {
+            if (IsVisible)
+            {
+                CloseAllPanels();
+                CenterCardSideDetailsPopup.IsOpen = false;
+                CenterCardVolumePopup.IsOpen = false;
+                Hide();
+                return;
+            }
+
+            Show();
+            RestoreCapsuleVisibility();
+        }
+
+        internal void ShowCapsuleAndControlCenter()
+        {
+            if (!IsVisible)
+            {
+                Show();
+                RestoreCapsuleVisibility();
+            }
+
+            OpenControlCenter();
+        }
+
+        private void ApplyControlCenterChange(CapsuleSettingsChangeKind changeKind)
+        {
+            if (changeKind.HasFlag(CapsuleSettingsChangeKind.Theme)
+                || changeKind.HasFlag(CapsuleSettingsChangeKind.Appearance))
+            {
+                ApplyTheme();
+            }
+
+            if (changeKind.HasFlag(CapsuleSettingsChangeKind.Theme))
+            {
+                RenderMainBarApps();
+                RenderOverflowAppsPanel();
+                RenderAppsManagementPanel();
+            }
+
+            if (changeKind.HasFlag(CapsuleSettingsChangeKind.Layout))
+            {
+                ApplyLayout();
+                RefreshRunningAppsBar();
+            }
+
+            if (changeKind.HasFlag(CapsuleSettingsChangeKind.Presentation))
+            {
+                _presentationController.ApplyPreferences(_capsuleConfig.Presentation);
+                UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+            }
+
+            if (changeKind.HasFlag(CapsuleSettingsChangeKind.Lyrics))
+            {
+                _lyricsService.PreferredLanguage = _capsuleConfig.LyricLanguage;
+                UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+            }
         }
 
         private static Geometry CreateFrozenGeometry(string data)
@@ -295,8 +390,9 @@ namespace DynamicIslandBar
 
                 _mediaService = mediaService;
             }
-            catch
+            catch (Exception ex)
             {
+                AppDiagnostics.Error("MediaInitialization", ex);
                 mediaService.Dispose();
                 // Media service unavailable.
             }
@@ -1399,6 +1495,7 @@ namespace DynamicIslandBar
                     }
                     catch (Exception ex)
                     {
+                        AppDiagnostics.Error("MediaRefresh", ex);
                         System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Error: {ex.GetType().Name}: {ex.Message}");
                     }
                 }
@@ -3635,7 +3732,7 @@ namespace DynamicIslandBar
         {
             var accent = GetAppAccentColor(app);
             UpdateCapsuleGlowBrush(accent);
-            ActiveAppSummaryPanel.BorderBrush = new SolidColorBrush(Color.FromArgb(168, accent.R, accent.G, accent.B));
+            CenterCardSurface.BorderBrush = new SolidColorBrush(Color.FromArgb(168, accent.R, accent.G, accent.B));
         }
 
         private Color GetAppAccentColor(RunningAppEntry app)
@@ -3910,6 +4007,8 @@ namespace DynamicIslandBar
             };
 
             var settingsMenu = new MenuItem { Header = "设置", Foreground = Brushes.White };
+            var openControlCenterItem = new MenuItem { Header = "打开主页", Foreground = Brushes.White };
+            openControlCenterItem.Click += (_, _) => OpenControlCenter();
             var usesTopDockLength = _capsuleConfig.Mode is CapsuleMode.TopIsland or CapsuleMode.LeftDock or CapsuleMode.RightDock;
 
             var themeMenu = new MenuItem { Header = "风格", Foreground = Brushes.White };
@@ -4003,6 +4102,8 @@ namespace DynamicIslandBar
                 Application.Current.Shutdown();
             };
 
+            menu.Items.Add(openControlCenterItem);
+            menu.Items.Add(new Separator());
             menu.Items.Add(settingsMenu);
             menu.Items.Add(new Separator());
             menu.Items.Add(hideTaskbar);

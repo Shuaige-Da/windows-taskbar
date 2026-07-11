@@ -19,6 +19,12 @@ public enum CapsuleThemePreset
     SoftLight
 }
 
+public enum StartupDisplayMode
+{
+    CapsuleAndControlCenter,
+    CapsuleOnly
+}
+
 public sealed class CapsuleConfig
 {
     public CapsuleMode Mode { get; set; } = CapsuleMode.BottomTaskbar;
@@ -27,6 +33,8 @@ public sealed class CapsuleConfig
     public double LastBottomCapsuleWidth { get; set; }
     public double LastBottomCapsuleHeight { get; set; } = 80;
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
+    public StartupDisplayMode StartupDisplayMode { get; set; } =
+        DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter;
     public HashSet<string> FavoriteApps { get; } = [];
     public HashSet<string> HiddenApps { get; } = [];
     public Dictionary<string, string> KnownLaunchPaths { get; } = [];
@@ -64,6 +72,43 @@ public static class CapsuleConfigSerializer
 
 public static class CapsuleConfigMutator
 {
+    public static void ReplaceWith(CapsuleConfig target, CapsuleConfig source)
+    {
+        var normalized = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(source));
+        target.Mode = normalized.Mode;
+        target.FloatingLeft = normalized.FloatingLeft;
+        target.FloatingTop = normalized.FloatingTop;
+        target.LastBottomCapsuleWidth = normalized.LastBottomCapsuleWidth;
+        target.LastBottomCapsuleHeight = normalized.LastBottomCapsuleHeight;
+        target.ThemePreset = normalized.ThemePreset;
+        target.StartupDisplayMode = normalized.StartupDisplayMode;
+        target.BackgroundImagePath = normalized.BackgroundImagePath;
+        target.BackgroundImageOpacity = normalized.BackgroundImageOpacity;
+        target.BackgroundImageStretchMode = normalized.BackgroundImageStretchMode;
+        target.GlassOpacityPercent = normalized.GlassOpacityPercent;
+        target.ShadowPercent = normalized.ShadowPercent;
+        target.GlowIntensityPercent = normalized.GlowIntensityPercent;
+        target.GlowThicknessPercent = normalized.GlowThicknessPercent;
+        target.GlowSpeedPercent = normalized.GlowSpeedPercent;
+        target.CapsuleThicknessPercent = normalized.CapsuleThicknessPercent;
+        target.CapsuleLengthPercent = normalized.CapsuleLengthPercent;
+        target.TopDockCapsuleLengthPercent = normalized.TopDockCapsuleLengthPercent;
+        target.CenterCardWidthPercent = normalized.CenterCardWidthPercent;
+        target.CenterCardAppId = normalized.CenterCardAppId;
+        target.LyricLanguage = normalized.LyricLanguage;
+        target.Presentation = normalized.Presentation.CloneNormalized();
+
+        target.FavoriteApps.Clear();
+        target.FavoriteApps.UnionWith(normalized.FavoriteApps);
+        target.HiddenApps.Clear();
+        target.HiddenApps.UnionWith(normalized.HiddenApps);
+        target.KnownLaunchPaths.Clear();
+        foreach (var pair in normalized.KnownLaunchPaths)
+        {
+            target.KnownLaunchPaths[pair.Key] = pair.Value;
+        }
+    }
+
     public static void SetFavorite(CapsuleConfig config, string appId, bool isFavorite)
     {
         if (isFavorite)
@@ -99,6 +144,13 @@ public static class CapsuleConfigMutator
     public static void SetThemePreset(CapsuleConfig config, CapsuleThemePreset themePreset)
     {
         config.ThemePreset = themePreset;
+    }
+
+    public static void SetStartupDisplayMode(CapsuleConfig config, StartupDisplayMode mode)
+    {
+        config.StartupDisplayMode = Enum.IsDefined(mode)
+            ? mode
+            : StartupDisplayMode.CapsuleAndControlCenter;
     }
 
     public static void SetGlassOpacityPercent(CapsuleConfig config, int percent)
@@ -180,30 +232,155 @@ public static class CapsuleConfigService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DynamicIslandBar",
         "capsule-config.json");
+    private static readonly string BackupFilePath = ConfigFilePath + ".bak";
 
     public static CapsuleConfig Load()
     {
-        try
+        if (TryReadConfig(ConfigFilePath, out var config))
         {
-            if (!File.Exists(ConfigFilePath))
-            {
-                return new CapsuleConfig();
-            }
+            return config!;
+        }
 
-            return CapsuleConfigSerializer.Deserialize(File.ReadAllText(ConfigFilePath));
-        }
-        catch
+        if (TryReadConfig(BackupFilePath, out config))
         {
-            return new CapsuleConfig();
+            TryRestoreBackup();
+            return config!;
         }
+
+        return new CapsuleConfig();
     }
 
     public static void Save(CapsuleConfig config)
     {
+        TrySave(config, ConfigFilePath, BackupFilePath);
+    }
+
+    public static bool TryImport(string sourcePath, out CapsuleConfig? config, out string errorMessage)
+    {
+        config = null;
+        errorMessage = string.Empty;
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+        {
+            errorMessage = "选择的配置文件不存在。";
+            return false;
+        }
+
+        if (!TryReadConfig(sourcePath, out config))
+        {
+            errorMessage = "配置文件格式无效或内容已损坏。";
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryExport(CapsuleConfig config, string destinationPath, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+        var tempPath = destinationPath + ".tmp";
+        try
+        {
+            var directory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            File.WriteAllText(tempPath, CapsuleConfigSerializer.Serialize(config));
+            File.Move(tempPath, destinationPath, overwrite: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            TryDelete(tempPath);
+            errorMessage = $"导出配置失败：{ex.Message}";
+            return false;
+        }
+    }
+
+    internal static bool TrySave(
+        CapsuleConfig config,
+        string configPath,
+        string backupPath)
+    {
+        var tempPath = configPath + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
+            File.WriteAllText(tempPath, CapsuleConfigSerializer.Serialize(config));
+            if (TryReadConfig(configPath, out _))
+            {
+                File.Copy(configPath, backupPath, overwrite: true);
+            }
+            File.Move(tempPath, configPath, overwrite: true);
+            return true;
+        }
+        catch
+        {
+            TryDelete(tempPath);
+            return false;
+        }
+    }
+
+    internal static CapsuleConfig Load(string configPath, string backupPath)
+    {
+        if (TryReadConfig(configPath, out var config))
+        {
+            return config!;
+        }
+
+        if (TryReadConfig(backupPath, out config))
+        {
+            try
+            {
+                File.Copy(backupPath, configPath, overwrite: true);
+            }
+            catch
+            {
+            }
+            return config!;
+        }
+
+        return new CapsuleConfig();
+    }
+
+    private static bool TryReadConfig(string path, out CapsuleConfig? config)
+    {
+        config = null;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+            config = CapsuleConfigSerializer.Deserialize(File.ReadAllText(path));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void TryRestoreBackup()
+    {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigFilePath)!);
-            File.WriteAllText(ConfigFilePath, CapsuleConfigSerializer.Serialize(config));
+            File.Copy(BackupFilePath, ConfigFilePath, overwrite: true);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
         catch
         {
@@ -219,6 +396,8 @@ internal sealed class CapsuleConfigStore
     public double LastBottomCapsuleWidth { get; set; }
     public double LastBottomCapsuleHeight { get; set; } = 80;
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
+    public StartupDisplayMode StartupDisplayMode { get; set; } =
+        DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter;
     public List<string> FavoriteApps { get; set; } = [];
     public List<string> HiddenApps { get; set; } = [];
     public Dictionary<string, string> KnownLaunchPaths { get; set; } = [];
@@ -248,6 +427,9 @@ internal sealed class CapsuleConfigStore
             LastBottomCapsuleWidth = LastBottomCapsuleWidth,
             LastBottomCapsuleHeight = LastBottomCapsuleHeight,
             ThemePreset = ThemePreset,
+            StartupDisplayMode = Enum.IsDefined(StartupDisplayMode)
+                ? StartupDisplayMode
+                : DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter,
             BackgroundImagePath = BackgroundImagePath,
             BackgroundImageOpacity = BackgroundImageOpacity,
             BackgroundImageStretchMode = BackgroundImageStretchMode,
@@ -293,6 +475,7 @@ internal sealed class CapsuleConfigStore
             LastBottomCapsuleWidth = config.LastBottomCapsuleWidth,
             LastBottomCapsuleHeight = config.LastBottomCapsuleHeight,
             ThemePreset = config.ThemePreset,
+            StartupDisplayMode = config.StartupDisplayMode,
             FavoriteApps = [.. config.FavoriteApps.Order(StringComparer.OrdinalIgnoreCase)],
             HiddenApps = [.. config.HiddenApps.Order(StringComparer.OrdinalIgnoreCase)],
             KnownLaunchPaths = new Dictionary<string, string>(config.KnownLaunchPaths),

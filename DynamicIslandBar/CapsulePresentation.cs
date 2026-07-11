@@ -10,7 +10,8 @@ public enum CapsuleVisualPart
     System,
     Lyrics,
     Details,
-    MediaControls
+    MediaControls,
+    CenterCard
 }
 
 public sealed class CapsulePartPresentationConfig
@@ -36,6 +37,7 @@ public sealed class CapsulePresentationConfig
     public CapsulePartPresentationConfig Lyrics { get; set; } = new();
     public CapsulePartPresentationConfig Details { get; set; } = new();
     public CapsulePartPresentationConfig MediaControls { get; set; } = new();
+    public CapsulePartPresentationConfig CenterCard { get; set; } = new();
 
     public CapsulePartPresentationConfig Get(CapsuleVisualPart part)
     {
@@ -47,6 +49,7 @@ public sealed class CapsulePresentationConfig
             CapsuleVisualPart.Lyrics => Lyrics,
             CapsuleVisualPart.Details => Details,
             CapsuleVisualPart.MediaControls => MediaControls,
+            CapsuleVisualPart.CenterCard => CenterCard,
             _ => throw new ArgumentOutOfRangeException(nameof(part), part, null)
         };
     }
@@ -60,7 +63,8 @@ public sealed class CapsulePresentationConfig
             System = (System ?? new()).CloneNormalized(),
             Lyrics = (Lyrics ?? new()).CloneNormalized(),
             Details = (Details ?? new()).CloneNormalized(),
-            MediaControls = (MediaControls ?? new()).CloneNormalized()
+            MediaControls = (MediaControls ?? new()).CloneNormalized(),
+            CenterCard = (CenterCard ?? new()).CloneNormalized()
         };
     }
 }
