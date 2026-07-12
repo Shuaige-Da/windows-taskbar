@@ -10,7 +10,7 @@
     <AssemblyName>DynamicIslandBar</AssemblyName>
     <RootNamespace>DynamicIslandBar</RootNamespace>
     <StartupObject>DynamicIslandBar.Program</StartupObject>
-    <ApplicationIcon>Assets\DynamicIslandBar-AppIcon-Legacy.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\UI-Win-AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,7 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\DynamicIslandBar-AppIcon.png" />
+    <Content Include="Assets\UI-Win-AppIcon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\ControlCenter-DefaultLandscape.png" />
   </ItemGroup>
 

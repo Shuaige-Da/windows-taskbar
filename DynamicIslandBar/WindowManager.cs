@@ -28,6 +28,12 @@ namespace DynamicIslandBar
         private static extern uint GetWindowLong(IntPtr hWnd, int nIndex);
 
         [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+        [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
         [DllImport("user32.dll")]
@@ -37,11 +43,24 @@ namespace DynamicIslandBar
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
         private const int GWL_STYLE = -16;
+        private const int GWL_EXSTYLE = -20;
         private const uint WS_VISIBLE = 0x10000000;
+        private const uint WS_EX_TOOLWINDOW = 0x00000080;
+        private const uint WS_EX_NOACTIVATE = 0x08000000;
+        private const uint GW_OWNER = 4;
         private const int SW_RESTORE = 9;
         private const int SW_MINIMIZE = 6;
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
 
         public sealed class WindowInfo
         {
@@ -51,6 +70,11 @@ namespace DynamicIslandBar
             public string ProcessName { get; init; } = string.Empty;
             public string? ExecutablePath { get; init; }
             public bool IsForeground { get; init; }
+            public bool IsProcessMainWindow { get; init; }
+            public bool IsToolWindow { get; init; }
+            public bool IsNoActivateWindow { get; init; }
+            public bool IsOwnedWindow { get; init; }
+            public long WindowArea { get; init; }
 
             public void Activate()
             {
@@ -114,6 +138,7 @@ namespace DynamicIslandBar
                 var processId = 0;
                 var processName = string.Empty;
                 string? executablePath = null;
+                var isProcessMainWindow = false;
                 try
                 {
                     GetWindowThreadProcessId(hWnd, out var pid);
@@ -121,10 +146,16 @@ namespace DynamicIslandBar
                     using var process = Process.GetProcessById(processId);
                     processName = process.ProcessName;
                     executablePath = TryGetProcessPath(process);
+                    isProcessMainWindow = process.MainWindowHandle == hWnd;
                 }
                 catch
                 {
                 }
+
+                var extendedStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+                var windowArea = GetWindowRect(hWnd, out var bounds)
+                    ? Math.Max(0L, bounds.Right - bounds.Left) * Math.Max(0L, bounds.Bottom - bounds.Top)
+                    : 0L;
 
                 windows.Add(new WindowInfo
                 {
@@ -133,7 +164,12 @@ namespace DynamicIslandBar
                     ProcessId = processId,
                     ProcessName = processName,
                     ExecutablePath = executablePath,
-                    IsForeground = hWnd == foregroundWindow
+                    IsForeground = hWnd == foregroundWindow,
+                    IsProcessMainWindow = isProcessMainWindow,
+                    IsToolWindow = (extendedStyle & WS_EX_TOOLWINDOW) != 0,
+                    IsNoActivateWindow = (extendedStyle & WS_EX_NOACTIVATE) != 0,
+                    IsOwnedWindow = GetWindow(hWnd, GW_OWNER) != IntPtr.Zero,
+                    WindowArea = windowArea
                 });
 
                 return true;
@@ -155,6 +191,11 @@ namespace DynamicIslandBar
             }
 
             return ActivateWindow(handle);
+        }
+
+        public static bool IsForegroundWindow(IntPtr handle)
+        {
+            return handle != IntPtr.Zero && handle == GetForegroundWindow();
         }
 
         public static bool ActivateWindow(IntPtr handle)

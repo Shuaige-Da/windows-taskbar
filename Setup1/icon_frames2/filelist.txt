@@ -1,0 +1,6 @@
+file 'D:\UI-win\Setup1\icon_frames2\frame_0.png'
+file 'D:\UI-win\Setup1\icon_frames2\frame_1.png'
+file 'D:\UI-win\Setup1\icon_frames2\frame_2.png'
+file 'D:\UI-win\Setup1\icon_frames2\frame_3.png'
+file 'D:\UI-win\Setup1\icon_frames2\frame_4.png'
+file 'D:\UI-win\Setup1\icon_frames2\frame_5.png'

@@ -356,6 +356,24 @@ namespace DynamicIslandBar
             catch { }
         }
 
+        public static void OpenBluetoothSettings()
+        {
+            try { Process.Start(new ProcessStartInfo("ms-settings:bluetooth") { UseShellExecute = true }); }
+            catch { }
+        }
+
+        public static void OpenMobileHotspotSettings()
+        {
+            try { Process.Start(new ProcessStartInfo("ms-settings:network-mobilehotspot") { UseShellExecute = true }); }
+            catch { }
+        }
+
+        public static void OpenNetworkSettings()
+        {
+            try { Process.Start(new ProcessStartInfo("ms-settings:network-status") { UseShellExecute = true }); }
+            catch { }
+        }
+
         public static void OpenBatterySettings()
         {
             try { Process.Start(new ProcessStartInfo("ms-settings:powersleep") { UseShellExecute = true }); }

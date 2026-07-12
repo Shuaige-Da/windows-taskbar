@@ -5,6 +5,40 @@ namespace DynamicIslandBar.Tests;
 public class MainWindowUiLogicTests
 {
     [Fact]
+    public void MainWindow_AppIconsUseDirectionalLiftAndNotificationGlowAnimations()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("AnimateAppIconHover", code);
+        Assert.Contains("ResolveAppIconLift", code);
+        Assert.Contains("CreateAppIconGlowBrush", code);
+        Assert.Contains("AnimateAppNotification", code);
+        Assert.Contains("WindowNotificationMonitor_ProcessAlerted", code);
+        Assert.Contains("RotateTransform.AngleProperty", code);
+        Assert.Contains("iconVisual.RenderTransform = transforms;", code);
+        Assert.Contains("iconVisual.Effect = shadow;", code);
+        Assert.Contains("var targetScale = hovering ?", code);
+        Assert.Contains("ClipToBounds = false", code);
+    }
+
+    [Fact]
+    public void MainWindow_UsesCapsuleSearchEnergyVolumeAndExpandableSystemPanel()
+    {
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("x:Key=\"CapsuleSearchTextBoxStyle\"", xaml);
+        Assert.Contains("x:Key=\"CapsuleEnergySliderStyle\"", xaml);
+        Assert.Contains("x:Key=\"CapsuleToggleButtonStyle\"", xaml);
+        Assert.Contains("x:Name=\"SystemMoreButton\"", xaml);
+        Assert.Contains("x:Name=\"SystemMorePopup\"", xaml);
+        Assert.Contains("BluetoothSettingsButton_Click", code);
+        Assert.Contains("MobileHotspotSettingsButton_Click", code);
+        Assert.Contains("OverflowAppsSearchButton_Click", code);
+        Assert.Contains("Color.FromRgb(0x34, 0xC7, 0x59)", code);
+    }
+
+    [Fact]
     public void MainWindow_SideDockLyricsUseBottomToTopDanmakuMotion()
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");

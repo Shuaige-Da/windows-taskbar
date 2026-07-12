@@ -268,6 +268,123 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="CapsuleToggleButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#18FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#42FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Grid>
+                            <Border x:Name="Chrome" CornerRadius="18" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/>
+                            <Border Margin="1" CornerRadius="17" BorderBrush="#70FFFFFF" BorderThickness="1,1,0,0"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.84"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.72"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.38"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CapsuleSearchTextBoxStyle" TargetType="{x:Type TextBox}">
+            <Setter Property="Foreground" Value="#F4FAFF"/>
+            <Setter Property="CaretBrush" Value="#4CD964"/>
+            <Setter Property="Background" Value="#12FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#6846E0FF"/>
+            <Setter Property="BorderThickness" Value="1.2"/>
+            <Setter Property="Padding" Value="15,0,44,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TextBox}">
+                        <Border x:Name="Chrome" CornerRadius="20" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#D84CD964"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="#20FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CapsuleEnergySliderStyle" TargetType="{x:Type Slider}">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="IsMoveToPointEnabled" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Slider}">
+                        <Grid Height="30">
+                            <Border Height="10" Margin="9,0" CornerRadius="5" VerticalAlignment="Center"
+                                    Background="#22FFFFFF" BorderBrush="#58FFFFFF" BorderThickness="1"/>
+                            <Track x:Name="PART_Track" Height="24" Margin="10,0" VerticalAlignment="Center"
+                                   Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}" IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="8" Margin="-1,0,-10,0" CornerRadius="4" VerticalAlignment="Center">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                                            <GradientStop Color="#FF4D6BFF" Offset="0"/>
+                                                            <GradientStop Color="#FF36D8F5" Offset="0.52"/>
+                                                            <GradientStop Color="#FF34C759" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}" IsTabStop="False" Opacity="0"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="20" Height="20">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid>
+                                                    <Ellipse Stroke="#EFFFFFFF" StrokeThickness="1.2">
+                                                        <Ellipse.Fill>
+                                                            <RadialGradientBrush Center="0.3,0.25" GradientOrigin="0.25,0.2">
+                                                                <GradientStop Color="#F5FFFFFF" Offset="0"/>
+                                                                <GradientStop Color="#9058DDF2" Offset="0.48"/>
+                                                                <GradientStop Color="#B034C759" Offset="1"/>
+                                                            </RadialGradientBrush>
+                                                        </Ellipse.Fill>
+                                                        <Ellipse.Effect>
+                                                            <DropShadowEffect Color="#46E0FF" BlurRadius="10" ShadowDepth="1" Opacity="0.6"/>
+                                                        </Ellipse.Effect>
+                                                    </Ellipse>
+                                                    <Ellipse Width="6" Height="6" Fill="#D8FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,3,0,0"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid x:Name="RootGrid" Margin="10,0,10,10">
@@ -484,7 +601,8 @@
                             CornerRadius="20"
                             Margin="2,0,0,0"
                             Cursor="Hand"
-                            Visibility="Collapsed"
+                            Visibility="Visible"
+                            ToolTip="应用库与搜索"
                             Background="#12FFFFFF"
                             BorderBrush="#16FFFFFF"
                             BorderThickness="1"
@@ -552,6 +670,19 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Margin="0,1,0,0" FontWeight="SemiBold"/>
                         </Grid>
+                    </Border>
+
+                    <!-- 更多系统功能 -->
+                    <Border x:Name="SystemMoreButton" Width="28" Height="28" CornerRadius="14"
+                            Cursor="Hand" Margin="2,0" Background="#0AFFFFFF"
+                            BorderBrush="#18FFFFFF" BorderThickness="1"
+                            MouseLeftButtonDown="SystemMoreButton_Click"
+                            MouseEnter="SystemMoreButton_MouseEnter"
+                            MouseLeave="SystemMoreButton_MouseLeave"
+                            ToolTip="更多系统功能">
+                        <Path Fill="#D8FFFFFF" Stretch="Uniform" Width="10" Height="6"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Data="M2,3 L10,11 L18,3 Z"/>
                     </Border>
 
                     <!-- 分割线 -->
@@ -1256,13 +1387,12 @@
                                        Margin="8,0,0,0"/>
                             <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100"
                                     Value="50" VerticalAlignment="Center"
-                                    Foreground="#4CD964"
+                                    Style="{StaticResource CapsuleEnergySliderStyle}"
                                     ValueChanged="VolumeSlider_ValueChanged"/>
                         </DockPanel>
                         <!-- Mute button -->
-                        <Button x:Name="MuteBtn" Content="静音" Foreground="#80FFFFFF"
-                                Background="#20FFFFFF" BorderThickness="0"
-                                Cursor="Hand" Padding="0,6" FontSize="12" Margin="0,0,0,10"
+                        <Button x:Name="MuteBtn" Content="静音" Style="{StaticResource CapsuleToggleButtonStyle}"
+                                Padding="16,7" FontSize="12" Margin="0,0,0,10"
                                 Click="MuteBtn_Click"/>
                         <!-- Devices -->
                         <TextBlock Text="输出设备" Foreground="#80FFFFFF" FontSize="11"
@@ -1279,6 +1409,53 @@
                                 Margin="0,10,0,0"
                                 Padding="0"
                                 Click="VolumeMoreSettings_Click"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- ===== 更多系统功能 ===== -->
+            <Popup x:Name="SystemMorePopup"
+                   PlacementTarget="{Binding ElementName=SystemMoreButton}"
+                   Placement="Top" HorizontalOffset="-132" VerticalOffset="-12"
+                   AllowsTransparency="True" PopupAnimation="Fade" StaysOpen="True"
+                   Closed="Popup_Closed">
+                <Border x:Name="SystemMorePanel" Width="292" Padding="14" CornerRadius="20"
+                        BorderBrush="#7046E0FF" BorderThickness="1.2"
+                        MouseEnter="SystemMorePanel_MouseEnter" MouseLeave="SystemMorePanel_MouseLeave">
+                    <Border.Background>
+                        <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
+                    </Border.Background>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.48" Color="Black"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock Text="更多系统功能" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="2,0,0,12"/>
+                        <UniformGrid Columns="2" Rows="2">
+                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="BluetoothSettingsButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE702;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+                                    <TextBlock Text="蓝牙" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="MobileHotspotSettingsButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE701;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+                                    <TextBlock Text="个人热点" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="NetworkSettingsButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE968;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+                                    <TextBlock Text="网络" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="SoundSettingsButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
+                                    <TextBlock Text="声音" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+                        </UniformGrid>
                     </StackPanel>
                 </Border>
             </Popup>
@@ -1319,7 +1496,7 @@
                         </Border>
                         <Slider x:Name="CenterCardVolumeSlider" Minimum="0" Maximum="100"
                                 Width="128" VerticalAlignment="Center"
-                                Foreground="#FF5DBB"
+                                Style="{StaticResource CapsuleEnergySliderStyle}"
                                 ValueChanged="CenterCardVolumeSlider_ValueChanged"/>
                         <TextBlock x:Name="CenterCardVolumePercentText" Text="--%"
                                    Foreground="#CCFFFFFF" FontSize="11"
@@ -1386,17 +1563,17 @@
                                    FontSize="14"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,10"/>
-                        <TextBox x:Name="OverflowAppsSearchBox"
-                                 Height="34"
-                                 Margin="0,0,0,8"
-                                 Padding="10,6"
-                                 Background="#22151818"
-                                 Foreground="White"
-                                 BorderBrush="#5076D964"
-                                 BorderThickness="1"
-                                 CaretBrush="White"
-                                 TextChanged="OverflowAppsSearchBox_TextChanged"
-                                 ToolTip="输入应用名称搜索本地已安装应用"/>
+                        <Grid Height="40" Margin="0,0,0,8">
+                            <TextBox x:Name="OverflowAppsSearchBox"
+                                     Style="{StaticResource CapsuleSearchTextBoxStyle}"
+                                     TextChanged="OverflowAppsSearchBox_TextChanged"
+                                     KeyDown="OverflowAppsSearchBox_KeyDown"
+                                     ToolTip="输入应用名称搜索本地已安装应用"/>
+                            <Button Content="&#xE721;" Style="{StaticResource CenterCardButtonStyle}"
+                                    Width="30" Height="30" FontFamily="Segoe Fluent Icons" Foreground="#4CD964"
+                                    HorizontalAlignment="Right" Margin="0,0,5,0" Padding="0"
+                                    Click="OverflowAppsSearchButton_Click"/>
+                        </Grid>
                         <TextBlock x:Name="OverflowAppsEmptyStateText"
                                    Foreground="#CCFFFFFF"
                                    FontSize="11"

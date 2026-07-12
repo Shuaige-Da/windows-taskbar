@@ -15,7 +15,7 @@ public class ControlCenterTests
             changes.Add,
             _ => saveCount++);
 
-        coordinator.SetTheme(CapsuleThemePreset.GlassGreen);
+        coordinator.SetTheme(CapsuleThemePreset.TransparentWhite);
         coordinator.SetStartupDisplayMode(StartupDisplayMode.CapsuleOnly);
         coordinator.SetCapsuleLength(64);
         coordinator.SetPartVisibility(CapsuleVisualPart.Lyrics, false);
@@ -28,7 +28,7 @@ public class ControlCenterTests
         coordinator.SetControlCenterBackgroundMode(ControlCenterBackgroundMode.CustomImage);
         coordinator.Flush();
 
-        Assert.Equal(CapsuleThemePreset.GlassGreen, config.ThemePreset);
+        Assert.Equal(CapsuleThemePreset.TransparentWhite, config.ThemePreset);
         Assert.Equal(StartupDisplayMode.CapsuleOnly, config.StartupDisplayMode);
         Assert.Equal(64, config.TopDockCapsuleLengthPercent);
         Assert.False(config.Presentation.Lyrics.IsVisible);
@@ -210,14 +210,22 @@ public class ControlCenterTests
         Assert.Contains("<Thumb Width=\"24\" Height=\"24\">", xaml);
         Assert.Contains("<Style TargetType=\"CheckBox\">", xaml);
         Assert.Contains("<Style TargetType=\"Slider\">", xaml);
+        Assert.Contains("x:Key=\"FeatureSearchTextBoxStyle\"", xaml);
+        Assert.Contains("x:Key=\"FeatureSearchResultItemStyle\"", xaml);
+        Assert.Contains("FeatureSearchSubmitButton_Click", code);
+        Assert.Contains("<Setter Property=\"Foreground\" Value=\"#2D72C7\" />", xaml);
         Assert.Contains("ApplyControlCenterTheme", code);
         Assert.DoesNotContain("SetBrushColor(\"WindowOverlayBrush\"", code);
         Assert.Contains("ControlCenterWindow_SizeChanged", code);
         Assert.Contains("ExitApplicationButton_Click", code);
+        Assert.Contains("CapsuleConfirmationDialog.ShowConfirmation", code);
+        Assert.DoesNotContain("\"确定要退出胶囊程序吗？\",\n            \"退出程序\",\n            MessageBoxButton.YesNo", code);
         Assert.Contains("[CapsuleVisualPart.CenterCard] = \"中心卡片背景\"", code);
         Assert.Contains("x:Name=\"TopSectionNavigationPanel\"", xaml);
         Assert.Contains("x:Name=\"FeatureSearchPopup\"", xaml);
         Assert.Contains("x:Name=\"DefaultLandscapeModeButton\"", xaml);
+        Assert.Contains("x:Name=\"WhiteThemeButton\" Tag=\"TransparentWhite\"", xaml);
+        Assert.Contains("x:Name=\"WhiteThemeCheckBadge\"", xaml);
         Assert.Contains("ControlCenter-DefaultLandscape.png", code);
         Assert.Contains("FeatureSearchCatalog", code);
         Assert.Contains("PageScrollViewer_ScrollChanged", code);

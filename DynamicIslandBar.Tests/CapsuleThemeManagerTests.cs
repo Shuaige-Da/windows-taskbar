@@ -6,8 +6,7 @@ public class CapsuleThemeManagerTests
 {
     [Theory]
     [InlineData(CapsuleThemePreset.ClassicDark)]
-    [InlineData(CapsuleThemePreset.GlassGreen)]
-    [InlineData(CapsuleThemePreset.SoftLight)]
+    [InlineData(CapsuleThemePreset.TransparentWhite)]
     public void BuildTheme_ReturnsNamedPreset(CapsuleThemePreset preset)
     {
         var theme = CapsuleThemeManager.BuildTheme(preset);
@@ -50,5 +49,15 @@ public class CapsuleThemeManagerTests
         var alpha = Convert.ToByte(theme.CapsuleBackground.Substring(1, 2), 16);
 
         Assert.True(alpha < 0xCC);
+    }
+
+    [Fact]
+    public void BuildTheme_TransparentWhiteUsesLowAlphaWhiteGlass()
+    {
+        var theme = CapsuleThemeManager.BuildTheme(CapsuleThemePreset.TransparentWhite);
+
+        Assert.Equal("#24FFFFFF", theme.CapsuleBackground);
+        Assert.Equal("#38FFFFFF", theme.PanelBackground);
+        Assert.Equal("#B8FFFFFF", theme.BorderBrush);
     }
 }

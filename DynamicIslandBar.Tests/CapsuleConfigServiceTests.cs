@@ -18,13 +18,23 @@ public class CapsuleConfigServiceTests
     }
 
     [Fact]
+    public void Serialize_RoundTripsTransparentWhiteTheme()
+    {
+        var config = new CapsuleConfig { ThemePreset = CapsuleThemePreset.TransparentWhite };
+
+        var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
+
+        Assert.Equal(CapsuleThemePreset.TransparentWhite, restored.ThemePreset);
+    }
+
+    [Fact]
     public void ReplaceWith_UpdatesExistingConfigInstanceAndCollections()
     {
         var target = new CapsuleConfig();
         target.FavoriteApps.Add("old-app");
         var replacement = new CapsuleConfig
         {
-            ThemePreset = CapsuleThemePreset.GlassGreen,
+            ThemePreset = CapsuleThemePreset.TransparentWhite,
             StartupDisplayMode = StartupDisplayMode.CapsuleOnly,
             GlassOpacityPercent = 44,
             LyricLanguage = LyricLanguage.Traditional
@@ -36,7 +46,7 @@ public class CapsuleConfigServiceTests
 
         CapsuleConfigMutator.ReplaceWith(target, replacement);
 
-        Assert.Equal(CapsuleThemePreset.GlassGreen, target.ThemePreset);
+        Assert.Equal(CapsuleThemePreset.TransparentWhite, target.ThemePreset);
         Assert.Equal(StartupDisplayMode.CapsuleOnly, target.StartupDisplayMode);
         Assert.Equal(44, target.GlassOpacityPercent);
         Assert.Equal(LyricLanguage.Traditional, target.LyricLanguage);
@@ -59,7 +69,7 @@ public class CapsuleConfigServiceTests
                 configPath,
                 backupPath));
             Assert.True(CapsuleConfigService.TrySave(
-                new CapsuleConfig { ThemePreset = CapsuleThemePreset.GlassGreen },
+                new CapsuleConfig { ThemePreset = CapsuleThemePreset.TransparentWhite },
                 configPath,
                 backupPath));
 
@@ -86,13 +96,13 @@ public class CapsuleConfigServiceTests
             var exportPath = Path.Combine(directory, "export.json");
             var config = new CapsuleConfig
             {
-                ThemePreset = CapsuleThemePreset.SoftLight,
+                ThemePreset = CapsuleThemePreset.TransparentWhite,
                 CenterCardWidthPercent = 73
             };
 
             Assert.True(CapsuleConfigService.TryExport(config, exportPath, out var exportError), exportError);
             Assert.True(CapsuleConfigService.TryImport(exportPath, out var imported, out var importError), importError);
-            Assert.Equal(CapsuleThemePreset.SoftLight, imported!.ThemePreset);
+            Assert.Equal(CapsuleThemePreset.TransparentWhite, imported!.ThemePreset);
             Assert.Equal(73, imported.CenterCardWidthPercent);
 
             var invalidPath = Path.Combine(directory, "invalid.json");
@@ -176,6 +186,16 @@ public class CapsuleConfigServiceTests
 
         Assert.Equal("cloudmusic", restored.CenterCardAppId);
         Assert.Equal(100, restored.CenterCardWidthPercent);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Deserialize_RemovedLegacyThemeFallsBackToTransparentBlue(int legacyThemeValue)
+    {
+        var config = CapsuleConfigSerializer.Deserialize($"{{\"ThemePreset\":{legacyThemeValue}}}");
+
+        Assert.Equal(CapsuleThemePreset.ClassicDark, config.ThemePreset);
     }
 
     [Fact]

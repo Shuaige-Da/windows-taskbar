@@ -19,27 +19,19 @@ public static class CapsuleThemeManager
         backgroundImageOpacity = Math.Clamp(backgroundImageOpacity, 0d, 1d);
         return preset switch
         {
-            CapsuleThemePreset.GlassGreen => new CapsuleTheme(
+            CapsuleThemePreset.TransparentWhite => new CapsuleTheme(
                 preset,
-                CapsuleBackground: "#B814302A",
-                PanelBackground: "#D317211E",
-                AccentColor: "#4CD964",
-                BorderBrush: "#554CD964",
-                BackgroundImagePath: backgroundImagePath,
-                BackgroundImageOpacity: backgroundImageOpacity),
-            CapsuleThemePreset.SoftLight => new CapsuleTheme(
-                preset,
-                CapsuleBackground: "#E6F2F2F2",
-                PanelBackground: "#F5FFFFFF",
-                AccentColor: "#1F8A70",
-                BorderBrush: "#221F8A70",
+                CapsuleBackground: "#24FFFFFF",
+                PanelBackground: "#38FFFFFF",
+                AccentColor: "#F4FAFF",
+                BorderBrush: "#B8FFFFFF",
                 BackgroundImagePath: backgroundImagePath,
                 BackgroundImageOpacity: backgroundImageOpacity),
             _ => new CapsuleTheme(
                 preset,
                 CapsuleBackground: "#A6183144",
                 PanelBackground: "#D8182634",
-                AccentColor: "#4CD964",
+                AccentColor: "#46E0FF",
                 BorderBrush: "#78D8F3FF",
                 BackgroundImagePath: backgroundImagePath,
                 BackgroundImageOpacity: backgroundImageOpacity)

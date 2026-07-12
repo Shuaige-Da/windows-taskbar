@@ -24,7 +24,10 @@ public partial class CapsuleControlCenterWindow : Window
 
     private sealed record ControlCenterThemeColors(
         Color Accent,
-        Color Muted);
+        Color Muted,
+        Color SearchSurface,
+        Color SearchForeground,
+        Color SearchMuted);
 
     private sealed record SectionDescriptor(string Key, string Title, string IconGlyph, FrameworkElement Target);
 
@@ -66,7 +69,7 @@ public partial class CapsuleControlCenterWindow : Window
 
     private static readonly IReadOnlyList<FeatureSearchEntry> FeatureSearchCatalog =
     [
-        new("主题预设", "经典 玻璃 绿色 浅色 外观 theme", "Theme", "ThemePresets"),
+        new("主题预设", "蓝色 白色 透明 玻璃 外观 theme", "Theme", "ThemePresets"),
         new("实时预览", "胶囊 主题 预览 preview", "Theme", "ThemePreview"),
         new("控制中心背景", "主页 山水 自定义 透明 图片", "Theme", "ControlCenterBackground"),
         new("胶囊背景", "胶囊 图片 透明度 填充", "Theme", "CapsuleBackground"),
@@ -153,13 +156,13 @@ public partial class CapsuleControlCenterWindow : Window
 
     private void ExitApplicationButton_Click(object sender, RoutedEventArgs e)
     {
-        var confirmation = MessageBox.Show(
+        var confirmation = CapsuleConfirmationDialog.ShowConfirmation(
             this,
-            "确定要退出胶囊程序吗？",
+            _settings.Config.ThemePreset,
             "退出程序",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        if (confirmation == MessageBoxResult.Yes)
+            "确定要退出胶囊程序吗？退出后，胶囊和控制中心都会关闭。",
+            "退出程序");
+        if (confirmation)
         {
             Application.Current.Shutdown();
         }
@@ -390,6 +393,23 @@ public partial class CapsuleControlCenterWindow : Window
     private void FeatureSearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         RefreshFeatureSearchResults();
+    }
+
+    private void FeatureSearchSubmitButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(FeatureSearchTextBox.Text))
+        {
+            FeatureSearchTextBox.Focus();
+            return;
+        }
+
+        if (FeatureSearchResultsList.SelectedItem is FeatureSearchEntry)
+        {
+            ActivateSelectedSearchResult();
+            return;
+        }
+
+        FeatureSearchTextBox.Focus();
     }
 
     private void RefreshFeatureSearchResults()
@@ -696,8 +716,7 @@ public partial class CapsuleControlCenterWindow : Window
         var cards = new[]
         {
             (Button: ClassicThemeButton, Badge: ClassicThemeCheckBadge),
-            (Button: GreenThemeButton, Badge: GreenThemeCheckBadge),
-            (Button: LightThemeButton, Badge: LightThemeCheckBadge)
+            (Button: WhiteThemeButton, Badge: WhiteThemeCheckBadge)
         };
         foreach (var card in cards)
         {
@@ -874,19 +893,25 @@ public partial class CapsuleControlCenterWindow : Window
     {
         var colors = _settings.Config.ThemePreset switch
         {
-            CapsuleThemePreset.GlassGreen => new ControlCenterThemeColors(
-                Color.FromRgb(0x4C, 0xD9, 0x64),
-                Color.FromRgb(0x58, 0x74, 0x6D)),
-            CapsuleThemePreset.SoftLight => new ControlCenterThemeColors(
-                Color.FromRgb(0x8A, 0x7D, 0xFF),
-                Color.FromRgb(0x62, 0x6F, 0x8E)),
+            CapsuleThemePreset.TransparentWhite => new ControlCenterThemeColors(
+                Color.FromRgb(0xE8, 0xF4, 0xFF),
+                Color.FromRgb(0x8E, 0xA3, 0xB8),
+                Color.FromArgb(0xD8, 0xF4, 0xFA, 0xFF),
+                Color.FromRgb(0x24, 0x3B, 0x58),
+                Color.FromRgb(0x61, 0x78, 0x95)),
             _ => new ControlCenterThemeColors(
                 Color.FromRgb(0x4D, 0x8C, 0xFF),
-                Color.FromRgb(0x61, 0x78, 0x95))
+                Color.FromRgb(0x61, 0x78, 0x95),
+                Color.FromArgb(0xD8, 0x16, 0x24, 0x32),
+                Color.FromRgb(0xF4, 0xFA, 0xFF),
+                Color.FromRgb(0xA8, 0xC5, 0xD8))
         };
 
         SetBrushColor("AccentBrush", colors.Accent);
         SetBrushColor("MutedTextBrush", colors.Muted);
+        SetBrushColor("FeatureSearchSurfaceBrush", colors.SearchSurface);
+        SetBrushColor("FeatureSearchForegroundBrush", colors.SearchForeground);
+        SetBrushColor("FeatureSearchMutedBrush", colors.SearchMuted);
     }
 
     private void SetBrushColor(string resourceKey, Color color)

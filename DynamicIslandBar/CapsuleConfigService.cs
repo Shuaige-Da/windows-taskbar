@@ -14,9 +14,8 @@ public enum CapsuleMode
 
 public enum CapsuleThemePreset
 {
-    ClassicDark,
-    GlassGreen,
-    SoftLight
+    ClassicDark = 0,
+    TransparentWhite = 3
 }
 
 public enum StartupDisplayMode
@@ -211,7 +210,9 @@ public static class CapsuleConfigMutator
 
     public static void SetThemePreset(CapsuleConfig config, CapsuleThemePreset themePreset)
     {
-        config.ThemePreset = themePreset;
+        config.ThemePreset = Enum.IsDefined(themePreset)
+            ? themePreset
+            : CapsuleThemePreset.ClassicDark;
     }
 
     public static void SetStartupDisplayMode(CapsuleConfig config, StartupDisplayMode mode)
@@ -553,7 +554,9 @@ internal sealed class CapsuleConfigStore
             FloatingTop = FloatingTop,
             LastBottomCapsuleWidth = LastBottomCapsuleWidth,
             LastBottomCapsuleHeight = LastBottomCapsuleHeight,
-            ThemePreset = ThemePreset,
+            ThemePreset = Enum.IsDefined(ThemePreset)
+                ? ThemePreset
+                : CapsuleThemePreset.ClassicDark,
             StartupDisplayMode = Enum.IsDefined(StartupDisplayMode)
                 ? StartupDisplayMode
                 : DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter,

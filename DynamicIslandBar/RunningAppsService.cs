@@ -8,7 +8,12 @@ public sealed record WindowAppCandidate(
     nint WindowHandle,
     bool IsForeground,
     string? ExePath = null,
-    int ProcessId = 0);
+    int ProcessId = 0,
+    bool IsProcessMainWindow = false,
+    bool IsToolWindow = false,
+    bool IsNoActivateWindow = false,
+    bool IsOwnedWindow = false,
+    long WindowArea = 0);
 
 public sealed record RunningAppEntry(
     string AppId,
@@ -25,7 +30,7 @@ public sealed record RunningAppsSnapshot(
     IReadOnlyList<RunningAppEntry> AllApps,
     IReadOnlyList<RunningAppEntry> MainBarApps,
     IReadOnlyList<RunningAppEntry> OverflowApps,
-    bool HasOverflowFolder);
+    bool ShowAppLibrary);
 
 public sealed record AppsMenuState(
     bool CanOpenApp,
@@ -56,17 +61,21 @@ public static class RunningAppsSnapshotBuilder
     {
         var runningApps = candidates
             .GroupBy(candidate => candidate.AppId)
-            .Select(group => new RunningAppEntry(
-                AppId: group.Key,
-                DisplayName: group.First().Title,
-                ExePath: group.First().ExePath
-                    ?? (config.KnownLaunchPaths.TryGetValue(group.Key, out var path) ? path : group.Key),
-                IsRunning: true,
-                IsFavorite: config.FavoriteApps.Contains(group.Key),
-                IsHiddenInCapsule: config.HiddenApps.Contains(group.Key),
-                RepresentativeWindowHandle: group.First().WindowHandle,
-                RepresentativeProcessId: group.First().ProcessId,
-                IsForeground: group.Any(candidate => candidate.IsForeground)))
+            .Select(group =>
+            {
+                var representative = SelectRepresentativeWindow(group);
+                return new RunningAppEntry(
+                    AppId: group.Key,
+                    DisplayName: representative.Title,
+                    ExePath: representative.ExePath
+                        ?? (config.KnownLaunchPaths.TryGetValue(group.Key, out var path) ? path : group.Key),
+                    IsRunning: true,
+                    IsFavorite: config.FavoriteApps.Contains(group.Key),
+                    IsHiddenInCapsule: config.HiddenApps.Contains(group.Key),
+                    RepresentativeWindowHandle: representative.WindowHandle,
+                    RepresentativeProcessId: representative.ProcessId,
+                    IsForeground: representative.IsForeground);
+            })
             .ToList();
 
         var apps = new List<RunningAppEntry>(runningApps);
@@ -95,9 +104,8 @@ public static class RunningAppsSnapshotBuilder
             .ToList();
 
         var visibleApps = apps.Where(app => !app.IsHiddenInCapsule).ToList();
-        var mainBarCapacity = visibleApps.Count > visibleSlots
-            ? Math.Max(visibleSlots - 1, 0)
-            : visibleSlots;
+        // The app library is also the installed-app search entry, so it always owns one slot.
+        var mainBarCapacity = Math.Max(visibleSlots - 1, 0);
         var mainBarApps = visibleApps.Take(mainBarCapacity).ToList();
         var overflowApps = visibleApps.Skip(mainBarCapacity).ToList();
 
@@ -105,7 +113,20 @@ public static class RunningAppsSnapshotBuilder
             AllApps: apps,
             MainBarApps: mainBarApps,
             OverflowApps: overflowApps,
-            HasOverflowFolder: overflowApps.Count > 0);
+            ShowAppLibrary: true);
+    }
+
+    private static WindowAppCandidate SelectRepresentativeWindow(
+        IEnumerable<WindowAppCandidate> candidates)
+    {
+        return candidates
+            .OrderBy(candidate => candidate.IsToolWindow)
+            .ThenBy(candidate => candidate.IsNoActivateWindow)
+            .ThenBy(candidate => candidate.IsOwnedWindow)
+            .ThenByDescending(candidate => candidate.IsProcessMainWindow)
+            .ThenByDescending(candidate => candidate.WindowArea)
+            .ThenByDescending(candidate => candidate.IsForeground)
+            .First();
     }
 
     private static string GetDisplayName(string appId)
