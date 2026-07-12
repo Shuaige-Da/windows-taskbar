@@ -31,24 +31,13 @@
             <GradientStop Color="#74FFFFFF" Offset="1" />
         </LinearGradientBrush>
         <SolidColorBrush x:Key="WindowOverlayBrush" Color="#52FFFFFF" />
-        <LinearGradientBrush x:Key="SidebarBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#D0FFFFFF" Offset="0" />
-            <GradientStop Color="#5AFFFFFF" Offset="0.42" />
-            <GradientStop Color="#86DCEEFF" Offset="0.76" />
-            <GradientStop Color="#C0FFFFFF" Offset="1" />
-        </LinearGradientBrush>
-        <LinearGradientBrush x:Key="CardBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#C8FFFFFF" Offset="0" />
-            <GradientStop Color="#62FFFFFF" Offset="0.18" />
-            <GradientStop Color="#30F4FBFF" Offset="0.54" />
-            <GradientStop Color="#58DDEEFF" Offset="0.82" />
-            <GradientStop Color="#B8FFFFFF" Offset="1" />
-        </LinearGradientBrush>
+        <SolidColorBrush x:Key="CardBrush" Color="#00FFFFFF" />
         <LinearGradientBrush x:Key="CardBorderBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#FFFFFFFF" Offset="0" />
-            <GradientStop Color="#80FFFFFF" Offset="0.38" />
-            <GradientStop Color="#A882B9F2" Offset="0.72" />
-            <GradientStop Color="#E8FFFFFF" Offset="1" />
+            <GradientStop Color="#E8FFFFFF" Offset="0" />
+            <GradientStop Color="#74FFFFFF" Offset="0.34" />
+            <GradientStop Color="#505A9BDA" Offset="0.66" />
+            <GradientStop Color="#B8D9F1FF" Offset="0.86" />
+            <GradientStop Color="#F0FFFFFF" Offset="1" />
         </LinearGradientBrush>
 
         <LinearGradientBrush x:Key="EnergyFillBrush" StartPoint="0,0.5" EndPoint="1,0.5">
@@ -78,6 +67,20 @@
             <GradientStop Color="#FFFFFFFF" Offset="1" />
         </LinearGradientBrush>
 
+        <LinearGradientBrush x:Key="SelectedGlassSurfaceBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#32FFFFFF" Offset="0" />
+            <GradientStop Color="#08FFFFFF" Offset="0.46" />
+            <GradientStop Color="#182F80D8" Offset="0.78" />
+            <GradientStop Color="#28FFFFFF" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="SelectedGlassBorderBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFFFFFFF" Offset="0" />
+            <GradientStop Color="#9AFFFFFF" Offset="0.35" />
+            <GradientStop Color="#D0478FFF" Offset="0.72" />
+            <GradientStop Color="#FFFFFFFF" Offset="1" />
+        </LinearGradientBrush>
+
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="#29435F" />
             <Setter Property="Background" Value="{StaticResource LiquidGlassBrush}" />
@@ -85,6 +88,7 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="16,9" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -162,21 +166,13 @@
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="29">
                                 <Border.Effect>
-                                    <DropShadowEffect Color="#5279A0" BlurRadius="18" ShadowDepth="5" Opacity="0.16" />
+                                    <DropShadowEffect Color="#4776A8" BlurRadius="17" ShadowDepth="5" Opacity="0.22" />
                                 </Border.Effect>
                             </Border>
-                            <Border x:Name="InnerHighlight" Margin="1" CornerRadius="28"
-                                    BorderBrush="#B8FFFFFF" BorderThickness="1,1,0,0" IsHitTestVisible="False" />
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalAlignment="Center" />
                         </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource GlassPillBrush}" />
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource GlassPillBorderBrush}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -236,7 +232,6 @@
                                     <DropShadowEffect Color="#4C7094" BlurRadius="24" ShadowDepth="7" Opacity="0.20" />
                                 </Border.Effect>
                             </Border>
-                            <Border Margin="1" CornerRadius="21" BorderBrush="#D8FFFFFF" BorderThickness="1.2,1.2,0,0" />
                             <ContentPresenter Margin="{TemplateBinding Padding}" />
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -371,32 +366,28 @@
 
         <Style TargetType="CheckBox">
             <Setter Property="Width" Value="56" />
-            <Setter Property="Height" Value="30" />
+            <Setter Property="Height" Value="28" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="True" />
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
-                        <Border x:Name="Track" Width="56" Height="30" CornerRadius="15"
-                                Background="#38FFFFFF" BorderBrush="#86FFFFFF" BorderThickness="1">
+                        <Border x:Name="Track" Width="56" Height="28" CornerRadius="14"
+                                Background="#FFD1D1D6" BorderThickness="0"
+                                UseLayoutRounding="True" SnapsToDevicePixels="True">
                             <Border.Effect>
-                                <DropShadowEffect Color="#46E0FF" BlurRadius="9" ShadowDepth="0" Opacity="0.28" />
+                                <DropShadowEffect Color="#53687C" BlurRadius="5" ShadowDepth="1" Opacity="0.18" />
                             </Border.Effect>
-                            <Ellipse x:Name="Thumb" Width="24" Height="24" Margin="3"
-                                     HorizontalAlignment="Left" Fill="#F4FAFF" Stroke="#90FFFFFF" StrokeThickness="1">
-                                <Ellipse.Effect>
-                                    <DropShadowEffect Color="#000000" BlurRadius="7" ShadowDepth="1" Opacity="0.38" />
-                                </Ellipse.Effect>
-                            </Ellipse>
+                            <Ellipse x:Name="Thumb" Width="24" Height="24" Margin="2"
+                                     HorizontalAlignment="Left" Fill="#FFFFFFFF"
+                                     UseLayoutRounding="True" SnapsToDevicePixels="True" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Track" Property="Background" Value="{StaticResource EnergyFillBrush}" />
-                                <Setter TargetName="Track" Property="BorderBrush" Value="#A572F4A4" />
+                                <Setter TargetName="Track" Property="Background" Value="#FF34C759" />
                                 <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Track" Property="BorderBrush" Value="#B8BFEFFF" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Track" Property="Opacity" Value="0.38" />
@@ -424,14 +415,14 @@
                                     <DropShadowEffect Color="#547EA5" BlurRadius="8" ShadowDepth="2" Opacity="0.18" />
                                 </Border.Effect>
                             </Border>
-                            <Track x:Name="PART_Track" Height="10" Margin="12,0" VerticalAlignment="Center"
+                            <Track x:Name="PART_Track" Height="28" Margin="12,0" VerticalAlignment="Center"
                                    Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
                                    Value="{TemplateBinding Value}">
                                 <Track.DecreaseRepeatButton>
                                     <RepeatButton Command="{x:Static Slider.DecreaseLarge}" IsTabStop="False">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Background="{StaticResource EnergyFillBrush}" CornerRadius="5" Margin="-1,0">
+                                                <Border Height="10" VerticalAlignment="Center" Background="{StaticResource EnergyFillBrush}" CornerRadius="5" Margin="-1,0,-12,0">
                                                     <Border.Effect>
                                                         <DropShadowEffect Color="#4D8CFF" BlurRadius="9" ShadowDepth="0" Opacity="0.42" />
                                                     </Border.Effect>
@@ -452,20 +443,20 @@
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="Thumb">
                                                 <Grid>
-                                                    <Ellipse Stroke="#F0FFFFFF" StrokeThickness="1.5">
+                                                    <Ellipse Stroke="#F0FFFFFF" StrokeThickness="1.4">
                                                         <Ellipse.Fill>
                                                             <RadialGradientBrush Center="0.32,0.28" GradientOrigin="0.28,0.22" RadiusX="0.74" RadiusY="0.74">
-                                                                <GradientStop Color="#FFFFFFFF" Offset="0" />
-                                                                <GradientStop Color="#D88CD8FF" Offset="0.28" />
-                                                                <GradientStop Color="#D84D8CFF" Offset="0.62" />
-                                                                <GradientStop Color="#D858D78F" Offset="1" />
+                                                                <GradientStop Color="#F0FFFFFF" Offset="0" />
+                                                                <GradientStop Color="#88EAF7FF" Offset="0.30" />
+                                                                <GradientStop Color="#425A9CFF" Offset="0.66" />
+                                                                <GradientStop Color="#5058D78F" Offset="1" />
                                                             </RadialGradientBrush>
                                                         </Ellipse.Fill>
                                                         <Ellipse.Effect>
                                                             <DropShadowEffect Color="#4D8CFF" BlurRadius="11" ShadowDepth="2" Opacity="0.52" />
                                                         </Ellipse.Effect>
                                                     </Ellipse>
-                                                    <Ellipse Width="7" Height="7" Fill="#C8FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,4,0,0" />
+                                                    <Ellipse Width="7" Height="7" Fill="#D8FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,4,0,0" />
                                                 </Grid>
                                             </ControlTemplate>
                                         </Thumb.Template>
@@ -504,12 +495,11 @@
                                     <DropShadowEffect Color="#567FA8" BlurRadius="14" ShadowDepth="4" Opacity="0.16" />
                                 </Border.Effect>
                             </Border>
-                            <Border Margin="1" CornerRadius="24" BorderBrush="#9FFFFFFF" BorderThickness="1,1,0,0" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource GlassPillBrush}" />
+                                <Setter Property="Foreground" Value="#2D72C7" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -550,12 +540,12 @@
         <Style x:Key="GlassCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1.4" />
+            <Setter Property="BorderThickness" Value="1.25" />
             <Setter Property="CornerRadius" Value="22" />
             <Setter Property="Padding" Value="20" />
             <Setter Property="Effect">
                 <Setter.Value>
-                    <DropShadowEffect Color="#51799E" BlurRadius="28" ShadowDepth="8" Opacity="0.22" />
+                    <DropShadowEffect Color="#4776A8" BlurRadius="18" ShadowDepth="5" Opacity="0.16" />
                 </Setter.Value>
             </Setter>
         </Style>
@@ -626,7 +616,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Margin="12,0,8,12" Background="{StaticResource SidebarBrush}" CornerRadius="28" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1.2">
+                <Border Grid.Column="0" Margin="12,0,8,12" Background="Transparent" CornerRadius="28" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1.2">
                     <Border.Effect>
                         <DropShadowEffect Color="#5279A0" BlurRadius="28" ShadowDepth="8" Opacity="0.22" />
                     </Border.Effect>
@@ -655,7 +645,8 @@
                             <Button x:Name="FeedbackNavButton" Style="{StaticResource NavButtonStyle}" Tag="Feedback" Click="NavigationButton_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8BD;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="反馈" Margin="13,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
                         </StackPanel>
                         <Button Grid.Row="2" Margin="2,8,2,8" Height="48" Foreground="#E5667C"
-                                BorderBrush="#A8FFFFFF" ToolTip="退出胶囊程序" Click="ExitApplicationButton_Click">
+                                Background="Transparent" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1.2"
+                                ToolTip="退出胶囊程序" Click="ExitApplicationButton_Click">
                             <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7E8;" Style="{StaticResource FluentIconTextStyle}"/><TextBlock Text="退出程序" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
                         </Button>
                         <Border Grid.Row="3" Style="{StaticResource GlassCardStyle}" CornerRadius="18" Padding="12" Margin="2,0,2,2">
@@ -675,9 +666,11 @@
                     </Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="64"/></Grid.ColumnDefinitions>
-                        <Border Background="{StaticResource GlassPillBrush}" BorderBrush="{StaticResource GlassPillBorderBrush}" BorderThickness="1.2" CornerRadius="29" Padding="3" HorizontalAlignment="Center">
+                        <Border Height="64" Background="Transparent" BorderBrush="{StaticResource CardBorderBrush}"
+                                BorderThickness="1.25" CornerRadius="32" Padding="3"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Border.Effect>
-                                <DropShadowEffect Color="#5279A0" BlurRadius="22" ShadowDepth="6" Opacity="0.20" />
+                                <DropShadowEffect Color="#4776A8" BlurRadius="18" ShadowDepth="5" Opacity="0.16" />
                             </Border.Effect>
                             <StackPanel x:Name="TopSectionNavigationPanel" Orientation="Horizontal" />
                         </Border>
@@ -748,7 +741,7 @@
                                 <Border x:Name="ControlCenterBackgroundSection" Style="{StaticResource GlassCardStyle}">
                                     <StackPanel>
                                         <TextBlock Text="控制中心背景" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,14" />
-                                        <Border Background="{StaticResource GlassPillBrush}" BorderBrush="{StaticResource GlassPillBorderBrush}" BorderThickness="1" CornerRadius="21" Padding="2" HorizontalAlignment="Left" Margin="0,0,0,16">
+                                        <Border Background="Transparent" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1.2" CornerRadius="21" Padding="2" HorizontalAlignment="Left" Margin="0,0,0,16">
                                             <StackPanel Orientation="Horizontal">
                                                 <Button x:Name="DefaultLandscapeModeButton" Tag="DefaultLandscape" Content="默认山水" Style="{StaticResource BackgroundModeButtonStyle}" Click="ControlCenterBackgroundModeButton_Click" />
                                                 <Button x:Name="CustomImageModeButton" Tag="CustomImage" Content="自定义图片" Style="{StaticResource BackgroundModeButtonStyle}" Click="ControlCenterBackgroundModeButton_Click" />
@@ -978,7 +971,7 @@
                                         <TextBox x:Name="FeedbackTextBox" Height="190" Margin="0,14,0,0" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" TextChanged="FeedbackTextBox_TextChanged" />
                                         <TextBlock x:Name="FeedbackCountText" Text="0 字" Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Right" Margin="0,6,0,0" />
 
-                                        <Border x:Name="FeedbackDropZone" Margin="0,18,0,0" Padding="18" CornerRadius="12" Background="#58FFFFFF" BorderBrush="#A8FFFFFF" BorderThickness="1" AllowDrop="True" DragOver="FeedbackDropZone_DragOver" Drop="FeedbackDropZone_Drop">
+                                        <Border x:Name="FeedbackDropZone" Margin="0,18,0,0" Padding="18" CornerRadius="12" Background="Transparent" BorderThickness="0" AllowDrop="True" DragOver="FeedbackDropZone_DragOver" Drop="FeedbackDropZone_Drop">
                                             <Grid>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <StackPanel>
@@ -1023,7 +1016,7 @@
                              KeyDown="FeatureSearchResultsList_KeyDown">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="12,10" Margin="0,2" CornerRadius="12" Background="#55FFFFFF">
+                                <Border Padding="12,10" Margin="0,2" CornerRadius="12" Background="Transparent">
                                     <StackPanel>
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding Location}" Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,0" />

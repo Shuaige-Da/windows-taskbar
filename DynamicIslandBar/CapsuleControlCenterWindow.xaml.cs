@@ -215,11 +215,12 @@ public partial class CapsuleControlCenterWindow : Window
         {
             var selected = string.Equals(button.Tag as string, pageKey, StringComparison.Ordinal);
             button.Background = selected
-                ? (Brush)FindResource("GlassPillBrush")
+                ? (Brush)FindResource("SelectedGlassSurfaceBrush")
                 : Brushes.Transparent;
             button.BorderBrush = selected
-                ? (Brush)FindResource("GlassPillBorderBrush")
+                ? (Brush)FindResource("SelectedGlassBorderBrush")
                 : Brushes.Transparent;
+            button.BorderThickness = selected ? new Thickness(1.25) : new Thickness(0);
             button.Foreground = selected
                 ? new SolidColorBrush(Color.FromRgb(0x2D, 0x72, 0xC7))
                 : new SolidColorBrush(Color.FromRgb(0x36, 0x53, 0x6F));
@@ -353,12 +354,12 @@ public partial class CapsuleControlCenterWindow : Window
         {
             var selected = string.Equals(button.Tag as string, sectionKey, StringComparison.Ordinal);
             button.Background = selected
-                ? (Brush)FindResource("GlassPillBrush")
+                ? (Brush)FindResource("SelectedGlassSurfaceBrush")
                 : Brushes.Transparent;
             button.BorderBrush = selected
-                ? (Brush)FindResource("GlassPillBorderBrush")
+                ? (Brush)FindResource("SelectedGlassBorderBrush")
                 : Brushes.Transparent;
-            button.BorderThickness = selected ? new Thickness(1) : new Thickness(0);
+            button.BorderThickness = selected ? new Thickness(1.25) : new Thickness(0);
             button.Foreground = new SolidColorBrush(selected
                 ? Color.FromRgb(0x2D, 0x72, 0xC7)
                 : Color.FromRgb(0x31, 0x4C, 0x68));
@@ -858,12 +859,12 @@ public partial class CapsuleControlCenterWindow : Window
             var selected = Enum.TryParse<ControlCenterBackgroundMode>(button.Tag as string, out var mode)
                 && mode == selectedMode;
             button.Background = selected
-                ? (Brush)FindResource("GlassPillBrush")
+                ? (Brush)FindResource("SelectedGlassSurfaceBrush")
                 : Brushes.Transparent;
             button.BorderBrush = selected
-                ? (Brush)FindResource("GlassPillBorderBrush")
+                ? (Brush)FindResource("SelectedGlassBorderBrush")
                 : Brushes.Transparent;
-            button.BorderThickness = selected ? new Thickness(1) : new Thickness(0);
+            button.BorderThickness = selected ? new Thickness(1.25) : new Thickness(0);
             button.Foreground = new SolidColorBrush(selected
                 ? Color.FromRgb(0x2D, 0x72, 0xC7)
                 : Color.FromRgb(0x36, 0x53, 0x6F));
