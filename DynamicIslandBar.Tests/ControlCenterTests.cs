@@ -187,6 +187,8 @@ public class ControlCenterTests
         Assert.Contains("x:Key=\"GlassPillBrush\"", xaml);
         Assert.Contains("x:Key=\"GlassPillBorderBrush\"", xaml);
         Assert.Contains("x:Key=\"GlassCardStyle\"", xaml);
+        Assert.Contains("x:Key=\"WindowOverlayBrush\" Color=\"#00000000\"", xaml);
+        Assert.Contains("<GradientStop Color=\"#14081624\" Offset=\"0\" />", xaml);
         Assert.Contains("x:Key=\"CardBrush\" Color=\"#00FFFFFF\"", xaml);
         Assert.Contains("x:Key=\"CardBorderBrush\" StartPoint=\"0,0\" EndPoint=\"1,1\"", xaml);
         Assert.Contains("x:Key=\"SelectedGlassSurfaceBrush\"", xaml);
@@ -209,6 +211,7 @@ public class ControlCenterTests
         Assert.Contains("<Style TargetType=\"CheckBox\">", xaml);
         Assert.Contains("<Style TargetType=\"Slider\">", xaml);
         Assert.Contains("ApplyControlCenterTheme", code);
+        Assert.DoesNotContain("SetBrushColor(\"WindowOverlayBrush\"", code);
         Assert.Contains("ControlCenterWindow_SizeChanged", code);
         Assert.Contains("ExitApplicationButton_Click", code);
         Assert.Contains("[CapsuleVisualPart.CenterCard] = \"中心卡片背景\"", code);

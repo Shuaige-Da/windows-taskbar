@@ -25,12 +25,12 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#4D8CFF" />
         <SolidColorBrush x:Key="AccentSecondaryBrush" Color="#4CD964" />
         <LinearGradientBrush x:Key="WindowSurfaceBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#82FFFFFF" Offset="0" />
-            <GradientStop Color="#20FFFFFF" Offset="0.34" />
-            <GradientStop Color="#38EAF5FF" Offset="0.72" />
-            <GradientStop Color="#74FFFFFF" Offset="1" />
+            <GradientStop Color="#14081624" Offset="0" />
+            <GradientStop Color="#02000000" Offset="0.34" />
+            <GradientStop Color="#101C3450" Offset="0.72" />
+            <GradientStop Color="#0A0C1C2E" Offset="1" />
         </LinearGradientBrush>
-        <SolidColorBrush x:Key="WindowOverlayBrush" Color="#52FFFFFF" />
+        <SolidColorBrush x:Key="WindowOverlayBrush" Color="#00000000" />
         <SolidColorBrush x:Key="CardBrush" Color="#00FFFFFF" />
         <LinearGradientBrush x:Key="CardBorderBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#E8FFFFFF" Offset="0" />

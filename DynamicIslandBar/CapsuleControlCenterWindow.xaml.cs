@@ -24,8 +24,7 @@ public partial class CapsuleControlCenterWindow : Window
 
     private sealed record ControlCenterThemeColors(
         Color Accent,
-        Color Muted,
-        Color Overlay);
+        Color Muted);
 
     private sealed record SectionDescriptor(string Key, string Title, string IconGlyph, FrameworkElement Target);
 
@@ -877,21 +876,17 @@ public partial class CapsuleControlCenterWindow : Window
         {
             CapsuleThemePreset.GlassGreen => new ControlCenterThemeColors(
                 Color.FromRgb(0x4C, 0xD9, 0x64),
-                Color.FromRgb(0x58, 0x74, 0x6D),
-                Color.FromArgb(0x52, 0xFF, 0xFF, 0xFF)),
+                Color.FromRgb(0x58, 0x74, 0x6D)),
             CapsuleThemePreset.SoftLight => new ControlCenterThemeColors(
                 Color.FromRgb(0x8A, 0x7D, 0xFF),
-                Color.FromRgb(0x62, 0x6F, 0x8E),
-                Color.FromArgb(0x58, 0xFF, 0xFF, 0xFF)),
+                Color.FromRgb(0x62, 0x6F, 0x8E)),
             _ => new ControlCenterThemeColors(
                 Color.FromRgb(0x4D, 0x8C, 0xFF),
-                Color.FromRgb(0x61, 0x78, 0x95),
-                Color.FromArgb(0x52, 0xFF, 0xFF, 0xFF))
+                Color.FromRgb(0x61, 0x78, 0x95))
         };
 
         SetBrushColor("AccentBrush", colors.Accent);
         SetBrushColor("MutedTextBrush", colors.Muted);
-        SetBrushColor("WindowOverlayBrush", colors.Overlay);
     }
 
     private void SetBrushColor(string resourceKey, Color color)
