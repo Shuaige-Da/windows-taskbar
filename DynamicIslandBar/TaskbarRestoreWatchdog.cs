@@ -5,6 +5,19 @@ namespace DynamicIslandBar;
 public static class TaskbarRestoreWatchdog
 {
     private const string WatcherArgument = "--restore-taskbar-when-parent-exits";
+    private const string RestoreNowArgument = "--restore-taskbar";
+
+    public static bool TryRestoreTaskbar(string[] args)
+    {
+        if (args.Length != 1
+            || !string.Equals(args[0], RestoreNowArgument, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        TaskbarManager.Show();
+        return true;
+    }
 
     public static string BuildWatcherArguments(int parentProcessId)
     {

@@ -11,6 +11,7 @@
     <RootNamespace>DynamicIslandBar</RootNamespace>
     <StartupObject>DynamicIslandBar.Program</StartupObject>
     <ApplicationIcon>Assets\UI-Win-AppIcon.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>zh-Hans;zh-Hant;en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\ControlCenter-DefaultLandscape.png" />
+    <Resource Include="Assets\ControlCenter-DefaultLandscape.jpg" />
   </ItemGroup>
 
 </Project>

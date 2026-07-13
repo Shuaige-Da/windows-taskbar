@@ -3,11 +3,11 @@
 #endif
 
 #ifndef SourceDir
-#define SourceDir "..\..\artifacts\release\DynamicIslandBar-v1.0.0-win-x64\publish"
+#define SourceDir "..\..\artifacts\release\DynamicIslandBar-v1.0.0-win-x64-framework-dependent\publish"
 #endif
 
 #ifndef OutputDir
-#define OutputDir "..\..\artifacts\release\DynamicIslandBar-v1.0.0-win-x64\installer"
+#define OutputDir "..\..\artifacts\release\DynamicIslandBar-v1.0.0-win-x64-framework-dependent\installer"
 #endif
 
 #ifndef DependencyLabel
@@ -60,3 +60,4 @@ Filename: "{app}\DynamicIslandBar.exe"; Description: "启动 DynamicIslandBar"; 
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM DynamicIslandBar.exe /F"; Flags: runhidden; RunOnceId: "StopDynamicIslandBar"
+Filename: "{app}\DynamicIslandBar.exe"; Parameters: "--restore-taskbar"; Flags: runhidden waituntilterminated; RunOnceId: "RestoreTaskbar"

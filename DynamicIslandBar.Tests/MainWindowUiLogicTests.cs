@@ -73,7 +73,8 @@ public class MainWindowUiLogicTests
         Assert.Contains("LoadLocalAppIconAsync(iconHost, app", code);
         Assert.Contains("LoadIconSource(launchPath, iconCache)", code);
         Assert.Contains("await _localAppIconLoadGate.WaitAsync(cancellationToken);", code);
-        Assert.Contains("ConcurrentDictionary<string, ImageSource> _iconCache", code);
+        Assert.Contains("BoundedCache<string, ImageSource?> _iconCache", code);
+        Assert.Contains("IconCacheCapacity = 256", code);
         Assert.Contains("CancelPendingOverflowAppsSearch();", code);
         Assert.Contains("_ = PreloadInstalledAppsAsync();", code);
         Assert.Contains("_overflowAppsActiveSearchQuery", code);
@@ -278,7 +279,8 @@ public class MainWindowUiLogicTests
     {
         var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
 
-        Assert.Contains("if (snapshot == null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)", code);
+        Assert.Contains("if (snapshot == null", code);
+        Assert.Contains("&& CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)", code);
         Assert.Contains("snapshot = new CenterCardMediaSnapshot(", code);
         Assert.Contains("Title: info.Title ?? app.DisplayName,", code);
         Assert.Contains("Artist: info.Artist ?? string.Empty,", code);

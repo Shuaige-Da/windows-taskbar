@@ -5,6 +5,11 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (TaskbarRestoreWatchdog.TryRestoreTaskbar(args))
+        {
+            return;
+        }
+
         if (TaskbarRestoreWatchdog.TryGetParentProcessId(args, out var parentProcessId))
         {
             TaskbarRestoreWatchdog.RunUntilParentExits(parentProcessId);

@@ -79,9 +79,12 @@ public static class RunningAppsSnapshotBuilder
             .ToList();
 
         var apps = new List<RunningAppEntry>(runningApps);
+        var knownAppIds = new HashSet<string>(
+            runningApps.Select(app => app.AppId),
+            StringComparer.Ordinal);
         foreach (var favoriteAppId in config.FavoriteApps)
         {
-            if (apps.Any(app => app.AppId == favoriteAppId))
+            if (!knownAppIds.Add(favoriteAppId))
             {
                 continue;
             }

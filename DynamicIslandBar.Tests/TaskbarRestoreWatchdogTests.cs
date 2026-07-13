@@ -33,6 +33,12 @@ public class TaskbarRestoreWatchdogTests
     }
 
     [Fact]
+    public void TryRestoreTaskbar_RejectsNormalAppStartup()
+    {
+        Assert.False(TaskbarRestoreWatchdog.TryRestoreTaskbar([]));
+    }
+
+    [Fact]
     public void App_UsesProgramEntryPointSoWatchdogAvoidsWpfStartup()
     {
         var projectFile = ReadProjectFile("DynamicIslandBar", "DynamicIslandBar.csproj");
@@ -40,7 +46,11 @@ public class TaskbarRestoreWatchdogTests
 
         Assert.Contains("<StartupObject>DynamicIslandBar.Program</StartupObject>", projectFile);
         Assert.Contains("TaskbarRestoreWatchdog.TryGetParentProcessId(args", programCode);
+        Assert.Contains("TaskbarRestoreWatchdog.TryRestoreTaskbar(args", programCode);
         Assert.Contains("new App()", programCode);
+        Assert.True(
+            programCode.IndexOf("TaskbarRestoreWatchdog.TryRestoreTaskbar(args", StringComparison.Ordinal) <
+            programCode.IndexOf("new App()", StringComparison.Ordinal));
         Assert.True(
             programCode.IndexOf("TaskbarRestoreWatchdog.TryGetParentProcessId(args", StringComparison.Ordinal) <
             programCode.IndexOf("new App()", StringComparison.Ordinal));

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -14,7 +13,6 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Text;
 using System.Runtime.InteropServices;
-using Icon = System.Drawing.Icon;
 
 namespace DynamicIslandBar
 {
@@ -62,6 +60,26 @@ namespace DynamicIslandBar
             Color.FromArgb(0x64, 0xFF, 0xFF, 0xFF));
         private static readonly SolidColorBrush PopupHoverBrush = CreateFrozenBrush(
             Color.FromArgb(0x19, 0xFF, 0xFF, 0xFF));
+        private static readonly SolidColorBrush AppListHoverBrush = CreateFrozenBrush(
+            Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF));
+        private static readonly SolidColorBrush SystemIconHoverBackgroundBrush = CreateFrozenBrush(
+            Color.FromArgb(42, 255, 255, 255));
+        private static readonly SolidColorBrush SystemIconIdleBackgroundBrush = CreateFrozenBrush(
+            Color.FromArgb(10, 255, 255, 255));
+        private static readonly SolidColorBrush SystemIconHoverBorderBrush = CreateFrozenBrush(
+            Color.FromArgb(48, 76, 217, 100));
+        private static readonly SolidColorBrush SystemIconIdleBorderBrush = CreateFrozenBrush(
+            Color.FromArgb(12, 255, 255, 255));
+        private static readonly SolidColorBrush ActiveToggleBackgroundBrush = CreateFrozenBrush(
+            Color.FromRgb(0x34, 0xC7, 0x59));
+        private static readonly SolidColorBrush ActiveToggleBorderBrush = CreateFrozenBrush(
+            Color.FromRgb(0x72, 0xF0, 0x9B));
+        private static readonly SolidColorBrush IdleToggleBackgroundBrush = CreateFrozenBrush(
+            Color.FromArgb(24, 255, 255, 255));
+        private static readonly SolidColorBrush IdleToggleBorderBrush = CreateFrozenBrush(
+            Color.FromArgb(66, 255, 255, 255));
+        private static readonly SolidColorBrush DefaultAudioDeviceBrush = CreateFrozenBrush(
+            Color.FromArgb(25, 76, 217, 100));
         private static readonly System.Windows.Media.Effects.DropShadowEffect LyricPrimaryEffect =
             CreateFrozenLyricEffect(Color.FromRgb(0xFF, 0x4F, 0xA3), 16, 0.8);
         private static readonly System.Windows.Media.Effects.DropShadowEffect LyricPreviewEffect =
@@ -106,7 +124,10 @@ namespace DynamicIslandBar
         private PopupState? _pendingHoverClosePopup;
         private PermissionPromptState? _pendingPermissionPrompt;
         private WifiAccessIssue _lastWifiAccessIssue = WifiAccessIssue.None;
-        private readonly ConcurrentDictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
+        private const int IconCacheCapacity = 256;
+        private readonly BoundedCache<string, ImageSource?> _iconCache = new(
+            IconCacheCapacity,
+            StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Color> _accentCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Border> _appIconHosts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, string> _appIdByProcessId = new();
@@ -328,6 +349,7 @@ namespace DynamicIslandBar
             {
                 _presentationController.ApplyPreferences(_capsuleConfig.Presentation);
                 UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+                UpdateMediaTimerState();
             }
 
             if (changeKind.HasFlag(CapsuleSettingsChangeKind.Lyrics))
@@ -1382,6 +1404,11 @@ namespace DynamicIslandBar
 
         private async void CenterCardMediaRefreshTimer_Tick(object? sender, EventArgs e)
         {
+            if (!IsCenterCardMediaEnabled())
+            {
+                return;
+            }
+
             await RefreshCenterCardMediaSnapshotAsync();
         }
 
@@ -1443,7 +1470,7 @@ namespace DynamicIslandBar
 
         private void UpdateMediaTimerState()
         {
-            if (_isMusicPlaying)
+            if (_isMusicPlaying && _capsuleConfig.Presentation.MediaControls.IsVisible)
             {
                 if (!_progressTimer.IsEnabled)
                 {
@@ -1457,6 +1484,7 @@ namespace DynamicIslandBar
 
             var snapshot = _centerCardLiveMediaSnapshot;
             var shouldTrackLyrics = _isMusicPlaying
+                && _capsuleConfig.Presentation.Lyrics.IsVisible
                 && snapshot is { IsMusicApp: true }
                 && (_lyricsService.HasLyricsFor(snapshot.Title, snapshot.Artist, _mediaDuration)
                     || _activeCenterCardLyricWindow is { Index: -1 });
@@ -1471,6 +1499,14 @@ namespace DynamicIslandBar
             {
                 _lyricsFastTimer.Stop();
             }
+        }
+
+        private bool IsCenterCardMediaEnabled()
+        {
+            var presentation = _capsuleConfig.Presentation;
+            return presentation.Lyrics.IsVisible
+                || presentation.Details.IsVisible
+                || presentation.MediaControls.IsVisible;
         }
 
         private void LyricsFastTimer_Tick(object? sender, EventArgs e)
@@ -1521,7 +1557,6 @@ namespace DynamicIslandBar
                     ResetCenterCardLyricScrollState(clearActiveTrack: true);
                 }
 
-                // Preserve lyric from previous snapshot if same song
                 var prevLyric = _centerCardLiveMediaSnapshot?.Lyric;
                 if (!string.IsNullOrWhiteSpace(prevLyric)
                     && snapshot != null
@@ -1535,134 +1570,135 @@ namespace DynamicIslandBar
 
                 if (snapshot == null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] No snapshot for '{app.DisplayName}' (AUMID={app.AppId})");
+                    Debug.WriteLine($"[MediaRefresh] No snapshot for '{app.DisplayName}' (AUMID={app.AppId})");
                 }
 
-                // Update progress bar from MediaService timeline
-                if (_mediaService != null)
+                var mediaService = _mediaService;
+                if (mediaService != null)
                 {
-                    try
-                    {
-                    // Tell MediaService which session to use (from the snapshot's AUMID)
-                    var aumid = snapshot?.SourceAppUserModelId;
-                    _mediaService.SetTargetSession(aumid);
-                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] AUMID={aumid}, snapshot={(snapshot != null ? "ok" : "null")}");
-
-                    var info = await _mediaService.GetMediaInfoAsync();
-                    var wasMusicPlaying = _isMusicPlaying;
-                    _isMusicPlaying = info.IsPlaying;
-                    var playbackStateChanged = wasMusicPlaying != _isMusicPlaying;
-                    _mediaDuration = info.Duration;
-                    UpdateMediaTimerState();
-
-                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Title={info.Title}, Artist={info.Artist}, Playing={info.IsPlaying}, Pos={info.Position}, Dur={info.Duration}");
-
-                    if (snapshot == null && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)
-                        && !string.IsNullOrWhiteSpace(info.Title))
-                    {
-                        snapshot = new CenterCardMediaSnapshot(
-                            IsMusicApp: true,
-                            IsPlaying: info.IsPlaying,
-                            Title: info.Title ?? app.DisplayName,
-                            Artist: info.Artist ?? string.Empty,
-                            Lyric: string.Empty,
-                            SourceAppUserModelId: null);
-                        if (HasCenterCardMediaIdentityChanged(previousSnapshot, snapshot))
-                        {
-                            ResetCenterCardLyricScrollState(clearActiveTrack: true);
-                        }
-                        _centerCardLiveMediaSnapshot = snapshot;
-                        UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
-                    }
-
-                    if (info.Duration.TotalSeconds > 0)
-                    {
-                        _lastMediaPosition = info.Position;
-                        _lastMediaUpdateUtc = DateTime.UtcNow;
-                        _isProgressInterpolationActive = _isMusicPlaying;
-
-                        var pct = info.Position.TotalSeconds / info.Duration.TotalSeconds * 100;
-                        UpdateCenterCardProgressDisplays(pct, info.Position, info.Duration);
-                    }
-                    else
-                    {
-                        _isProgressInterpolationActive = false;
-                    }
-
-                    // Update play/pause icon
-                    UpdateCenterCardPlayPauseIcons();
-
-                    // Lyrics are fetched independently so network latency cannot stall media refresh.
-                    if (snapshot != null && !string.IsNullOrWhiteSpace(info.Title))
-                    {
-                        var lyricsAvailable = _lyricsService.HasLyricsFor(
-                            info.Title ?? string.Empty,
-                            info.Artist ?? string.Empty,
-                            info.Duration);
-
-                        if (lyricsAvailable && _lyricsService.RealDuration > TimeSpan.Zero)
-                        {
-                            _mediaService.SetRealDuration(_lyricsService.RealDuration);
-                        }
-                        else
-                        {
-                            QueueLyricsRefresh(
-                                info.Title ?? string.Empty,
-                                info.Artist ?? string.Empty,
-                                info.Duration);
-                        }
-                        UpdateMediaTimerState();
-
-                        var lyricApplied = ApplyCenterCardLyricAtPosition(
-                            info.Position,
-                            forceRestart: playbackStateChanged);
-                        if (!lyricApplied && info.Position <= TimeSpan.Zero)
-                        {
-                            ApplyCenterCardLyricAtPosition(
-                                _mediaService.GetCurrentPosition(),
-                                forceRestart: playbackStateChanged);
-                        }
-                        snapshot = _centerCardLiveMediaSnapshot;
-                    }
-                    else
-                    {
-                        if (snapshot == null)
-                            System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Skipping lyrics: no snapshot");
-                        else if (string.IsNullOrWhiteSpace(info.Title))
-                            System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Skipping lyrics: no title");
-                        else if (info.Duration.TotalSeconds <= 0)
-                            System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Skipping lyrics: duration={info.Duration}");
-                    }
-
-                    // Sync playback mode from session
-                    _playbackModeIndex = _mediaService.GetPlaybackMode();
-                    System.Diagnostics.Debug.WriteLine($"[MediaRefresh] PlaybackMode={_playbackModeIndex}");
-                    UpdatePlaybackModeIcon();
-
-                    // Re-update progress panel visibility now that media state is fresh
-                    var showProgress = !IsSideDockMode
-                        && _isCenterCardHovered
-                        && _mediaDuration.TotalSeconds > 0
-                        && _presentationController.IsEffectivelyVisible(CapsuleVisualPart.MediaControls);
-                    CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
-                    CenterCardProgressPanel.Opacity = _capsuleConfig.Presentation.MediaControls.OpacityPercent / 100d;
-                    if (_isCenterCardHovered)
-                    {
-                        UpdateCenterCardHoverVisual(new CenterCardPresentation(
-                            CenterCardDisplayMode.MusicDetails, string.Empty, string.Empty,
-                            false, true, false));
-                    }
-                    }
-                    catch (Exception ex)
-                    {
-                        AppDiagnostics.Error("MediaRefresh", ex);
-                        System.Diagnostics.Debug.WriteLine($"[MediaRefresh] Error: {ex.GetType().Name}: {ex.Message}");
-                    }
+                    await RefreshMediaServiceStateAsync(
+                        mediaService,
+                        app,
+                        snapshot,
+                        previousSnapshot);
                 }
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("MediaRefresh", ex);
+                Debug.WriteLine($"[MediaRefresh] Error: {ex.GetType().Name}: {ex.Message}");
             }
             finally
             {
                 _isCenterCardMediaRefreshInProgress = false;
+            }
+        }
+
+        private async Task RefreshMediaServiceStateAsync(
+            MediaService mediaService,
+            RunningAppEntry app,
+            CenterCardMediaSnapshot? snapshot,
+            CenterCardMediaSnapshot? previousSnapshot)
+        {
+            var aumid = snapshot?.SourceAppUserModelId;
+            mediaService.SetTargetSession(aumid);
+            Debug.WriteLine($"[MediaRefresh] AUMID={aumid}, snapshot={(snapshot != null ? "ok" : "null")}");
+
+            var info = await mediaService.GetMediaInfoAsync();
+            var wasMusicPlaying = _isMusicPlaying;
+            _isMusicPlaying = info.IsPlaying;
+            var playbackStateChanged = wasMusicPlaying != _isMusicPlaying;
+            _mediaDuration = info.Duration;
+            UpdateMediaTimerState();
+
+            Debug.WriteLine($"[MediaRefresh] Title={info.Title}, Artist={info.Artist}, Playing={info.IsPlaying}, Pos={info.Position}, Dur={info.Duration}");
+
+            if (snapshot == null
+                && CenterCardMediaSnapshotProvider.IsLikelyMusicApp(app)
+                && !string.IsNullOrWhiteSpace(info.Title))
+            {
+                snapshot = new CenterCardMediaSnapshot(
+                    IsMusicApp: true,
+                    IsPlaying: info.IsPlaying,
+                    Title: info.Title ?? app.DisplayName,
+                    Artist: info.Artist ?? string.Empty,
+                    Lyric: string.Empty,
+                    SourceAppUserModelId: null);
+                if (HasCenterCardMediaIdentityChanged(previousSnapshot, snapshot))
+                {
+                    ResetCenterCardLyricScrollState(clearActiveTrack: true);
+                }
+
+                _centerCardLiveMediaSnapshot = snapshot;
+                UpdateActiveAppSummary(app, GetPrimarySummaryStatus(app));
+            }
+
+            if (info.Duration.TotalSeconds > 0)
+            {
+                _lastMediaPosition = info.Position;
+                _lastMediaUpdateUtc = DateTime.UtcNow;
+                _isProgressInterpolationActive = _isMusicPlaying;
+
+                var percent = info.Position.TotalSeconds / info.Duration.TotalSeconds * 100;
+                UpdateCenterCardProgressDisplays(percent, info.Position, info.Duration);
+            }
+            else
+            {
+                _isProgressInterpolationActive = false;
+            }
+
+            UpdateCenterCardPlayPauseIcons();
+            if (snapshot != null && !string.IsNullOrWhiteSpace(info.Title))
+            {
+                var title = info.Title ?? string.Empty;
+                var artist = info.Artist ?? string.Empty;
+                var lyricsAvailable = _lyricsService.HasLyricsFor(title, artist, info.Duration);
+                if (lyricsAvailable && _lyricsService.RealDuration > TimeSpan.Zero)
+                {
+                    mediaService.SetRealDuration(_lyricsService.RealDuration);
+                }
+                else
+                {
+                    QueueLyricsRefresh(title, artist, info.Duration);
+                }
+
+                UpdateMediaTimerState();
+                var lyricApplied = ApplyCenterCardLyricAtPosition(
+                    info.Position,
+                    forceRestart: playbackStateChanged);
+                if (!lyricApplied && info.Position <= TimeSpan.Zero)
+                {
+                    ApplyCenterCardLyricAtPosition(
+                        mediaService.GetCurrentPosition(),
+                        forceRestart: playbackStateChanged);
+                }
+            }
+            else
+            {
+                Debug.WriteLine(snapshot == null
+                    ? "[MediaRefresh] Skipping lyrics: no snapshot"
+                    : "[MediaRefresh] Skipping lyrics: no title");
+            }
+
+            _playbackModeIndex = mediaService.GetPlaybackMode();
+            Debug.WriteLine($"[MediaRefresh] PlaybackMode={_playbackModeIndex}");
+            UpdatePlaybackModeIcon();
+
+            var showProgress = !IsSideDockMode
+                && _isCenterCardHovered
+                && _mediaDuration.TotalSeconds > 0
+                && _presentationController.IsEffectivelyVisible(CapsuleVisualPart.MediaControls);
+            CenterCardProgressPanel.Visibility = showProgress ? Visibility.Visible : Visibility.Collapsed;
+            CenterCardProgressPanel.Opacity = _capsuleConfig.Presentation.MediaControls.OpacityPercent / 100d;
+            if (_isCenterCardHovered)
+            {
+                UpdateCenterCardHoverVisual(new CenterCardPresentation(
+                    CenterCardDisplayMode.MusicDetails,
+                    string.Empty,
+                    string.Empty,
+                    false,
+                    true,
+                    false));
             }
         }
 
@@ -2084,7 +2120,7 @@ namespace DynamicIslandBar
                     WindowArea: window.WindowArea));
             }
 
-            _runningAppsSnapshot = RunningAppsSnapshotBuilder.Build(
+            var refreshedSnapshot = RunningAppsSnapshotBuilder.Build(
                 candidates,
                 _capsuleConfig,
                 _currentLayoutMetrics.VisibleAppSlots);
@@ -2098,6 +2134,14 @@ namespace DynamicIslandBar
             {
                 CapsuleConfigService.Save(_capsuleConfig);
             }
+
+            if (!RunningAppsRefreshPolicy.RequiresUiRefresh(_runningAppsSnapshot, refreshedSnapshot))
+            {
+                _runningAppsSnapshot = refreshedSnapshot;
+                return;
+            }
+
+            _runningAppsSnapshot = refreshedSnapshot;
 
             RenderMainBarApps();
             if (AppsPopup.IsOpen)
@@ -2403,7 +2447,7 @@ namespace DynamicIslandBar
                 Padding = new Thickness(10, 8, 10, 8),
                 Margin = new Thickness(0, 2, 0, 2),
                 Cursor = Cursors.Hand,
-                Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255)),
+                Background = Brushes.Transparent,
                 Tag = app
             };
 
@@ -2425,8 +2469,8 @@ namespace DynamicIslandBar
             dock.Children.Add(title);
 
             row.Child = dock;
-            row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
-            row.MouseLeave += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255));
+            row.MouseEnter += (_, _) => row.Background = AppListHoverBrush;
+            row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
             row.MouseLeftButtonDown += (_, e) =>
             {
                 e.Handled = true;
@@ -4398,32 +4442,30 @@ namespace DynamicIslandBar
 
         private static ImageSource? LoadIconSource(
             string? exePath,
-            ConcurrentDictionary<string, ImageSource> iconCache)
+            BoundedCache<string, ImageSource?> iconCache)
         {
             if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
             {
                 return null;
             }
 
-            if (iconCache.TryGetValue(exePath, out var cached))
-            {
-                return cached;
-            }
-
             try
             {
-                using var icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
-                if (icon == null)
+                return iconCache.GetOrAdd(exePath, path =>
                 {
-                    return null;
-                }
+                    using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                    if (icon == null)
+                    {
+                        return null;
+                    }
 
-                var source = Imaging.CreateBitmapSourceFromHIcon(
-                    icon.Handle,
-                    Int32Rect.Empty,
-                    BitmapSizeOptions.FromWidthAndHeight(32, 32));
-                source.Freeze();
-                return iconCache.GetOrAdd(exePath, source);
+                    var source = Imaging.CreateBitmapSourceFromHIcon(
+                        icon.Handle,
+                        Int32Rect.Empty,
+                        BitmapSizeOptions.FromWidthAndHeight(32, 32));
+                    source.Freeze();
+                    return source;
+                });
             }
             catch
             {
@@ -5903,14 +5945,12 @@ namespace DynamicIslandBar
 
         private void SetSystemIconHighlight(Border border, bool highlighted)
         {
-            border.Background = new SolidColorBrush(
-                highlighted
-                    ? Color.FromArgb(42, 255, 255, 255)
-                    : Color.FromArgb(10, 255, 255, 255));
-            border.BorderBrush = new SolidColorBrush(
-                highlighted
-                    ? Color.FromArgb(48, 76, 217, 100)
-                    : Color.FromArgb(12, 255, 255, 255));
+            border.Background = highlighted
+                ? SystemIconHoverBackgroundBrush
+                : SystemIconIdleBackgroundBrush;
+            border.BorderBrush = highlighted
+                ? SystemIconHoverBorderBrush
+                : SystemIconIdleBorderBrush;
         }
 
         private void ClearCenterCardAppSelectorHighlight()
@@ -6936,11 +6976,11 @@ namespace DynamicIslandBar
             var muted = AudioService.IsMuted();
             MuteBtn.Content = muted ? "取消静音" : "静音";
             MuteBtn.Background = muted
-                ? new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59))
-                : new SolidColorBrush(Color.FromArgb(24, 255, 255, 255));
+                ? ActiveToggleBackgroundBrush
+                : IdleToggleBackgroundBrush;
             MuteBtn.BorderBrush = muted
-                ? new SolidColorBrush(Color.FromRgb(0x72, 0xF0, 0x9B))
-                : new SolidColorBrush(Color.FromArgb(66, 255, 255, 255));
+                ? ActiveToggleBorderBrush
+                : IdleToggleBorderBrush;
 
             AudioDevicesList.Children.Clear();
             AudioDevicesList.Children.Add(new TextBlock
@@ -6972,8 +7012,8 @@ namespace DynamicIslandBar
                             Cursor = Cursors.Hand,
                             Tag = dev,
                             Background = dev.IsDefault
-                                ? new SolidColorBrush(Color.FromArgb(25, 76, 217, 100))
-                                : new SolidColorBrush(Color.FromArgb(0, 255, 255, 255))
+                                ? DefaultAudioDeviceBrush
+                                : Brushes.Transparent
                         };
                         var text = new TextBlock
                         {
@@ -6983,10 +7023,10 @@ namespace DynamicIslandBar
                             TextTrimming = TextTrimming.CharacterEllipsis
                         };
                         row.Child = text;
-                        row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255));
+                        row.MouseEnter += (_, _) => row.Background = PopupHoverBrush;
                         row.MouseLeave += (_, _) => row.Background = dev.IsDefault
-                            ? new SolidColorBrush(Color.FromArgb(25, 76, 217, 100))
-                            : new SolidColorBrush(Color.FromArgb(0, 255, 255, 255));
+                            ? DefaultAudioDeviceBrush
+                            : Brushes.Transparent;
                         row.MouseLeftButtonDown += (_, e) =>
                         {
                             e.Handled = true;

@@ -247,7 +247,7 @@ public class ControlCenterTests
         Assert.Contains("x:Name=\"DefaultLandscapeModeButton\"", xaml);
         Assert.Contains("x:Name=\"WhiteThemeButton\" Tag=\"TransparentWhite\"", xaml);
         Assert.Contains("x:Name=\"WhiteThemeCheckBadge\"", xaml);
-        Assert.Contains("ControlCenter-DefaultLandscape.png", code);
+        Assert.Contains("ControlCenter-DefaultLandscape.jpg", code);
         Assert.Contains("FeatureSearchCatalog", code);
         Assert.Contains("PageScrollViewer_ScrollChanged", code);
     }

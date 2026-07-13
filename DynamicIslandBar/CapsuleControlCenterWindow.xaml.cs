@@ -44,7 +44,7 @@ public partial class CapsuleControlCenterWindow : Window
     }
 
     private static readonly Uri DefaultLandscapeUri = new(
-        "pack://application:,,,/DynamicIslandBar;component/Assets/ControlCenter-DefaultLandscape.png",
+        "pack://application:,,,/DynamicIslandBar;component/Assets/ControlCenter-DefaultLandscape.jpg",
         UriKind.Absolute);
 
     private static ImageSource? _defaultLandscapeSource;

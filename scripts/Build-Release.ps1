@@ -13,13 +13,13 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "DynamicIslandBar\DynamicIslandBar.csproj"
 $testProjectPath = Join-Path $repoRoot "DynamicIslandBar.Tests\DynamicIslandBar.Tests.csproj"
 $releaseRoot = Join-Path $repoRoot "artifacts\release"
-$releaseName = "DynamicIslandBar-v$Version-$Runtime"
+$dependencyLabel = if ($SelfContained) { "self-contained" } else { "framework-dependent" }
+$releaseName = "DynamicIslandBar-v$Version-$Runtime-$dependencyLabel"
 $releaseDir = Join-Path $releaseRoot $releaseName
 $publishDir = Join-Path $releaseDir "publish"
 $packageDir = Join-Path $releaseDir "packages"
 $installerDir = Join-Path $releaseDir "installer"
 $installerScript = Join-Path $repoRoot "release\installer\DynamicIslandBar.iss"
-$dependencyLabel = if ($SelfContained) { "self-contained" } else { "framework-dependent" }
 
 function Write-Step {
     param([string]$Message)
@@ -44,9 +44,19 @@ New-Item -ItemType Directory -Force -Path $publishDir, $packageDir, $installerDi
 
 $running = Get-Process DynamicIslandBar -ErrorAction SilentlyContinue
 if ($running) {
+    $runningPaths = $running.Path | Where-Object { $_ } | Select-Object -Unique
     Write-Step "Stopping running DynamicIslandBar processes"
     $running | Stop-Process -Force
     Start-Sleep -Milliseconds 500
+    foreach ($runningPath in $runningPaths) {
+        if (Test-Path -LiteralPath $runningPath) {
+            Start-Process `
+                -FilePath $runningPath `
+                -ArgumentList "--restore-taskbar" `
+                -WindowStyle Hidden `
+                -Wait
+        }
+    }
 }
 
 if (-not $SkipTests) {
@@ -63,16 +73,18 @@ $publishArgs = @(
     "--self-contained", $SelfContained.ToString().ToLowerInvariant(),
     "-o", $publishDir,
     "-p:PublishSingleFile=true",
-    "-p:EnableCompressionInSingleFile=true",
     "-p:IncludeNativeLibrariesForSelfExtract=true",
     "-p:DebugType=none",
     "-p:DebugSymbols=false",
     "-p:Version=$Version"
 )
+if ($SelfContained) {
+    $publishArgs += "-p:EnableCompressionInSingleFile=true"
+}
 Invoke-DotNet $publishArgs
 
 Write-Step "Creating portable package"
-$zipPath = Join-Path $packageDir "$releaseName-$dependencyLabel.zip"
+$zipPath = Join-Path $packageDir "$releaseName.zip"
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
 
 $iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
@@ -99,10 +111,20 @@ $manifest = [ordered]@{
     version = $Version
     runtime = $Runtime
     dependency = $dependencyLabel
+    requiresDotNetDesktopRuntime = -not $SelfContained
+    dotNetDesktopRuntime = if ($SelfContained) { $null } else { "Microsoft Windows Desktop Runtime 8.x (x64)" }
     createdAt = (Get-Date).ToString("s")
     publishDir = $publishDir
     portableZip = $zipPath
+    portableZipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
     installer = $installerPath
+    installerSha256 = if ($installerPath) {
+        (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash
+    } else {
+        $null
+    }
+    executableSha256 = (Get-FileHash -LiteralPath (Join-Path $publishDir "DynamicIslandBar.exe") -Algorithm SHA256).Hash
+    signatureStatus = (Get-AuthenticodeSignature -LiteralPath (Join-Path $publishDir "DynamicIslandBar.exe")).Status.ToString()
 }
 $manifestPath = Join-Path $releaseDir "release-manifest.json"
 $manifest | ConvertTo-Json -Depth 4 | Set-Content -Path $manifestPath -Encoding UTF8
