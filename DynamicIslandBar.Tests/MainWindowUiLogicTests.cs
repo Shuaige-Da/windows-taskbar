@@ -17,6 +17,8 @@ public class MainWindowUiLogicTests
         Assert.Contains("RotateTransform.AngleProperty", code);
         Assert.Contains("iconVisual.RenderTransform = transforms;", code);
         Assert.Contains("iconVisual.Effect = shadow;", code);
+        Assert.Contains("Background = Brushes.Transparent,", code);
+        Assert.DoesNotContain("border.Background = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255));\n                Panel.SetZIndex(border, 12);", code);
         Assert.Contains("var targetScale = hovering ?", code);
         Assert.Contains("ClipToBounds = false", code);
     }
@@ -31,11 +33,45 @@ public class MainWindowUiLogicTests
         Assert.Contains("x:Key=\"CapsuleEnergySliderStyle\"", xaml);
         Assert.Contains("x:Key=\"CapsuleToggleButtonStyle\"", xaml);
         Assert.Contains("x:Name=\"SystemMoreButton\"", xaml);
+        Assert.Contains("x:Name=\"SystemMoreChevronRotation\"", xaml);
         Assert.Contains("x:Name=\"SystemMorePopup\"", xaml);
-        Assert.Contains("BluetoothSettingsButton_Click", code);
-        Assert.Contains("MobileHotspotSettingsButton_Click", code);
+        Assert.Contains("x:Key=\"CompactSystemToggleStyle\"", xaml);
+        Assert.Contains("x:Name=\"BluetoothToggle\"", xaml);
+        Assert.Contains("x:Name=\"MobileHotspotToggle\"", xaml);
+        Assert.Contains("SystemFeatureToggle_Click", code);
+        Assert.Contains("RefreshSystemMorePanel", code);
         Assert.Contains("OverflowAppsSearchButton_Click", code);
         Assert.Contains("Color.FromRgb(0x34, 0xC7, 0x59)", code);
+        Assert.Contains("WifiService.ConnectAsync", code);
+        Assert.Contains("SystemInfoService.OpenAvailableNetworks", code);
+    }
+
+    [Fact]
+    public void CapsuleContextMenu_UsesTransparentThemeAwareGlassAndEnergySliders()
+    {
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("x:Key=\"CapsuleMenuBorderBrush\"", xaml);
+        Assert.Contains("x:Key=\"CapsuleMenuAccentBrush\"", xaml);
+        Assert.Contains("x:Key=\"CapsuleEnergyFillBrush\"", xaml);
+        Assert.Contains("<Setter TargetName=\"ItemBorder\" Property=\"Background\" Value=\"Transparent\"/>", xaml);
+        Assert.DoesNotContain("Background = new SolidColorBrush(Color.FromRgb(30, 30, 30))", code);
+        Assert.Contains("ApplyCapsuleMenuTheme();", code);
+        Assert.Contains("slider.Style = (Style)FindResource(\"CapsuleEnergySliderStyle\");", code);
+        Assert.Contains("CapsuleConfirmationDialog.ShowConfirmation", code);
+    }
+
+    [Theory]
+    [InlineData(PopupFlowDirection.Down, 0d)]
+    [InlineData(PopupFlowDirection.Up, 180d)]
+    [InlineData(PopupFlowDirection.Left, 90d)]
+    [InlineData(PopupFlowDirection.Right, -90d)]
+    public void SystemMoreChevron_PointsTowardPopupDirection(
+        PopupFlowDirection direction,
+        double expectedAngle)
+    {
+        Assert.Equal(expectedAngle, SystemMoreChevronPolicy.ResolveAngle(direction));
     }
 
     [Fact]

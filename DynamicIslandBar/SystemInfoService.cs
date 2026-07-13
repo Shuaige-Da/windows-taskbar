@@ -356,6 +356,12 @@ namespace DynamicIslandBar
             catch { }
         }
 
+        public static void OpenAvailableNetworks()
+        {
+            try { Process.Start(new ProcessStartInfo("ms-availablenetworks:") { UseShellExecute = true }); }
+            catch { OpenWifiSettings(); }
+        }
+
         public static void OpenBluetoothSettings()
         {
             try { Process.Start(new ProcessStartInfo("ms-settings:bluetooth") { UseShellExecute = true }); }

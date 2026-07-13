@@ -76,6 +76,11 @@ namespace DynamicIslandBar
         {
             var merged = new Dictionary<string, WifiNetwork>(StringComparer.OrdinalIgnoreCase);
 
+            var saved = savedProfiles
+                .Where(profile => !string.IsNullOrWhiteSpace(profile))
+                .Select(profile => profile.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var network in scannedNetworks)
             {
                 if (string.IsNullOrWhiteSpace(network.Ssid))
@@ -88,11 +93,12 @@ namespace DynamicIslandBar
                     Ssid = network.Ssid.Trim(),
                     SignalStrength = string.IsNullOrWhiteSpace(network.SignalStrength) ? "可用" : network.SignalStrength,
                     IsSecured = network.IsSecured,
-                    IsConnected = string.Equals(network.Ssid, currentSsid, StringComparison.OrdinalIgnoreCase)
+                    IsConnected = string.Equals(network.Ssid, currentSsid, StringComparison.OrdinalIgnoreCase),
+                    HasSavedProfile = saved.Contains(network.Ssid)
                 };
             }
 
-            foreach (var profile in savedProfiles)
+            foreach (var profile in saved)
             {
                 if (string.IsNullOrWhiteSpace(profile) || merged.ContainsKey(profile))
                 {
@@ -104,7 +110,8 @@ namespace DynamicIslandBar
                     Ssid = profile.Trim(),
                     SignalStrength = "已保存",
                     IsSecured = true,
-                    IsConnected = string.Equals(profile, currentSsid, StringComparison.OrdinalIgnoreCase)
+                    IsConnected = string.Equals(profile, currentSsid, StringComparison.OrdinalIgnoreCase),
+                    HasSavedProfile = true
                 };
             }
 
@@ -115,7 +122,8 @@ namespace DynamicIslandBar
                     Ssid = currentSsid,
                     SignalStrength = "已连接",
                     IsSecured = true,
-                    IsConnected = true
+                    IsConnected = true,
+                    HasSavedProfile = saved.Contains(currentSsid)
                 };
             }
 

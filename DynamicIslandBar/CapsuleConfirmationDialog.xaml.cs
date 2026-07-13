@@ -37,27 +37,24 @@ public partial class CapsuleConfirmationDialog : Window
     private void ApplyTheme(CapsuleThemePreset themePreset)
     {
         var isWhite = themePreset == CapsuleThemePreset.TransparentWhite;
-        var foreground = ColorFrom(isWhite ? "#FF243B58" : "#FFF4FAFF");
-        var muted = ColorFrom(isWhite ? "#FF617895" : "#FFC5D8EA");
-        var accent = ColorFrom(isWhite ? "#FF4D8CFF" : "#FF46E0FF");
+        var foreground = ColorFrom("#FFF4FAFF");
+        var muted = ColorFrom("#FFC5D8EA");
+        var accent = ColorFrom(isWhite ? "#FFFFFFFF" : "#FF46E0FF");
 
-        DialogSurface.Background = new LinearGradientBrush(
-            ColorFrom(isWhite ? "#E8F7FBFF" : "#E5182634"),
-            ColorFrom(isWhite ? "#C8E8F1FA" : "#E50A1422"),
-            45);
+        DialogSurface.Background = Brushes.Transparent;
         DialogSurface.BorderBrush = new SolidColorBrush(
             ColorFrom(isWhite ? "#EFFFFFFF" : "#B846E0FF"));
         Foreground = new SolidColorBrush(foreground);
         DialogMessageText.Foreground = new SolidColorBrush(muted);
         CloseButton.Foreground = new SolidColorBrush(muted);
 
-        DialogIconSurface.Background = new SolidColorBrush(Color.FromArgb(30, accent.R, accent.G, accent.B));
+        DialogIconSurface.Background = Brushes.Transparent;
         DialogIconSurface.BorderBrush = new SolidColorBrush(Color.FromArgb(150, accent.R, accent.G, accent.B));
         DialogIconGlyph.Foreground = new SolidColorBrush(accent);
 
         StyleButton(CancelButton, foreground, Color.FromArgb(18, 255, 255, 255), Color.FromArgb(95, 255, 255, 255));
         StyleButton(ConfirmButton, Colors.White, ColorFrom("#FFE5667C"), ColorFrom("#FFFFB2BF"));
-        DialogShadow.Color = isWhite ? ColorFrom("#700C2948") : Colors.Black;
+        DialogShadow.Color = Colors.Black;
     }
 
     private static void StyleButton(

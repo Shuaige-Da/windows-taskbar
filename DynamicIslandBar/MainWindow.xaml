@@ -42,26 +42,38 @@
             <GradientStop Color="#F00E1015" Offset="1"/>
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="CapsuleMenuGlassBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#F01A2732" Offset="0"/>
-            <GradientStop Color="#E8121820" Offset="0.58"/>
-            <GradientStop Color="#F0080B10" Offset="1"/>
+            <GradientStop Color="#08FFFFFF" Offset="0"/>
+            <GradientStop Color="#00000000" Offset="0.58"/>
+            <GradientStop Color="#06000000" Offset="1"/>
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="CapsuleMenuAccentBrush" Color="#46E0FF"/>
+        <LinearGradientBrush x:Key="CapsuleMenuBorderBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#E8FFFFFF" Offset="0"/>
+            <GradientStop Color="#58FFFFFF" Offset="0.42"/>
+            <GradientStop Color="#C846E0FF" Offset="0.72"/>
+            <GradientStop Color="#E8FFFFFF" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CapsuleEnergyFillBrush" StartPoint="0,0.5" EndPoint="1,0.5">
+            <GradientStop Color="#FF4D6BFF" Offset="0"/>
+            <GradientStop Color="#FF36D8F5" Offset="0.52"/>
+            <GradientStop Color="#FF34C759" Offset="1"/>
         </LinearGradientBrush>
         <Style x:Key="CapsuleContextMenuStyle" TargetType="{x:Type ContextMenu}">
             <Setter Property="Foreground" Value="#F2FFFFFF"/>
             <Setter Property="Background" Value="{StaticResource CapsuleMenuGlassBrush}"/>
-            <Setter Property="BorderBrush" Value="#6646E0FF"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="4"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CapsuleMenuBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1.2"/>
+            <Setter Property="Padding" Value="6"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ContextMenu}">
-                        <Border CornerRadius="12"
+                        <Border CornerRadius="18"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 Padding="{TemplateBinding Padding}">
                             <Border.Effect>
-                                <DropShadowEffect BlurRadius="22" ShadowDepth="7" Opacity="0.36" Color="Black"/>
+                                <DropShadowEffect BlurRadius="26" ShadowDepth="7" Opacity="0.42" Color="Black"/>
                             </Border.Effect>
                             <StackPanel IsItemsHost="True"/>
                         </Border>
@@ -72,15 +84,18 @@
         <Style x:Key="CapsuleMenuItemStyle" TargetType="{x:Type MenuItem}">
             <Setter Property="Foreground" Value="#F2FFFFFF"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CapsuleMenuBorderBrush}"/>
+            <Setter Property="Padding" Value="13,8"/>
             <Setter Property="MinWidth" Value="150"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type MenuItem}">
                         <Grid>
                             <Border x:Name="ItemBorder"
-                                    CornerRadius="8"
-                                    Background="{TemplateBinding Background}"/>
+                                    CornerRadius="15"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="1.2"/>
                             <Grid Margin="{TemplateBinding Padding}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="22"/>
@@ -90,7 +105,7 @@
                                 <TextBlock Grid.Column="0"
                                            Text="✓"
                                            Visibility="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVisibilityConverter}}"
-                                           Foreground="#4CD964"
+                                           Foreground="{StaticResource CapsuleMenuAccentBrush}"
                                            VerticalAlignment="Center"/>
                                 <ContentPresenter Grid.Column="1"
                                                   ContentSource="Header"
@@ -114,11 +129,11 @@
                                    PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
                                    Placement="Right"
                                    PopupAnimation="Fade">
-                                <Border CornerRadius="12"
-                                        Background="{StaticResource CapsuleMenuGlassBrush}"
-                                        BorderBrush="#6646E0FF"
-                                        BorderThickness="1"
-                                        Padding="4">
+                                 <Border CornerRadius="18"
+                                         Background="{StaticResource CapsuleMenuGlassBrush}"
+                                         BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
+                                         BorderThickness="1.2"
+                                         Padding="6">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="22" ShadowDepth="7" Opacity="0.36" Color="Black"/>
                                     </Border.Effect>
@@ -128,7 +143,9 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#2646E0FF"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="Transparent"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource CapsuleMenuBorderBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource CapsuleMenuAccentBrush}"/>
                             </Trigger>
                             <Trigger Property="HasItems" Value="True">
                                 <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible"/>
@@ -300,6 +317,37 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="CompactSystemToggleStyle" TargetType="{x:Type CheckBox}">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type CheckBox}">
+                        <Border x:Name="Track" Width="40" Height="22" CornerRadius="11"
+                                Background="#52FFFFFF" BorderBrush="#58FFFFFF" BorderThickness="1">
+                            <Ellipse x:Name="Thumb" Width="18" Height="18" Margin="1"
+                                     HorizontalAlignment="Left" Fill="White">
+                                <Ellipse.Effect>
+                                    <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0.28"/>
+                                </Ellipse.Effect>
+                            </Ellipse>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background" Value="#FF34C759"/>
+                                <Setter TargetName="Track" Property="BorderBrush" Value="#FF34C759"/>
+                                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.38"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="CapsuleSearchTextBoxStyle" TargetType="{x:Type TextBox}">
             <Setter Property="Foreground" Value="#F4FAFF"/>
             <Setter Property="CaretBrush" Value="#4CD964"/>
@@ -340,15 +388,8 @@
                                     <RepeatButton Command="{x:Static Slider.DecreaseLarge}" IsTabStop="False">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Height="8" Margin="-1,0,-10,0" CornerRadius="4" VerticalAlignment="Center">
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                                                            <GradientStop Color="#FF4D6BFF" Offset="0"/>
-                                                            <GradientStop Color="#FF36D8F5" Offset="0.52"/>
-                                                            <GradientStop Color="#FF34C759" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                </Border>
+                                                <Border Height="8" Margin="-1,0,-10,0" CornerRadius="4" VerticalAlignment="Center"
+                                                        Background="{StaticResource CapsuleEnergyFillBrush}"/>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -680,9 +721,14 @@
                             MouseEnter="SystemMoreButton_MouseEnter"
                             MouseLeave="SystemMoreButton_MouseLeave"
                             ToolTip="更多系统功能">
-                        <Path Fill="#D8FFFFFF" Stretch="Uniform" Width="10" Height="6"
+                        <Path x:Name="SystemMoreChevron" Fill="#D8FFFFFF" Stretch="Uniform" Width="10" Height="6"
                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                              Data="M2,3 L10,11 L18,3 Z"/>
+                              RenderTransformOrigin="0.5,0.5"
+                              Data="M2,3 L10,11 L18,3 Z">
+                            <Path.RenderTransform>
+                                <RotateTransform x:Name="SystemMoreChevronRotation" />
+                            </Path.RenderTransform>
+                        </Path>
                     </Border>
 
                     <!-- 分割线 -->
@@ -1315,15 +1361,16 @@
                             <TextBlock Text="WLAN" Foreground="White" FontSize="15"
                                        FontWeight="SemiBold" VerticalAlignment="Center"/>
                             <TextBlock x:Name="WifiStatusText" Text="已连接"
-                                       Foreground="#80FFFFFF" FontSize="11"
+                                       Foreground="#FF34C759" FontSize="11" FontWeight="SemiBold"
                                        VerticalAlignment="Center" Margin="8,0,0,0"/>
                             <TextBlock x:Name="WifiSystemAccessHint" Text=""
                                        Foreground="#E3B341" FontSize="11"
                                        VerticalAlignment="Center" Margin="8,0,0,0"
                                        Visibility="Collapsed"/>
-                            <Button x:Name="WifiRefreshBtn" Content="↻" DockPanel.Dock="Right"
-                                    Foreground="#80FFFFFF" Background="Transparent" BorderThickness="0"
-                                    FontSize="16" Cursor="Hand" Padding="4,0"
+                            <Button x:Name="WifiRefreshBtn" Content="&#xE72C;" DockPanel.Dock="Right"
+                                    Style="{StaticResource CenterCardButtonStyle}"
+                                    Foreground="White" Background="#10FFFFFF" BorderThickness="1"
+                                    FontFamily="Segoe Fluent Icons" FontSize="13" Width="30" Height="26" Padding="0"
                                     Click="WifiRefresh_Click"/>
                         </DockPanel>
                         <!-- Current network -->
@@ -1333,8 +1380,9 @@
                                 <TextBlock x:Name="WifiCurrentSsid" Text="" Foreground="White"
                                            FontSize="13" VerticalAlignment="Center"/>
                                 <Button x:Name="WifiDisconnectBtn" Content="断开" DockPanel.Dock="Right"
-                                        Foreground="#80FFFFFF" Background="#30FFFFFF" BorderThickness="0"
-                                        FontSize="11" Cursor="Hand" Padding="8,4"
+                                        Style="{StaticResource CenterCardButtonStyle}"
+                                        Foreground="#FFFF8294" Background="Transparent" BorderBrush="#72FF8294"
+                                        FontSize="11" Padding="12,5"
                                         Click="WifiDisconnect_Click"/>
                             </DockPanel>
                         </Border>
@@ -1431,31 +1479,32 @@
                     <StackPanel>
                         <TextBlock Text="更多系统功能" Foreground="White" FontSize="15" FontWeight="SemiBold" Margin="2,0,0,12"/>
                         <UniformGrid Columns="2" Rows="2">
-                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="BluetoothSettingsButton_Click">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE702;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
-                                    <TextBlock Text="蓝牙" Margin="8,0,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="MobileHotspotSettingsButton_Click">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE701;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
-                                    <TextBlock Text="个人热点" Margin="8,0,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="NetworkSettingsButton_Click">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE968;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
-                                    <TextBlock Text="网络" Margin="8,0,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource CenterCardButtonStyle}" Margin="3" Padding="12,10" Click="SoundSettingsButton_Click">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons" FontSize="16"/>
-                                    <TextBlock Text="声音" Margin="8,0,0,0"/>
-                                </StackPanel>
-                            </Button>
+                            <Border CornerRadius="15" Margin="3" Padding="10,8" Background="#10FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1">
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE702;" FontFamily="Segoe Fluent Icons" FontSize="16"/><TextBlock Text="蓝牙" Margin="7,0,0,0"/></StackPanel>
+                                    <CheckBox x:Name="BluetoothToggle" Grid.Column="1" Tag="Bluetooth" Style="{StaticResource CompactSystemToggleStyle}" Click="SystemFeatureToggle_Click"/>
+                                </Grid>
+                            </Border>
+                            <Border CornerRadius="15" Margin="3" Padding="10,8" Background="#10FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1">
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE701;" FontFamily="Segoe Fluent Icons" FontSize="16"/><TextBlock Text="个人热点" Margin="7,0,0,0"/></StackPanel>
+                                    <CheckBox x:Name="MobileHotspotToggle" Grid.Column="1" Tag="MobileHotspot" Style="{StaticResource CompactSystemToggleStyle}" Click="SystemFeatureToggle_Click"/>
+                                </Grid>
+                            </Border>
+                            <Border CornerRadius="15" Margin="3" Padding="10,8" Background="#10FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1">
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE968;" FontFamily="Segoe Fluent Icons" FontSize="16"/><TextBlock Text="Wi-Fi" Margin="7,0,0,0"/></StackPanel>
+                                    <CheckBox x:Name="WifiSystemToggle" Grid.Column="1" Tag="Wifi" Style="{StaticResource CompactSystemToggleStyle}" Click="SystemFeatureToggle_Click"/>
+                                </Grid>
+                            </Border>
+                            <Border CornerRadius="15" Margin="3" Padding="10,8" Background="#10FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1">
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons" FontSize="16"/><TextBlock Text="声音" Margin="7,0,0,0"/></StackPanel>
+                                    <CheckBox x:Name="SoundSystemToggle" Grid.Column="1" Tag="Sound" Style="{StaticResource CompactSystemToggleStyle}" Click="SystemFeatureToggle_Click"/>
+                                </Grid>
+                            </Border>
                         </UniformGrid>
+                        <TextBlock x:Name="SystemFeatureStatusText" Foreground="#B8FFFFFF" FontSize="10.5" Margin="4,8,4,0" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
             </Popup>

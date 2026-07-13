@@ -23,6 +23,8 @@ public partial class CapsuleControlCenterWindow : Window
         PresentationControlKind Kind);
 
     private sealed record ControlCenterThemeColors(
+        Color PrimaryText,
+        Color InactiveText,
         Color Accent,
         Color Muted,
         Color SearchSurface,
@@ -224,8 +226,8 @@ public partial class CapsuleControlCenterWindow : Window
                 : Brushes.Transparent;
             button.BorderThickness = selected ? new Thickness(1.25) : new Thickness(0);
             button.Foreground = selected
-                ? new SolidColorBrush(Color.FromRgb(0x2D, 0x72, 0xC7))
-                : new SolidColorBrush(Color.FromRgb(0x36, 0x53, 0x6F));
+                ? (Brush)FindResource("AccentBrush")
+                : (Brush)FindResource("InactiveTextBrush");
         }
 
         BuildTopSectionNavigation(pageKey);
@@ -362,9 +364,9 @@ public partial class CapsuleControlCenterWindow : Window
                 ? (Brush)FindResource("SelectedGlassBorderBrush")
                 : Brushes.Transparent;
             button.BorderThickness = selected ? new Thickness(1.25) : new Thickness(0);
-            button.Foreground = new SolidColorBrush(selected
-                ? Color.FromRgb(0x2D, 0x72, 0xC7)
-                : Color.FromRgb(0x31, 0x4C, 0x68));
+            button.Foreground = selected
+                ? (Brush)FindResource("AccentBrush")
+                : (Brush)FindResource("InactiveTextBrush");
         }
     }
 
@@ -499,7 +501,7 @@ public partial class CapsuleControlCenterWindow : Window
             StartupStatusText.Text = startupEnabled ? "已启用" : "未启用";
             StartupStatusText.Foreground = startupEnabled
                 ? new SolidColorBrush(Color.FromRgb(0x72, 0xF4, 0xA4))
-                : new SolidColorBrush(Color.FromRgb(0x91, 0xA1, 0xB7));
+                : (Brush)FindResource("MutedTextBrush");
             StartupDisplayModeComboBox.SelectedIndex = config.StartupDisplayMode == StartupDisplayMode.CapsuleOnly
                 ? 1
                 : 0;
@@ -725,10 +727,10 @@ public partial class CapsuleControlCenterWindow : Window
                 _settings.Config.ThemePreset.ToString(),
                 StringComparison.Ordinal);
             card.Button.BorderBrush = selected
-                ? new SolidColorBrush(Color.FromRgb(0x4D, 0x8C, 0xFF))
+                ? (Brush)FindResource("AccentBrush")
                 : (Brush)FindResource("CardBorderBrush");
             card.Button.BorderThickness = new Thickness(selected ? 2 : 1);
-            card.Badge.Background = new SolidColorBrush(Color.FromRgb(0x4D, 0x8C, 0xFF));
+            card.Badge.Background = (Brush)FindResource("AccentBrush");
             card.Badge.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
         }
     }
@@ -883,9 +885,9 @@ public partial class CapsuleControlCenterWindow : Window
                 ? (Brush)FindResource("SelectedGlassBorderBrush")
                 : Brushes.Transparent;
             button.BorderThickness = selected ? new Thickness(1.25) : new Thickness(0);
-            button.Foreground = new SolidColorBrush(selected
-                ? Color.FromRgb(0x2D, 0x72, 0xC7)
-                : Color.FromRgb(0x36, 0x53, 0x6F));
+            button.Foreground = selected
+                ? (Brush)FindResource("AccentBrush")
+                : (Brush)FindResource("InactiveTextBrush");
         }
     }
 
@@ -894,28 +896,83 @@ public partial class CapsuleControlCenterWindow : Window
         var colors = _settings.Config.ThemePreset switch
         {
             CapsuleThemePreset.TransparentWhite => new ControlCenterThemeColors(
-                Color.FromRgb(0xE8, 0xF4, 0xFF),
-                Color.FromRgb(0x8E, 0xA3, 0xB8),
-                Color.FromArgb(0xD8, 0xF4, 0xFA, 0xFF),
-                Color.FromRgb(0x24, 0x3B, 0x58),
-                Color.FromRgb(0x61, 0x78, 0x95)),
+                Color.FromRgb(0xF4, 0xFA, 0xFF),
+                Color.FromArgb(0xD8, 0xFF, 0xFF, 0xFF),
+                Colors.White,
+                Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF),
+                Colors.Transparent,
+                Colors.White,
+                Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF)),
             _ => new ControlCenterThemeColors(
+                Color.FromRgb(0x24, 0x3B, 0x58),
+                Color.FromRgb(0x36, 0x53, 0x6F),
                 Color.FromRgb(0x4D, 0x8C, 0xFF),
                 Color.FromRgb(0x61, 0x78, 0x95),
-                Color.FromArgb(0xD8, 0x16, 0x24, 0x32),
+                Colors.Transparent,
                 Color.FromRgb(0xF4, 0xFA, 0xFF),
                 Color.FromRgb(0xA8, 0xC5, 0xD8))
         };
 
+        SetBrushColor("PrimaryTextBrush", colors.PrimaryText);
+        SetBrushColor("InactiveTextBrush", colors.InactiveText);
         SetBrushColor("AccentBrush", colors.Accent);
         SetBrushColor("MutedTextBrush", colors.Muted);
         SetBrushColor("FeatureSearchSurfaceBrush", colors.SearchSurface);
         SetBrushColor("FeatureSearchForegroundBrush", colors.SearchForeground);
         SetBrushColor("FeatureSearchMutedBrush", colors.SearchMuted);
+        SetBrushColor("DividerBrush", _settings.Config.ThemePreset == CapsuleThemePreset.TransparentWhite
+            ? Color.FromArgb(0x5A, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0x5A, 0x29, 0x40, 0x56));
+        Foreground = (Brush)FindResource("PrimaryTextBrush");
+        ApplyThemeGradientColors(_settings.Config.ThemePreset == CapsuleThemePreset.TransparentWhite);
+    }
+
+    private void ApplyThemeGradientColors(bool isWhiteTheme)
+    {
+        SetGradientStopColor("SelectedGlassSurfaceBrush", 2, isWhiteTheme
+            ? Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0x18, 0x2F, 0x80, 0xD8));
+        SetGradientStopColor("SelectedGlassBorderBrush", 2, isWhiteTheme
+            ? Colors.White
+            : Color.FromArgb(0xD0, 0x47, 0x8F, 0xFF));
+        SetGradientStopColor("GlassPillBorderBrush", 2, isWhiteTheme
+            ? Color.FromArgb(0xE8, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0xB0, 0x5B, 0x9C, 0xFF));
+
+        var energyColors = isWhiteTheme
+            ? new[] { Colors.White, Color.FromRgb(0xE8, 0xF4, 0xFF), Colors.White }
+            : new[]
+            {
+                Color.FromRgb(0x52, 0x6D, 0xFF),
+                Color.FromRgb(0x33, 0xC7, 0xF4),
+                Color.FromRgb(0x58, 0xD7, 0x8F)
+            };
+        for (var index = 0; index < energyColors.Length; index++)
+        {
+            SetGradientStopColor("EnergyFillBrush", index, energyColors[index]);
+        }
+    }
+
+    private void SetGradientStopColor(string resourceKey, int stopIndex, Color color)
+    {
+        if (Resources[resourceKey] is LinearGradientBrush brush
+            && !brush.IsFrozen
+            && stopIndex >= 0
+            && stopIndex < brush.GradientStops.Count)
+        {
+            brush.GradientStops[stopIndex].Color = color;
+        }
     }
 
     private void SetBrushColor(string resourceKey, Color color)
     {
+        var colorResourceKey = resourceKey + "Color";
+        if (Resources.Contains(colorResourceKey))
+        {
+            Resources[colorResourceKey] = color;
+            return;
+        }
+
         if (Resources[resourceKey] is SolidColorBrush brush && !brush.IsFrozen)
         {
             brush.Color = color;
@@ -1172,7 +1229,7 @@ public partial class CapsuleControlCenterWindow : Window
         }
     }
 
-    private static void AddPresentationHeader(
+    private void AddPresentationHeader(
         Grid header,
         string text,
         int column,
@@ -1181,7 +1238,7 @@ public partial class CapsuleControlCenterWindow : Window
         var label = new TextBlock
         {
             Text = text,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x91, 0xA8, 0xBC)),
+            Foreground = (Brush)FindResource("MutedTextBrush"),
             FontSize = 11,
             HorizontalAlignment = alignment,
             VerticalAlignment = VerticalAlignment.Center
@@ -1462,7 +1519,7 @@ public partial class CapsuleControlCenterWindow : Window
             info.Children.Add(new TextBlock
             {
                 Text = FormatFileSize(attachment.FileSizeBytes),
-                Foreground = new SolidColorBrush(Color.FromRgb(0x91, 0xA1, 0xB7)),
+                Foreground = (Brush)FindResource("MutedTextBrush"),
                 FontSize = 11,
                 Margin = new Thickness(0, 4, 0, 0)
             });

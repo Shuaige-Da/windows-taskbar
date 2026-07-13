@@ -10,6 +10,15 @@ namespace DynamicIslandBar
         public string SignalStrength { get; set; } = "";
         public bool IsSecured { get; set; }
         public bool IsConnected { get; set; }
+        public bool HasSavedProfile { get; set; }
+    }
+
+    public enum WifiConnectionResult
+    {
+        Connected,
+        ProfileMissing,
+        Failed,
+        TimedOut
     }
 
     public static class WifiService
@@ -93,15 +102,29 @@ namespace DynamicIslandBar
             return GetNetworkSnapshot().Networks;
         }
 
-        public static void Connect(string ssid)
+        public static async Task<WifiConnectionResult> ConnectAsync(string ssid)
         {
-            try
+            if (!GetSavedProfiles().Contains(ssid, StringComparer.OrdinalIgnoreCase))
             {
-                RunNetsh($"wlan connect name=\"{ssid}\"");
+                return WifiConnectionResult.ProfileMissing;
             }
-            catch
+
+            var output = await Task.Run(() => RunNetsh($"wlan connect name=\"{ssid}\" ssid=\"{ssid}\""));
+            if (string.IsNullOrWhiteSpace(output))
             {
+                return WifiConnectionResult.Failed;
             }
+
+            for (var attempt = 0; attempt < 12; attempt++)
+            {
+                await Task.Delay(350);
+                if (string.Equals(GetCurrentSsid(), ssid, StringComparison.OrdinalIgnoreCase))
+                {
+                    return WifiConnectionResult.Connected;
+                }
+            }
+
+            return WifiConnectionResult.TimedOut;
         }
 
         public static void Disconnect()
@@ -113,6 +136,21 @@ namespace DynamicIslandBar
             catch
             {
             }
+        }
+
+        public static async Task<bool> DisconnectAsync()
+        {
+            await Task.Run(Disconnect);
+            for (var attempt = 0; attempt < 10; attempt++)
+            {
+                await Task.Delay(250);
+                if (string.IsNullOrWhiteSpace(GetCurrentSsid()))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string RunNetsh(string args)
@@ -147,7 +185,9 @@ namespace DynamicIslandBar
         {
             try
             {
-                var process = new ProcessStartInfo("powershell", "-NoProfile -Command \"Get-NetConnectionProfile | Select-Object -First 1 -ExpandProperty Name\"")
+                var process = new ProcessStartInfo(
+                    "powershell",
+                    "-NoProfile -Command \"Get-NetConnectionProfile | Where-Object { $_.InterfaceAlias -match 'Wi-?Fi|WLAN|无线' } | Select-Object -First 1 -ExpandProperty Name\"")
                 {
                     RedirectStandardOutput = true,
                     UseShellExecute = false,

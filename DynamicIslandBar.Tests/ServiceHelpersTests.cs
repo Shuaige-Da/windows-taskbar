@@ -90,14 +90,32 @@ public class WifiHelpersTests
             {
                 Assert.Equal("rainwave", network.Ssid);
                 Assert.True(network.IsConnected);
+                Assert.True(network.HasSavedProfile);
                 Assert.Equal("已保存", network.SignalStrength);
             },
             network =>
             {
                 Assert.Equal("ZstuWlan", network.Ssid);
                 Assert.False(network.IsConnected);
+                Assert.True(network.HasSavedProfile);
                 Assert.Equal("已保存", network.SignalStrength);
             });
+    }
+
+    [Fact]
+    public void BuildNetworkList_MarksScannedNetworksWithSavedProfiles()
+    {
+        var networks = WifiNetworkListBuilder.Build(
+            scannedNetworks:
+            [
+                new WifiNetwork { Ssid = "saved", SignalStrength = "90%", IsSecured = true },
+                new WifiNetwork { Ssid = "new", SignalStrength = "80%", IsSecured = true }
+            ],
+            savedProfiles: ["saved"],
+            currentSsid: null);
+
+        Assert.True(networks.Single(network => network.Ssid == "saved").HasSavedProfile);
+        Assert.False(networks.Single(network => network.Ssid == "new").HasSavedProfile);
     }
 
     [Fact]

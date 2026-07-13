@@ -81,6 +81,7 @@ namespace DynamicIslandBar
         private TranslateTransform? _capsuleGlowTransform;
         private bool _suppressVolumeEvent;
         private bool _windowLoaded;
+        private bool _isUpdatingSystemFeatureToggles;
         private int _wifiRefreshVersion;
         private int _volumeRefreshVersion;
         private int _runningAppsRefreshVersion;
@@ -530,6 +531,8 @@ namespace DynamicIslandBar
             ConfigurePopup(AppsPopup, _currentLayoutMetrics.PopupDirection, -142);
             ConfigurePopup(OverflowAppsPopup, _currentLayoutMetrics.PopupDirection, 0);
             ConfigurePopup(SystemMorePopup, _currentLayoutMetrics.PopupDirection, -132);
+            SystemMoreChevronRotation.Angle = SystemMoreChevronPolicy.ResolveAngle(
+                _currentLayoutMetrics.PopupDirection);
             ConfigurePopup(CenterCardAppsPopup, _currentLayoutMetrics.PopupDirection, -120);
             ClearSnapPreview();
         }
@@ -1167,6 +1170,41 @@ namespace DynamicIslandBar
             ApplyGlassPanelTheme(AppHoverOverlayBackground);
             ApplyGlassPanelTheme(CenterCardSideDetailsChrome);
             ApplyGlassPanelTheme(CenterCardVolumePanel);
+            ApplyCapsuleMenuTheme();
+        }
+
+        private void ApplyCapsuleMenuTheme()
+        {
+            var accent = (Color)ColorConverter.ConvertFromString(_currentTheme.AccentColor);
+            if (Resources["CapsuleMenuAccentBrush"] is SolidColorBrush accentBrush && !accentBrush.IsFrozen)
+            {
+                accentBrush.Color = accent;
+            }
+
+            if (Resources["CapsuleMenuBorderBrush"] is LinearGradientBrush borderBrush
+                && !borderBrush.IsFrozen
+                && borderBrush.GradientStops.Count > 2)
+            {
+                borderBrush.GradientStops[2].Color = Color.FromArgb(0xC8, accent.R, accent.G, accent.B);
+            }
+
+            if (Resources["CapsuleEnergyFillBrush"] is LinearGradientBrush energyBrush
+                && !energyBrush.IsFrozen
+                && energyBrush.GradientStops.Count >= 3)
+            {
+                var colors = _capsuleConfig.ThemePreset == CapsuleThemePreset.TransparentWhite
+                    ? new[] { Colors.White, Color.FromRgb(0xE8, 0xF4, 0xFF), Colors.White }
+                    : new[]
+                    {
+                        Color.FromRgb(0x4D, 0x6B, 0xFF),
+                        Color.FromRgb(0x36, 0xD8, 0xF5),
+                        Color.FromRgb(0x34, 0xC7, 0x59)
+                    };
+                for (var index = 0; index < colors.Length; index++)
+                {
+                    energyBrush.GradientStops[index].Color = colors[index];
+                }
+            }
         }
 
         private void ApplyCapsuleBackgroundImage()
@@ -2245,7 +2283,7 @@ namespace DynamicIslandBar
                 CornerRadius = new CornerRadius(size / 2),
                 Margin = new Thickness(2, 0, 2, 0),
                 Cursor = Cursors.Hand,
-                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                Background = Brushes.Transparent,
                 BorderBrush = glowBrush,
                 BorderThickness = new Thickness(1.25),
                 Tag = app,
@@ -2257,7 +2295,6 @@ namespace DynamicIslandBar
 
             border.MouseEnter += (_, _) =>
             {
-                border.Background = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255));
                 Panel.SetZIndex(border, 12);
                 AnimateAppIconHover(scale, lift, shadow, glowBrush, hovering: true);
                 _hoveredApp = app;
@@ -2273,7 +2310,6 @@ namespace DynamicIslandBar
             };
             border.MouseLeave += (_, _) =>
             {
-                border.Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255));
                 Panel.SetZIndex(border, 0);
                 AnimateAppIconHover(scale, lift, shadow, glowBrush, hovering: false);
                 if (ReferenceEquals(_hoveredApp, app) || _hoveredApp?.AppId == app.AppId)
@@ -4206,11 +4242,7 @@ namespace DynamicIslandBar
         private void OpenAppContextMenu(FrameworkElement host, RunningAppEntry app)
         {
             var state = AppsMenuStateBuilder.Build(app);
-            var menu = new ContextMenu
-            {
-                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
-                Foreground = Brushes.White
-            };
+            var menu = new ContextMenu { Foreground = Brushes.White };
 
             var visibilityItem = new MenuItem
             {
@@ -4303,11 +4335,7 @@ namespace DynamicIslandBar
 
         private void Capsule_RightClick(object sender, MouseButtonEventArgs e)
         {
-            var menu = new ContextMenu
-            {
-                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
-                Foreground = Brushes.White
-            };
+            var menu = new ContextMenu { Foreground = Brushes.White };
 
             var settingsMenu = new MenuItem { Header = "设置", Foreground = Brushes.White };
             var openControlCenterItem = new MenuItem { Header = "打开主页", Foreground = Brushes.White };
@@ -4400,8 +4428,16 @@ namespace DynamicIslandBar
             var exitItem = new MenuItem { Header = "退出程序", Foreground = Brushes.White };
             exitItem.Click += (_, _) =>
             {
-                TaskbarManager.Show();
-                Application.Current.Shutdown();
+                if (CapsuleConfirmationDialog.ShowConfirmation(
+                        this,
+                        _capsuleConfig.ThemePreset,
+                        "退出程序",
+                        "确定要退出胶囊程序吗？退出后，胶囊和控制中心都会关闭。",
+                        "退出程序"))
+                {
+                    TaskbarManager.Show();
+                    Application.Current.Shutdown();
+                }
             };
 
             menu.Items.Add(openControlCenterItem);
@@ -4424,6 +4460,8 @@ namespace DynamicIslandBar
         private void StyleCapsuleContextMenu(ContextMenu menu)
         {
             menu.Style = (Style)FindResource("CapsuleContextMenuStyle");
+            menu.Background = (Brush)FindResource("CapsuleMenuGlassBrush");
+            menu.BorderBrush = (Brush)FindResource("CapsuleMenuBorderBrush");
             foreach (var item in menu.Items.OfType<MenuItem>())
             {
                 StyleCapsuleMenuItem(item);
@@ -4466,6 +4504,7 @@ namespace DynamicIslandBar
                 LargeChange = 10,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            slider.Style = (Style)FindResource("CapsuleEnergySliderStyle");
             slider.ValueChanged += (_, args) =>
             {
                 var percent = (int)Math.Round(args.NewValue);
@@ -4619,7 +4658,7 @@ namespace DynamicIslandBar
         {
             ExpandCapsuleForHover();
             SetSystemIconHighlight(SystemMoreButton, true);
-            ShowHoverPopup(GetSystemMorePopupState(), () => { });
+            ShowHoverPopup(GetSystemMorePopupState(), RefreshSystemMorePanel);
         }
 
         private void SystemMoreButton_MouseLeave(object sender, MouseEventArgs e)
@@ -4632,7 +4671,7 @@ namespace DynamicIslandBar
         private void SystemMoreButton_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            ShowHoverPopup(GetSystemMorePopupState(), () => { });
+            ShowHoverPopup(GetSystemMorePopupState(), RefreshSystemMorePanel);
             CancelHoverPopupClose();
         }
 
@@ -5402,6 +5441,7 @@ namespace DynamicIslandBar
         private void RefreshWifiPanelCore()
         {
             var refreshVersion = ++_wifiRefreshVersion;
+            WifiRefreshBtn.IsEnabled = false;
             WifiNetworksList.Children.Clear();
             var currentSsid = WifiService.GetCurrentSsid();
             WifiSystemAccessHint.Visibility = Visibility.Collapsed;
@@ -5413,11 +5453,13 @@ namespace DynamicIslandBar
                 WifiCurrentNetwork.Visibility = Visibility.Visible;
                 WifiCurrentSsid.Text = currentSsid;
                 WifiStatusText.Text = "已连接";
+                WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59));
             }
             else
             {
                 WifiCurrentNetwork.Visibility = Visibility.Collapsed;
                 WifiStatusText.Text = "未连接";
+                WifiStatusText.Foreground = new SolidColorBrush(Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF));
             }
 
             WifiNetworksList.Children.Add(new TextBlock
@@ -5445,6 +5487,7 @@ namespace DynamicIslandBar
                     if (snapshot.Networks.Count == 0)
                     {
                         WifiStatusText.Text = "无可用列表";
+                        WifiRefreshBtn.IsEnabled = true;
                         WifiNetworksList.Children.Add(new TextBlock
                         {
                             Text = GetWifiEmptyStateMessage(snapshot.AccessIssue),
@@ -5470,7 +5513,9 @@ namespace DynamicIslandBar
                         var nameBlock = new TextBlock
                         {
                             Text = net.Ssid,
-                            Foreground = net.IsConnected ? new SolidColorBrush(Colors.White) : new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+                            Foreground = net.IsConnected
+                                ? new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59))
+                                : new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
                             FontSize = 13,
                             VerticalAlignment = VerticalAlignment.Center
                         };
@@ -5502,7 +5547,12 @@ namespace DynamicIslandBar
                         var capturedNet = net;
                         row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255));
                         row.MouseLeave += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255));
-                        row.MouseLeftButtonDown += (_, e) =>
+                        row.ToolTip = capturedNet.IsConnected
+                            ? "当前已连接"
+                            : capturedNet.HasSavedProfile
+                                ? "单击连接"
+                                : "单击后在 Windows 网络面板中输入密码";
+                        row.MouseLeftButtonUp += (_, e) =>
                         {
                             e.Handled = true;
                             if (!capturedNet.IsConnected)
@@ -5511,18 +5561,47 @@ namespace DynamicIslandBar
                                     AppPermission.WifiControl,
                                     "WiFi 控制权限",
                                     $"允许切换到“{capturedNet.Ssid}”并管理当前 WiFi 连接。",
-                                    () =>
-                                    {
-                                        WifiStatusText.Text = $"正在连接 {capturedNet.Ssid}";
-                                        WifiService.Connect(capturedNet.Ssid);
-                                        RefreshWifiPanelCore();
-                                    });
+                                    async () => await ConnectToWifiAsync(capturedNet));
                             }
                         };
                         WifiNetworksList.Children.Add(row);
                     }
+                    WifiRefreshBtn.IsEnabled = true;
                 });
             });
+        }
+
+        private async Task ConnectToWifiAsync(WifiNetwork network)
+        {
+            WifiStatusText.Text = $"正在连接 {network.Ssid}";
+            WifiStatusText.Foreground = new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
+            WifiNetworksList.IsEnabled = false;
+            var result = await WifiService.ConnectAsync(network.Ssid);
+            WifiNetworksList.IsEnabled = true;
+
+            switch (result)
+            {
+                case WifiConnectionResult.Connected:
+                    WifiStatusText.Text = "已连接";
+                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59));
+                    RefreshWifiPanelCore();
+                    break;
+                case WifiConnectionResult.ProfileMissing:
+                    WifiStatusText.Text = "请在系统面板输入密码";
+                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD6, 0x6B));
+                    SystemInfoService.OpenAvailableNetworks();
+                    break;
+                case WifiConnectionResult.TimedOut:
+                    WifiStatusText.Text = "连接超时，请重试";
+                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x82, 0x94));
+                    RefreshWifiPanelCore();
+                    break;
+                default:
+                    WifiStatusText.Text = "连接失败";
+                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x82, 0x94));
+                    RefreshWifiPanelCore();
+                    break;
+            }
         }
 
         private void WifiRefresh_Click(object sender, RoutedEventArgs e)
@@ -5536,9 +5615,18 @@ namespace DynamicIslandBar
                 AppPermission.WifiControl,
                 "WiFi 控制权限",
                 "允许断开当前 WiFi 连接。",
-                () =>
+                async () =>
                 {
-                    WifiService.Disconnect();
+                    WifiDisconnectBtn.IsEnabled = false;
+                    WifiStatusText.Text = "正在断开";
+                    var disconnected = await WifiService.DisconnectAsync();
+                    WifiDisconnectBtn.IsEnabled = true;
+                    if (!disconnected)
+                    {
+                        WifiStatusText.Text = "断开失败，请重试";
+                        WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x82, 0x94));
+                        return;
+                    }
                     RefreshWifiPanelCore();
                 });
         }
@@ -5790,28 +5878,70 @@ namespace DynamicIslandBar
             SystemInfoService.OpenSoundSettings();
         }
 
-        private void BluetoothSettingsButton_Click(object sender, RoutedEventArgs e)
+        private async void RefreshSystemMorePanel()
         {
-            CloseAllPanels();
-            SystemInfoService.OpenBluetoothSettings();
+            if (_isUpdatingSystemFeatureToggles)
+            {
+                return;
+            }
+
+            _isUpdatingSystemFeatureToggles = true;
+            SystemFeatureStatusText.Text = "正在读取系统状态…";
+            var entries = new[]
+            {
+                (Feature: SystemFeatureToggle.Bluetooth, Toggle: BluetoothToggle),
+                (Feature: SystemFeatureToggle.MobileHotspot, Toggle: MobileHotspotToggle),
+                (Feature: SystemFeatureToggle.Wifi, Toggle: WifiSystemToggle),
+                (Feature: SystemFeatureToggle.Sound, Toggle: SoundSystemToggle)
+            };
+            var states = await Task.WhenAll(entries.Select(entry =>
+                SystemFeatureToggleService.GetStateAsync(entry.Feature)));
+            for (var index = 0; index < entries.Length; index++)
+            {
+                entries[index].Toggle.IsChecked = states[index].IsOn;
+                entries[index].Toggle.IsEnabled = states[index].IsAvailable;
+                entries[index].Toggle.ToolTip = states[index].Message;
+            }
+
+            SystemFeatureStatusText.Text = states.Any(state => !state.IsAvailable)
+                ? "部分功能受设备或系统权限限制"
+                : "点击开关可直接切换系统状态";
+            _isUpdatingSystemFeatureToggles = false;
         }
 
-        private void MobileHotspotSettingsButton_Click(object sender, RoutedEventArgs e)
+        private async void SystemFeatureToggle_Click(object sender, RoutedEventArgs e)
         {
-            CloseAllPanels();
-            SystemInfoService.OpenMobileHotspotSettings();
-        }
+            if (_isUpdatingSystemFeatureToggles
+                || sender is not CheckBox { Tag: string featureName } toggle
+                || !Enum.TryParse<SystemFeatureToggle>(featureName, out var feature))
+            {
+                return;
+            }
 
-        private void NetworkSettingsButton_Click(object sender, RoutedEventArgs e)
-        {
-            CloseAllPanels();
-            SystemInfoService.OpenNetworkSettings();
-        }
+            _isUpdatingSystemFeatureToggles = true;
+            toggle.IsEnabled = false;
+            SystemFeatureStatusText.Text = "正在切换…";
+            var state = await SystemFeatureToggleService.SetStateAsync(feature, toggle.IsChecked == true);
+            toggle.IsChecked = state.IsOn;
+            toggle.IsEnabled = state.IsAvailable;
+            toggle.ToolTip = state.Message;
+            SystemFeatureStatusText.Text = state.Message ?? "系统状态已更新";
+            SystemFeatureStatusText.Foreground = new SolidColorBrush(state.IsAvailable
+                ? Color.FromRgb(0x72, 0xF4, 0xA4)
+                : Color.FromRgb(0xFF, 0x82, 0x94));
+            _isUpdatingSystemFeatureToggles = false;
 
-        private void SoundSettingsButton_Click(object sender, RoutedEventArgs e)
-        {
-            CloseAllPanels();
-            SystemInfoService.OpenSoundSettings();
+            if (feature == SystemFeatureToggle.Wifi)
+            {
+                if (WifiPopup.IsOpen)
+                {
+                    RefreshWifiPanelCore();
+                }
+            }
+            else if (feature == SystemFeatureToggle.Sound)
+            {
+                RefreshVolumePanelCore();
+            }
         }
 
         #endregion
