@@ -10,6 +10,7 @@
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
         Loaded="Window_Loaded"
+        PreviewKeyDown="Window_PreviewKeyDown"
         Width="560" Height="420"
         Title="DynamicIslandBar">
     <Window.Resources>
@@ -57,6 +58,11 @@
             <GradientStop Color="#FF4D6BFF" Offset="0"/>
             <GradientStop Color="#FF36D8F5" Offset="0.52"/>
             <GradientStop Color="#FF34C759" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CapsuleScrollThumbBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#D8FFFFFF" Offset="0"/>
+            <GradientStop Color="#C846E0FF" Offset="0.48"/>
+            <GradientStop Color="#58FFFFFF" Offset="1"/>
         </LinearGradientBrush>
         <Style x:Key="CapsuleContextMenuStyle" TargetType="{x:Type ContextMenu}">
             <Setter Property="Foreground" Value="#F2FFFFFF"/>
@@ -189,10 +195,11 @@
                                                 <Grid>
                                                     <Ellipse Width="14"
                                                              Height="14"
-                                                             Fill="#46E0FF"/>
+                                                             Fill="{StaticResource CapsuleMenuAccentBrush}"/>
                                                     <Ellipse Width="24"
                                                              Height="24"
-                                                             Fill="#4646E0FF"
+                                                             Fill="{StaticResource CapsuleMenuAccentBrush}"
+                                                             Opacity="0.28"
                                                              HorizontalAlignment="Center"
                                                              VerticalAlignment="Center"/>
                                                 </Grid>
@@ -231,11 +238,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToolTip">
-                        <Border CornerRadius="10" Padding="12,8"
-                                MaxWidth="260">
-                            <Border.Background>
-                                <SolidColorBrush Color="#1E1E1E" Opacity="0.95"/>
-                            </Border.Background>
+                        <Border CornerRadius="12" Padding="12,8" MaxWidth="260"
+                                Background="{StaticResource CapsuleMenuGlassBrush}"
+                                BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
+                                BorderThickness="1">
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="15" ShadowDepth="4" Opacity="0.5" Color="Black"/>
                             </Border.Effect>
@@ -270,12 +276,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#2846E0FF"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#6646E0FF"/>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="Transparent"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource CapsuleMenuAccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#3A4CD964"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#804CD964"/>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="Transparent"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource CapsuleMenuAccentBrush}"/>
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.72"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
@@ -348,11 +355,105 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <ControlTemplate x:Key="CapsuleVerticalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
+            <Grid Width="12" Background="Transparent">
+                <Border Width="5" Margin="0,3" HorizontalAlignment="Center"
+                        CornerRadius="2.5" Background="#14FFFFFF"
+                        BorderBrush="#24FFFFFF" BorderThickness="1"/>
+                <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True">
+                    <Track.DecreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0" Focusable="False"/>
+                    </Track.DecreaseRepeatButton>
+                    <Track.Thumb>
+                        <Thumb MinHeight="34" Width="10" Focusable="False">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="{x:Type Thumb}">
+                                    <Grid>
+                                        <Border x:Name="ThumbChrome" Margin="1" CornerRadius="5"
+                                                Background="{StaticResource CapsuleScrollThumbBrush}"
+                                                BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
+                                                BorderThickness="1"/>
+                                        <Border Margin="2" CornerRadius="4"
+                                                BorderBrush="#B8FFFFFF" BorderThickness="1,1,0,0"
+                                                IsHitTestVisible="False"/>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="0.82"/>
+                                        </Trigger>
+                                        <Trigger Property="IsDragging" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="1"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Track.Thumb>
+                    <Track.IncreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0" Focusable="False"/>
+                    </Track.IncreaseRepeatButton>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+        <ControlTemplate x:Key="CapsuleHorizontalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
+            <Grid Height="12" Background="Transparent">
+                <Border Height="5" Margin="3,0" VerticalAlignment="Center"
+                        CornerRadius="2.5" Background="#14FFFFFF"
+                        BorderBrush="#24FFFFFF" BorderThickness="1"/>
+                <Track x:Name="PART_Track" Orientation="Horizontal">
+                    <Track.DecreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageLeftCommand}" Opacity="0" Focusable="False"/>
+                    </Track.DecreaseRepeatButton>
+                    <Track.Thumb>
+                        <Thumb MinWidth="34" Height="10" Focusable="False">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="{x:Type Thumb}">
+                                    <Grid>
+                                        <Border x:Name="ThumbChrome" Margin="1" CornerRadius="5"
+                                                Background="{StaticResource CapsuleScrollThumbBrush}"
+                                                BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
+                                                BorderThickness="1"/>
+                                        <Border Margin="2" CornerRadius="4"
+                                                BorderBrush="#B8FFFFFF" BorderThickness="1,1,0,0"
+                                                IsHitTestVisible="False"/>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="0.82"/>
+                                        </Trigger>
+                                        <Trigger Property="IsDragging" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="1"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Track.Thumb>
+                    <Track.IncreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageRightCommand}" Opacity="0" Focusable="False"/>
+                    </Track.IncreaseRepeatButton>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+        <Style TargetType="{x:Type ScrollBar}">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template" Value="{StaticResource CapsuleVerticalScrollBarTemplate}"/>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Width" Value="Auto"/>
+                    <Setter Property="Height" Value="12"/>
+                    <Setter Property="Margin" Value="0,4,0,0"/>
+                    <Setter Property="Template" Value="{StaticResource CapsuleHorizontalScrollBarTemplate}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="CapsuleSearchTextBoxStyle" TargetType="{x:Type TextBox}">
             <Setter Property="Foreground" Value="#F4FAFF"/>
-            <Setter Property="CaretBrush" Value="#4CD964"/>
-            <Setter Property="Background" Value="#12FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#6846E0FF"/>
+            <Setter Property="CaretBrush" Value="{StaticResource CapsuleMenuAccentBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CapsuleMenuBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1.2"/>
             <Setter Property="Padding" Value="15,0,44,0"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -365,8 +466,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#D84CD964"/>
-                                <Setter TargetName="Chrome" Property="Background" Value="#20FFFFFF"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource CapsuleMenuAccentBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="Transparent"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -411,7 +512,8 @@
                                                             </RadialGradientBrush>
                                                         </Ellipse.Fill>
                                                         <Ellipse.Effect>
-                                                            <DropShadowEffect Color="#46E0FF" BlurRadius="10" ShadowDepth="1" Opacity="0.6"/>
+                                                            <DropShadowEffect Color="{Binding Color, Source={StaticResource CapsuleMenuAccentBrush}}"
+                                                                              BlurRadius="10" ShadowDepth="1" Opacity="0.6"/>
                                                         </Ellipse.Effect>
                                                     </Ellipse>
                                                     <Ellipse Width="6" Height="6" Fill="#D8FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,3,0,0"/>
@@ -1081,7 +1183,7 @@
                             Visibility="Collapsed"
                             BorderThickness="2"
                             CornerRadius="40"
-                            BorderBrush="#8046E0FF"
+                            BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                             Background="#12000000"/>
                 </Canvas>
 
@@ -1344,7 +1446,7 @@
                    Closed="Popup_Closed">
                 <Border x:Name="WifiPanel"
                         CornerRadius="16" Padding="14"
-                        BorderBrush="#6046E0FF"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                         BorderThickness="1"
                         MouseEnter="WifiPanel_MouseEnter"
                         MouseLeave="WifiPanel_MouseLeave"
@@ -1411,7 +1513,7 @@
                    Closed="Popup_Closed">
                 <Border x:Name="VolumePanel"
                         CornerRadius="16" Padding="14"
-                        BorderBrush="#6046E0FF"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                         BorderThickness="1"
                         MouseEnter="VolumePanel_MouseEnter"
                         MouseLeave="VolumePanel_MouseLeave"
@@ -1468,7 +1570,7 @@
                    AllowsTransparency="True" PopupAnimation="Fade" StaysOpen="True"
                    Closed="Popup_Closed">
                 <Border x:Name="SystemMorePanel" Width="292" Padding="14" CornerRadius="20"
-                        BorderBrush="#7046E0FF" BorderThickness="1.2"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}" BorderThickness="1.2"
                         MouseEnter="SystemMorePanel_MouseEnter" MouseLeave="SystemMorePanel_MouseLeave">
                     <Border.Background>
                         <StaticResource ResourceKey="HoverOverlayGlassBrush"/>
@@ -1522,7 +1624,7 @@
                         CornerRadius="18"
                         Padding="12,9"
                         Width="224"
-                        BorderBrush="#4046E0FF"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                         BorderThickness="1"
                         MouseEnter="CenterCardVolumePopup_MouseEnter"
                         MouseLeave="CenterCardVolumePopup_MouseLeave">
@@ -1567,7 +1669,7 @@
                    Closed="Popup_Closed">
                 <Border x:Name="AppsPanel"
                         CornerRadius="16" Padding="12"
-                        BorderBrush="#6046E0FF"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                         BorderThickness="1"
                         MouseEnter="AppsPanel_MouseEnter"
                         MouseLeave="AppsPanel_MouseLeave"
@@ -1595,7 +1697,7 @@
                    Closed="Popup_Closed">
                 <Border x:Name="OverflowAppsPanel"
                         CornerRadius="16" Padding="12"
-                        BorderBrush="#6046E0FF"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                         BorderThickness="1"
                         MouseEnter="OverflowAppsPanel_MouseEnter"
                         MouseLeave="OverflowAppsPanel_MouseLeave"
@@ -1616,7 +1718,8 @@
                             <TextBox x:Name="OverflowAppsSearchBox"
                                      Style="{StaticResource CapsuleSearchTextBoxStyle}"
                                      TextChanged="OverflowAppsSearchBox_TextChanged"
-                                     KeyDown="OverflowAppsSearchBox_KeyDown"
+                                     PreviewMouseLeftButtonDown="OverflowAppsSearchBox_PreviewMouseLeftButtonDown"
+                                     PreviewKeyDown="OverflowAppsSearchBox_PreviewKeyDown"
                                      ToolTip="输入应用名称搜索本地已安装应用"/>
                             <Button Content="&#xE721;" Style="{StaticResource CenterCardButtonStyle}"
                                     Width="30" Height="30" FontFamily="Segoe Fluent Icons" Foreground="#4CD964"
@@ -1644,7 +1747,7 @@
                    Closed="Popup_Closed">
                 <Border x:Name="CenterCardAppsPanel"
                         CornerRadius="16" Padding="12"
-                        BorderBrush="#6046E0FF"
+                        BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                         BorderThickness="1"
                         MouseEnter="CenterCardAppsPanel_MouseEnter"
                         MouseLeave="CenterCardAppsPanel_MouseLeave"
@@ -1670,7 +1773,7 @@
                     Width="380"
                     Padding="16"
                     CornerRadius="18"
-                    BorderBrush="#6046E0FF"
+                    BorderBrush="{StaticResource CapsuleMenuBorderBrush}"
                     BorderThickness="1"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Bottom"
@@ -1725,5 +1828,76 @@
 
             </Grid>
         </Grid>
+
+        <Canvas x:Name="CapsuleKeyboardFocusLayer"
+                IsHitTestVisible="False"
+                Panel.ZIndex="500">
+            <Border x:Name="CapsuleKeyboardFocusRing"
+                    Visibility="Collapsed"
+                    Background="Transparent"
+                    BorderThickness="2"
+                    CornerRadius="18">
+                <Border.BorderBrush>
+                    <LinearGradientBrush x:Name="CapsuleKeyboardFocusBrush"
+                                         StartPoint="0,0"
+                                         EndPoint="1,1"
+                                         MappingMode="RelativeToBoundingBox">
+                        <LinearGradientBrush.RelativeTransform>
+                            <RotateTransform x:Name="CapsuleKeyboardFocusRotation"
+                                             CenterX="0.5"
+                                             CenterY="0.5" />
+                        </LinearGradientBrush.RelativeTransform>
+                        <GradientStop Color="#FF4D6BFF" Offset="0" />
+                        <GradientStop Color="#FF46E0FF" Offset="0.3" />
+                        <GradientStop Color="#FFFFFFFF" Offset="0.5" />
+                        <GradientStop Color="#FF34C759" Offset="0.72" />
+                        <GradientStop Color="#FF4D6BFF" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.Effect>
+                    <DropShadowEffect Color="#FF46E0FF"
+                                      BlurRadius="14"
+                                      ShadowDepth="0"
+                                      Opacity="0.72" />
+                </Border.Effect>
+            </Border>
+        </Canvas>
+
+        <Popup x:Name="CapsulePopupKeyboardFocusPopup"
+               AllowsTransparency="True"
+               Focusable="False"
+               IsHitTestVisible="False"
+               Placement="Relative"
+               PopupAnimation="None"
+               StaysOpen="True">
+            <Border x:Name="CapsulePopupKeyboardFocusRing"
+                    IsHitTestVisible="False"
+                    Background="Transparent"
+                    BorderThickness="2"
+                    CornerRadius="18">
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0"
+                                         EndPoint="1,1"
+                                         MappingMode="RelativeToBoundingBox">
+                        <LinearGradientBrush.RelativeTransform>
+                            <RotateTransform x:Name="CapsulePopupKeyboardFocusRotation"
+                                             CenterX="0.5"
+                                             CenterY="0.5" />
+                        </LinearGradientBrush.RelativeTransform>
+                        <GradientStop Color="#FF4D6BFF" Offset="0" />
+                        <GradientStop Color="#FF46E0FF" Offset="0.3" />
+                        <GradientStop Color="#FFFFFFFF" Offset="0.5" />
+                        <GradientStop Color="#FF34C759" Offset="0.72" />
+                        <GradientStop Color="#FF4D6BFF" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.Effect>
+                    <DropShadowEffect Color="#FF46E0FF"
+                                      BlurRadius="14"
+                                      ShadowDepth="0"
+                                      Opacity="0.72" />
+                </Border.Effect>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

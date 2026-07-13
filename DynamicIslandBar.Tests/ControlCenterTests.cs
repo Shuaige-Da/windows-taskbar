@@ -17,6 +17,7 @@ public class ControlCenterTests
 
         coordinator.SetTheme(CapsuleThemePreset.TransparentWhite);
         coordinator.SetStartupDisplayMode(StartupDisplayMode.CapsuleOnly);
+        coordinator.SetKeyboardNavigationEnabled(false);
         coordinator.SetCapsuleLength(64);
         coordinator.SetPartVisibility(CapsuleVisualPart.Lyrics, false);
         coordinator.SetPartOpacity(CapsuleVisualPart.Dock, 140);
@@ -30,6 +31,7 @@ public class ControlCenterTests
 
         Assert.Equal(CapsuleThemePreset.TransparentWhite, config.ThemePreset);
         Assert.Equal(StartupDisplayMode.CapsuleOnly, config.StartupDisplayMode);
+        Assert.False(config.IsKeyboardNavigationEnabled);
         Assert.Equal(64, config.TopDockCapsuleLengthPercent);
         Assert.False(config.Presentation.Lyrics.IsVisible);
         Assert.False(config.Presentation.CenterCard.IsVisible);
@@ -41,6 +43,7 @@ public class ControlCenterTests
         Assert.Equal(ControlCenterBackgroundMode.CustomImage, config.ControlCenterBackgroundMode);
         Assert.Contains(CapsuleSettingsChangeKind.Theme, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Startup, changes);
+        Assert.Contains(CapsuleSettingsChangeKind.Input, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Layout, changes);
         Assert.Contains(CapsuleSettingsChangeKind.Presentation, changes);
         Assert.Contains(CapsuleSettingsChangeKind.ControlCenterAppearance, changes);
@@ -169,6 +172,10 @@ public class ControlCenterTests
         Assert.Contains("x:Name=\"StartupCheckBox\"", xaml);
         Assert.Contains("登录 Windows 后自动启动胶囊软件", xaml);
         Assert.Contains("x:Name=\"StartupDisplayModeComboBox\"", xaml);
+        Assert.Contains("x:Name=\"KeyboardNavigationCheckBox\"", xaml);
+        Assert.Contains("胶囊键盘导航", xaml);
+        Assert.Contains("KeyboardNavigationCheckBox_Changed", code);
+        Assert.Contains("SetKeyboardNavigationEnabled", code);
         Assert.Contains("Content=\"导出配置\"", xaml);
         Assert.Contains("Content=\"导入配置\"", xaml);
         Assert.Contains("Content=\"恢复默认\"", xaml);
@@ -354,16 +361,27 @@ public class ControlCenterTests
         Assert.Contains("e.SetObserved();", appCode);
     }
 
+    [Fact]
+    public void ControlCenter_DropDownsAndScrollBarsUseTransparentThemeAwareGlass()
+    {
+        var xaml = ReadProjectFile("DynamicIslandBar", "CapsuleControlCenterWindow.xaml");
+        var code = ReadProjectFile("DynamicIslandBar", "CapsuleControlCenterWindow.xaml.cs");
+
+        Assert.Contains("x:Key=\"ControlCenterScrollThumbBrush\"", xaml);
+        Assert.Contains("x:Key=\"ControlCenterVerticalScrollBarTemplate\"", xaml);
+        Assert.Contains("x:Key=\"ControlCenterHorizontalScrollBarTemplate\"", xaml);
+        Assert.Contains("Background=\"{StaticResource ControlCenterScrollThumbBrush}\"", xaml);
+        Assert.Contains("<Setter Property=\"Background\" Value=\"Transparent\" />", xaml);
+        Assert.Contains("<Setter Property=\"Foreground\" Value=\"{StaticResource PrimaryTextBrush}\" />", xaml);
+        Assert.DoesNotContain("Background=\"#42182634\"", xaml);
+        Assert.DoesNotContain("Background=\"#6670DFF2\"", xaml);
+        Assert.Contains("Color=\"{DynamicResource AccentBrushColor}\"", xaml);
+        Assert.Contains("SetGradientStopColor(\n            \"ControlCenterScrollThumbBrush\"", code);
+        Assert.Contains("ApplyWindowGlowTheme(isWhiteTheme);", code);
+    }
+
     private static string ReadProjectFile(params string[] pathParts)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null
-               && !File.Exists(Path.Combine(directory.FullName, "DynamicIslandBar", "MainWindow.xaml")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.NotNull(directory);
-        return File.ReadAllText(Path.Combine(new[] { directory!.FullName }.Concat(pathParts).ToArray()));
+        return RepositoryFile.Read(pathParts);
     }
 }

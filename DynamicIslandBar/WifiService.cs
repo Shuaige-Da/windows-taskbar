@@ -23,19 +23,21 @@ namespace DynamicIslandBar
 
     public static class WifiService
     {
+        private const int CommandTimeoutMilliseconds = 5000;
+        private const string CurrentWifiProfileCommand =
+            "-NoProfile -Command \"Get-NetConnectionProfile | Where-Object { $_.InterfaceAlias -match 'Wi-?Fi|WLAN|无线' } | Select-Object -First 1 -ExpandProperty Name\"";
+
+        private sealed record CommandResult(string Output, int ExitCode, bool TimedOut)
+        {
+            public bool Succeeded => !TimedOut && ExitCode == 0;
+        }
+
         public static string? GetCurrentSsid()
         {
-            try
+            var currentSsid = WifiTextParser.ParseCurrentSsid(RunNetsh("wlan show interfaces").Output);
+            if (!string.IsNullOrWhiteSpace(currentSsid))
             {
-                var output = RunNetsh("wlan show interfaces");
-                var currentSsid = WifiTextParser.ParseCurrentSsid(output);
-                if (!string.IsNullOrWhiteSpace(currentSsid))
-                {
-                    return currentSsid;
-                }
-            }
-            catch
-            {
+                return currentSsid;
             }
 
             return GetCurrentProfileName();
@@ -43,36 +45,22 @@ namespace DynamicIslandBar
 
         public static bool IsWifiEnabled()
         {
-            try
-            {
-                var output = RunNetsh("wlan show interfaces");
-                return !output.Contains("There are no interfaces", StringComparison.OrdinalIgnoreCase) &&
-                       !output.Contains("没有接口", StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                return false;
-            }
+            var result = RunNetsh("wlan show interfaces");
+            return result.Succeeded
+                && !result.Output.Contains("There are no interfaces", StringComparison.OrdinalIgnoreCase)
+                && !result.Output.Contains("没有接口", StringComparison.OrdinalIgnoreCase);
         }
 
         public static List<WifiNetwork> ScanNetworks()
         {
-            try
-            {
-                var output = RunNetsh("wlan show networks mode=bssid");
-                var currentSsid = GetCurrentSsid();
-                return ParseNetworks(output, currentSsid);
-            }
-            catch
-            {
-                return [];
-            }
+            var output = RunNetsh("wlan show networks mode=bssid").Output;
+            return ParseNetworks(output, GetCurrentSsid());
         }
 
         public static WifiNetworkSnapshot GetNetworkSnapshot()
         {
             var currentSsid = GetCurrentSsid();
-            var scanOutput = RunNetsh("wlan show networks mode=bssid");
+            var scanOutput = RunNetsh("wlan show networks mode=bssid").Output;
             var accessIssue = WifiAccessAnalyzer.DetectIssue(scanOutput);
             var scannedNetworks = ParseNetworks(scanOutput, currentSsid);
             var savedProfiles = GetSavedProfiles();
@@ -80,21 +68,14 @@ namespace DynamicIslandBar
             return new WifiNetworkSnapshot
             {
                 Networks = WifiNetworkListBuilder.Build(scannedNetworks, savedProfiles, currentSsid),
-                AccessIssue = accessIssue
+                AccessIssue = accessIssue,
+                CurrentSsid = currentSsid
             };
         }
 
         public static List<string> GetSavedProfiles()
         {
-            try
-            {
-                var output = RunNetsh("wlan show profiles");
-                return WifiTextParser.ParseSavedProfiles(output);
-            }
-            catch
-            {
-                return [];
-            }
+            return WifiTextParser.ParseSavedProfiles(RunNetsh("wlan show profiles").Output);
         }
 
         public static List<WifiNetwork> GetNetworks()
@@ -109,15 +90,16 @@ namespace DynamicIslandBar
                 return WifiConnectionResult.ProfileMissing;
             }
 
-            var output = await Task.Run(() => RunNetsh($"wlan connect name=\"{ssid}\" ssid=\"{ssid}\""));
-            if (string.IsNullOrWhiteSpace(output))
+            var result = await Task.Run(() => RunNetsh($"wlan connect name=\"{ssid}\" ssid=\"{ssid}\""))
+                .ConfigureAwait(false);
+            if (!result.Succeeded || string.IsNullOrWhiteSpace(result.Output))
             {
                 return WifiConnectionResult.Failed;
             }
 
             for (var attempt = 0; attempt < 12; attempt++)
             {
-                await Task.Delay(350);
+                await Task.Delay(350).ConfigureAwait(false);
                 if (string.Equals(GetCurrentSsid(), ssid, StringComparison.OrdinalIgnoreCase))
                 {
                     return WifiConnectionResult.Connected;
@@ -129,21 +111,15 @@ namespace DynamicIslandBar
 
         public static void Disconnect()
         {
-            try
-            {
-                RunNetsh("wlan disconnect");
-            }
-            catch
-            {
-            }
+            RunNetsh("wlan disconnect");
         }
 
         public static async Task<bool> DisconnectAsync()
         {
-            await Task.Run(Disconnect);
+            await Task.Run(Disconnect).ConfigureAwait(false);
             for (var attempt = 0; attempt < 10; attempt++)
             {
-                await Task.Delay(250);
+                await Task.Delay(250).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(GetCurrentSsid()))
                 {
                     return true;
@@ -153,62 +129,75 @@ namespace DynamicIslandBar
             return false;
         }
 
-        private static string RunNetsh(string args)
+        private static CommandResult RunNetsh(string args) => RunCommand("netsh", args);
+
+        private static CommandResult RunCommand(string fileName, string arguments)
         {
             try
             {
-                var process = new ProcessStartInfo("netsh", args)
+                var processInfo = new ProcessStartInfo(fileName, arguments)
                 {
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    StandardOutputEncoding = Encoding.UTF8
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
                 };
 
-                using var proc = Process.Start(process);
-                if (proc == null)
+                using var process = Process.Start(processInfo);
+                if (process is null)
                 {
-                    return string.Empty;
+                    return new CommandResult(string.Empty, -1, false);
                 }
 
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(5000);
-                return output;
+                var outputTask = process.StandardOutput.ReadToEndAsync();
+                var errorTask = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(CommandTimeoutMilliseconds))
+                {
+                    TryTerminateProcess(process);
+                    AppDiagnostics.Error($"CommandTimeout-{fileName}", new TimeoutException(arguments));
+                    return new CommandResult(string.Empty, -1, true);
+                }
+
+                Task.WaitAll(outputTask, errorTask);
+                var output = outputTask.Result;
+                var error = errorTask.Result;
+                if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(error))
+                {
+                    AppDiagnostics.Error(
+                        $"CommandFailed-{fileName}",
+                        new InvalidOperationException($"Exit code {process.ExitCode}: {error.Trim()}"));
+                }
+
+                return new CommandResult(output, process.ExitCode, false);
             }
-            catch
+            catch (Exception ex)
             {
-                return string.Empty;
+                AppDiagnostics.Error($"Command-{fileName}", ex);
+                return new CommandResult(string.Empty, -1, false);
+            }
+        }
+
+        private static void TryTerminateProcess(Process process)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(1000);
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("TerminateCommandProcess", ex);
             }
         }
 
         private static string? GetCurrentProfileName()
         {
-            try
-            {
-                var process = new ProcessStartInfo(
-                    "powershell",
-                    "-NoProfile -Command \"Get-NetConnectionProfile | Where-Object { $_.InterfaceAlias -match 'Wi-?Fi|WLAN|无线' } | Select-Object -First 1 -ExpandProperty Name\"")
-                {
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = Encoding.UTF8
-                };
-
-                using var proc = Process.Start(process);
-                if (proc == null)
-                {
-                    return null;
-                }
-
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(5000);
-                return WifiTextParser.ParseCurrentProfileName(output);
-            }
-            catch
-            {
-                return null;
-            }
+            var result = RunCommand("powershell", CurrentWifiProfileCommand);
+            return result.Succeeded
+                ? WifiTextParser.ParseCurrentProfileName(result.Output)
+                : null;
         }
 
         private static List<WifiNetwork> ParseNetworks(string output, string? currentSsid)

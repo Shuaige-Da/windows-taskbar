@@ -13,7 +13,8 @@ internal enum CapsuleSettingsChangeKind
     Lyrics = 16,
     Startup = 32,
     ControlCenterAppearance = 64,
-    All = Theme | Appearance | Layout | Presentation | Lyrics | Startup | ControlCenterAppearance
+    Input = 128,
+    All = Theme | Appearance | Layout | Presentation | Lyrics | Startup | ControlCenterAppearance | Input
 }
 
 internal sealed class CapsuleSettingsCoordinator : IDisposable
@@ -57,6 +58,12 @@ internal sealed class CapsuleSettingsCoordinator : IDisposable
     {
         CapsuleConfigMutator.SetStartupDisplayMode(_config, mode);
         NotifyChanged(CapsuleSettingsChangeKind.Startup);
+    }
+
+    public void SetKeyboardNavigationEnabled(bool isEnabled)
+    {
+        CapsuleConfigMutator.SetKeyboardNavigationEnabled(_config, isEnabled);
+        NotifyChanged(CapsuleSettingsChangeKind.Input);
     }
 
     public void SetBackgroundImage(string? path)

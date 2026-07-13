@@ -41,6 +41,7 @@ public sealed class CapsuleConfig
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
     public StartupDisplayMode StartupDisplayMode { get; set; } =
         DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter;
+    public bool IsKeyboardNavigationEnabled { get; set; } = true;
     public HashSet<string> FavoriteApps { get; } = [];
     public HashSet<string> HiddenApps { get; } = [];
     public Dictionary<string, string> KnownLaunchPaths { get; } = [];
@@ -145,6 +146,7 @@ public static class CapsuleConfigMutator
         target.LastBottomCapsuleHeight = normalized.LastBottomCapsuleHeight;
         target.ThemePreset = normalized.ThemePreset;
         target.StartupDisplayMode = normalized.StartupDisplayMode;
+        target.IsKeyboardNavigationEnabled = normalized.IsKeyboardNavigationEnabled;
         target.BackgroundImagePath = normalized.BackgroundImagePath;
         target.BackgroundImageOpacity = normalized.BackgroundImageOpacity;
         target.BackgroundImageStretchMode = normalized.BackgroundImageStretchMode;
@@ -220,6 +222,11 @@ public static class CapsuleConfigMutator
         config.StartupDisplayMode = Enum.IsDefined(mode)
             ? mode
             : StartupDisplayMode.CapsuleAndControlCenter;
+    }
+
+    public static void SetKeyboardNavigationEnabled(CapsuleConfig config, bool isEnabled)
+    {
+        config.IsKeyboardNavigationEnabled = isEnabled;
     }
 
     public static void SetBackgroundImagePath(CapsuleConfig config, string? path)
@@ -521,6 +528,7 @@ internal sealed class CapsuleConfigStore
     public CapsuleThemePreset ThemePreset { get; set; } = CapsuleThemePreset.ClassicDark;
     public StartupDisplayMode StartupDisplayMode { get; set; } =
         DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter;
+    public bool IsKeyboardNavigationEnabled { get; set; } = true;
     public List<string> FavoriteApps { get; set; } = [];
     public List<string> HiddenApps { get; set; } = [];
     public Dictionary<string, string> KnownLaunchPaths { get; set; } = [];
@@ -560,6 +568,7 @@ internal sealed class CapsuleConfigStore
             StartupDisplayMode = Enum.IsDefined(StartupDisplayMode)
                 ? StartupDisplayMode
                 : DynamicIslandBar.StartupDisplayMode.CapsuleAndControlCenter,
+            IsKeyboardNavigationEnabled = IsKeyboardNavigationEnabled,
             BackgroundImagePath = BackgroundImagePath,
             BackgroundImageOpacity = Math.Clamp(BackgroundImageOpacity, 0d, 1d),
             BackgroundImageStretchMode = CapsuleBackgroundImagePolicy.NormalizeStretchMode(BackgroundImageStretchMode),
@@ -612,6 +621,7 @@ internal sealed class CapsuleConfigStore
             LastBottomCapsuleHeight = config.LastBottomCapsuleHeight,
             ThemePreset = config.ThemePreset,
             StartupDisplayMode = config.StartupDisplayMode,
+            IsKeyboardNavigationEnabled = config.IsKeyboardNavigationEnabled,
             FavoriteApps = [.. config.FavoriteApps.Order(StringComparer.OrdinalIgnoreCase)],
             HiddenApps = [.. config.HiddenApps.Order(StringComparer.OrdinalIgnoreCase)],
             KnownLaunchPaths = new Dictionary<string, string>(config.KnownLaunchPaths),

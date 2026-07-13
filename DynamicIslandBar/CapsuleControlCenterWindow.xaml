@@ -59,6 +59,11 @@
             <GradientStop Color="#FF33C7F4" Offset="0.52" />
             <GradientStop Color="#FF58D78F" Offset="1" />
         </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ControlCenterScrollThumbBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#D8FFFFFF" Offset="0" />
+            <GradientStop Color="#C84D8CFF" Offset="0.48" />
+            <GradientStop Color="#58FFFFFF" Offset="1" />
+        </LinearGradientBrush>
 
         <LinearGradientBrush x:Key="LiquidGlassBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#E0FFFFFF" Offset="0" />
@@ -333,7 +338,7 @@
 
         <Style TargetType="ComboBox">
             <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-            <Setter Property="Background" Value="#24FFFFFF" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
             <Setter Property="BorderThickness" Value="1.2" />
             <Setter Property="Padding" Value="12,8" />
@@ -370,12 +375,16 @@
                             <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True"
                                    Focusable="False" IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Fade">
                                 <Border MinWidth="240" MaxHeight="260" Margin="0,7,0,0" Padding="6"
-                                        Background="#42182634" BorderBrush="{StaticResource AccentBrush}"
+                                        Background="Transparent" BorderBrush="{StaticResource CardBorderBrush}"
                                         BorderThickness="1.2" CornerRadius="18">
                                     <Border.Effect>
-                                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="6" Opacity="0.5" />
+                                        <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="6" Opacity="0.28" />
                                     </Border.Effect>
-                                    <ScrollViewer><ItemsPresenter /></ScrollViewer>
+                                    <Grid>
+                                        <Border Margin="1" CornerRadius="16" BorderBrush="#8FFFFFFF"
+                                                BorderThickness="1,1,0,0" IsHitTestVisible="False" />
+                                        <ScrollViewer Margin="2"><ItemsPresenter /></ScrollViewer>
+                                    </Grid>
                                 </Border>
                             </Popup>
                         </Grid>
@@ -385,7 +394,7 @@
         </Style>
 
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Foreground" Value="#EAF7FF" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -415,39 +424,95 @@
             </Setter>
         </Style>
 
+        <ControlTemplate x:Key="ControlCenterVerticalScrollBarTemplate" TargetType="ScrollBar">
+            <Grid Width="12" Background="Transparent">
+                <Border Width="5" Margin="0,3" HorizontalAlignment="Center" CornerRadius="2.5"
+                        Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" />
+                <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True">
+                    <Track.DecreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0" Focusable="False" />
+                    </Track.DecreaseRepeatButton>
+                    <Track.Thumb>
+                        <Thumb MinHeight="34" Width="10" Focusable="False">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="Thumb">
+                                    <Grid>
+                                        <Border x:Name="ThumbChrome" Margin="1" CornerRadius="5"
+                                                Background="{StaticResource ControlCenterScrollThumbBrush}"
+                                                BorderBrush="{StaticResource SelectedGlassBorderBrush}" BorderThickness="1" />
+                                        <Border Margin="2" CornerRadius="4" BorderBrush="#B8FFFFFF"
+                                                BorderThickness="1,1,0,0" IsHitTestVisible="False" />
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="0.82" />
+                                        </Trigger>
+                                        <Trigger Property="IsDragging" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="1" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Track.Thumb>
+                    <Track.IncreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0" Focusable="False" />
+                    </Track.IncreaseRepeatButton>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+
+        <ControlTemplate x:Key="ControlCenterHorizontalScrollBarTemplate" TargetType="ScrollBar">
+            <Grid Height="12" Background="Transparent">
+                <Border Height="5" Margin="3,0" VerticalAlignment="Center" CornerRadius="2.5"
+                        Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" />
+                <Track x:Name="PART_Track" Orientation="Horizontal">
+                    <Track.DecreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageLeftCommand}" Opacity="0" Focusable="False" />
+                    </Track.DecreaseRepeatButton>
+                    <Track.Thumb>
+                        <Thumb MinWidth="34" Height="10" Focusable="False">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="Thumb">
+                                    <Grid>
+                                        <Border x:Name="ThumbChrome" Margin="1" CornerRadius="5"
+                                                Background="{StaticResource ControlCenterScrollThumbBrush}"
+                                                BorderBrush="{StaticResource SelectedGlassBorderBrush}" BorderThickness="1" />
+                                        <Border Margin="2" CornerRadius="4" BorderBrush="#B8FFFFFF"
+                                                BorderThickness="1,1,0,0" IsHitTestVisible="False" />
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="0.82" />
+                                        </Trigger>
+                                        <Trigger Property="IsDragging" Value="True">
+                                            <Setter TargetName="ThumbChrome" Property="Opacity" Value="1" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Track.Thumb>
+                    <Track.IncreaseRepeatButton>
+                        <RepeatButton Command="{x:Static ScrollBar.PageRightCommand}" Opacity="0" Focusable="False" />
+                    </Track.IncreaseRepeatButton>
+                </Track>
+            </Grid>
+        </ControlTemplate>
+
         <Style TargetType="ScrollBar">
-            <Setter Property="Width" Value="8" />
+            <Setter Property="Width" Value="12" />
             <Setter Property="Margin" Value="4,0,0,0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="Transparent">
-                            <Track x:Name="PART_Track" IsDirectionReversed="True">
-                                <Track.DecreaseRepeatButton>
-                                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0" />
-                                </Track.DecreaseRepeatButton>
-                                <Track.Thumb>
-                                    <Thumb MinHeight="36">
-                                        <Thumb.Template>
-                                            <ControlTemplate TargetType="Thumb">
-                                                <Border Margin="2" CornerRadius="3" Background="#6670DFF2">
-                                                    <Border.Effect>
-                                                        <DropShadowEffect Color="#46E0FF" BlurRadius="5" ShadowDepth="0" Opacity="0.25" />
-                                                    </Border.Effect>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Thumb.Template>
-                                    </Thumb>
-                                </Track.Thumb>
-                                <Track.IncreaseRepeatButton>
-                                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0" />
-                                </Track.IncreaseRepeatButton>
-                            </Track>
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="Template" Value="{StaticResource ControlCenterVerticalScrollBarTemplate}" />
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Width" Value="Auto" />
+                    <Setter Property="Height" Value="12" />
+                    <Setter Property="Margin" Value="0,4,0,0" />
+                    <Setter Property="Template" Value="{StaticResource ControlCenterHorizontalScrollBarTemplate}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style TargetType="CheckBox">
@@ -510,7 +575,7 @@
                                             <ControlTemplate TargetType="RepeatButton">
                                                 <Border Height="10" VerticalAlignment="Center" Background="{StaticResource EnergyFillBrush}" CornerRadius="5" Margin="-1,0,-12,0">
                                                     <Border.Effect>
-                                                        <DropShadowEffect Color="#4D8CFF" BlurRadius="9" ShadowDepth="0" Opacity="0.42" />
+                                                        <DropShadowEffect Color="{DynamicResource AccentBrushColor}" BlurRadius="9" ShadowDepth="0" Opacity="0.42" />
                                                     </Border.Effect>
                                                 </Border>
                                             </ControlTemplate>
@@ -534,12 +599,12 @@
                                                             <RadialGradientBrush Center="0.32,0.28" GradientOrigin="0.28,0.22" RadiusX="0.74" RadiusY="0.74">
                                                                 <GradientStop Color="#F0FFFFFF" Offset="0" />
                                                                 <GradientStop Color="#88EAF7FF" Offset="0.30" />
-                                                                <GradientStop Color="#425A9CFF" Offset="0.66" />
+                                                                <GradientStop Color="{DynamicResource AccentBrushColor}" Offset="0.66" />
                                                                 <GradientStop Color="#5058D78F" Offset="1" />
                                                             </RadialGradientBrush>
                                                         </Ellipse.Fill>
                                                         <Ellipse.Effect>
-                                                            <DropShadowEffect Color="#4D8CFF" BlurRadius="11" ShadowDepth="2" Opacity="0.52" />
+                                                            <DropShadowEffect Color="{DynamicResource AccentBrushColor}" BlurRadius="11" ShadowDepth="2" Opacity="0.52" />
                                                         </Ellipse.Effect>
                                                     </Ellipse>
                                                     <Ellipse Width="7" Height="7" Fill="#D8FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,4,0,0" />
@@ -597,7 +662,7 @@
             <Setter Property="Width" Value="54" />
             <Setter Property="Height" Value="54" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Foreground" Value="#294B6C" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             <Setter Property="Background" Value="{StaticResource GlassPillBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource GlassPillBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
@@ -927,6 +992,26 @@
                                                 <ComboBoxItem Content="胶囊和控制中心" Tag="CapsuleAndControlCenter" />
                                                 <ComboBoxItem Content="仅显示胶囊" Tag="CapsuleOnly" />
                                             </ComboBox>
+                                        </Grid>
+                                        <Separator Background="{StaticResource DividerBrush}" Margin="0,16" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="胶囊键盘导航" FontSize="14" FontWeight="SemiBold" />
+                                                <TextBlock Text="使用方向键在应用、中心卡片和系统图标间移动，按 Enter 执行，Esc 取消选择"
+                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           FontSize="11"
+                                                           Margin="0,5,0,0"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <CheckBox x:Name="KeyboardNavigationCheckBox"
+                                                      Grid.Column="1"
+                                                      Content="启用"
+                                                      Foreground="{StaticResource PrimaryTextBrush}"
+                                                      VerticalAlignment="Center"
+                                                      Margin="20,0,0,0"
+                                                      Checked="KeyboardNavigationCheckBox_Changed"
+                                                      Unchecked="KeyboardNavigationCheckBox_Changed" />
                                         </Grid>
                                     </StackPanel>
                                 </Border>

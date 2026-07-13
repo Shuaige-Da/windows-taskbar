@@ -47,6 +47,91 @@ public class MainWindowUiLogicTests
     }
 
     [Fact]
+    public void MainWindow_ScrollBarsAndSearchUseThemeAwareGlassResources()
+    {
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("x:Key=\"CapsuleScrollThumbBrush\"", xaml);
+        Assert.Contains("x:Key=\"CapsuleVerticalScrollBarTemplate\"", xaml);
+        Assert.Contains("x:Key=\"CapsuleHorizontalScrollBarTemplate\"", xaml);
+        Assert.Contains("<Style TargetType=\"{x:Type ScrollBar}\">", xaml);
+        Assert.Contains("Background=\"{StaticResource CapsuleScrollThumbBrush}\"", xaml);
+        Assert.Contains("BorderBrush=\"{StaticResource CapsuleMenuBorderBrush}\"", xaml);
+        Assert.Contains("<Setter Property=\"CaretBrush\" Value=\"{StaticResource CapsuleMenuAccentBrush}\"/>", xaml);
+        Assert.Contains("Resources[\"CapsuleScrollThumbBrush\"]", code);
+    }
+
+    [Fact]
+    public void OverflowAppSearch_BuildsIndexAndLoadsIconsWithoutBlockingTheUiThread()
+    {
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("OverflowAppsSearchDebounceMilliseconds = 140", code);
+        Assert.Contains("Task.Run(\n                LocalAppSearchService.EnumerateInstalledApps)", code);
+        Assert.Contains("await loadTask.WaitAsync(cancellationToken);", code);
+        Assert.Contains("LoadLocalAppIconAsync(iconHost, app", code);
+        Assert.Contains("LoadIconSource(launchPath, iconCache)", code);
+        Assert.Contains("await _localAppIconLoadGate.WaitAsync(cancellationToken);", code);
+        Assert.Contains("ConcurrentDictionary<string, ImageSource> _iconCache", code);
+        Assert.Contains("CancelPendingOverflowAppsSearch();", code);
+        Assert.Contains("_ = PreloadInstalledAppsAsync();", code);
+        Assert.Contains("_overflowAppsActiveSearchQuery", code);
+        Assert.Contains("StringComparison.OrdinalIgnoreCase))\n                {\n                    QueueOverflowAppsSearch(query);", code);
+        Assert.DoesNotContain("_installedApps = LocalAppSearchService.EnumerateInstalledApps();", code);
+        Assert.DoesNotContain(
+            "_overflowAppsActiveSearchQuery = query;\n\n            OverflowAppsListPanel.Children.Clear();",
+            code);
+    }
+
+    [Fact]
+    public void OverflowAppSearch_SupportsVisibleKeyboardSelectionAndFocusRecovery()
+    {
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("PreviewMouseLeftButtonDown=\"OverflowAppsSearchBox_PreviewMouseLeftButtonDown\"", xaml);
+        Assert.Contains("PreviewKeyDown=\"OverflowAppsSearchBox_PreviewKeyDown\"", xaml);
+        Assert.Contains("Keyboard.Focus(OverflowAppsSearchBox);", code);
+        Assert.Contains("if (!_isOverflowAppsKeyboardSelectionMode)", code);
+        Assert.Contains("e.Key == Key.Down && _overflowAppsSearchResultHosts.Count > 0", code);
+        Assert.Contains("e.Key is Key.Left or Key.Right or Key.Up or Key.Down", code);
+        Assert.Contains("MoveOverflowAppsSearchSelection(e.Key);", code);
+        Assert.Contains("ExitOverflowAppsKeyboardSelectionMode();", code);
+        Assert.Contains("_overflowAppsSelectedSearchIndex < GetOverflowAppsSearchColumnCount()", code);
+        Assert.Contains("SelectOverflowAppsSearchResult(searchResults.Count > 0 ? 0 : -1);", code);
+        Assert.Contains("RepeatBehavior = RepeatBehavior.Forever", code);
+        Assert.Contains("ActivateSelectedInstalledAppSearchResultOrFocus", code);
+        Assert.DoesNotContain("ActivateFirstInstalledAppSearchResultOrFocus", code);
+    }
+
+    [Fact]
+    public void CapsuleKeyboardNavigation_UsesSpatialFocusRingAndEnterActivation()
+    {
+        var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
+        var code = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml.cs");
+
+        Assert.Contains("PreviewKeyDown=\"Window_PreviewKeyDown\"", xaml);
+        Assert.Contains("x:Name=\"CapsuleKeyboardFocusRing\"", xaml);
+        Assert.Contains("TryMoveCapsuleKeyboardSelection(e.Key)", code);
+        Assert.Contains("FindDirectionalCapsuleKeyboardTarget", code);
+        Assert.Contains("GetCapsuleKeyboardTargets", code);
+        Assert.Contains("target.Activate();", code);
+        Assert.Contains("HandleAppPrimaryAction(app)", code);
+        Assert.Contains("AddButtonKeyboardTarget(targets, \"center-play-pause\", CenterCardPlayPauseButton);", code);
+        Assert.Contains("new CapsuleKeyboardTarget(\"system-wifi\", WifiIcon, ActivateWifiIcon)", code);
+        Assert.Contains("RepeatBehavior = RepeatBehavior.Forever", code);
+        Assert.Contains("!_capsuleConfig.IsKeyboardNavigationEnabled", code);
+        Assert.Contains("_capsuleKeyboardSelectedTargetKey", code);
+        Assert.Contains("RestoreCapsuleKeyboardSelectionAfterRefresh();", code);
+        Assert.Contains("TryFindExpandedPopupEntryTarget", code);
+        Assert.Contains("AddPopupKeyboardTargets(targets);", code);
+        Assert.Contains("x:Name=\"CapsulePopupKeyboardFocusPopup\"", xaml);
+        Assert.Contains("TryEnterOverflowAppsPanelFromSearch", code);
+        Assert.Contains("ClearCapsuleKeyboardSelection();\n            _isOverflowAppsKeyboardSelectionMode = false;", code);
+    }
+
+    [Fact]
     public void CapsuleContextMenu_UsesTransparentThemeAwareGlassAndEnergySliders()
     {
         var xaml = ReadProjectFile("DynamicIslandBar", "MainWindow.xaml");
@@ -345,7 +430,7 @@ public class MainWindowUiLogicTests
         Assert.Contains("x:Name=\"CenterCardSideVolumePanel\"", xaml);
         Assert.Contains("x:Name=\"CenterCardSideVolumeSlider\"", xaml);
         Assert.Contains("Style=\"{StaticResource SideDockVolumeSliderStyle}\"", xaml);
-        Assert.Contains("Fill=\"#46E0FF\"", xaml);
+        Assert.Contains("Fill=\"{StaticResource CapsuleMenuAccentBrush}\"", xaml);
         Assert.Contains("ValueChanged=\"CenterCardSideVolumeSlider_ValueChanged\"", xaml);
         Assert.Contains("Orientation=\"Vertical\"", xaml);
         Assert.Contains("ToggleCenterCardSideVolumeSlider();", code);
@@ -458,14 +543,6 @@ public class MainWindowUiLogicTests
 
     private static string ReadProjectFile(params string[] pathParts)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null &&
-               !File.Exists(Path.Combine(directory.FullName, "DynamicIslandBar", "MainWindow.xaml")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.NotNull(directory);
-        return File.ReadAllText(Path.Combine(new[] { directory!.FullName }.Concat(pathParts).ToArray()));
+        return RepositoryFile.Read(pathParts);
     }
 }

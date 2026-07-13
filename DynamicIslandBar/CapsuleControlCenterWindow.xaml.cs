@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -75,7 +76,7 @@ public partial class CapsuleControlCenterWindow : Window
         new("实时预览", "胶囊 主题 预览 preview", "Theme", "ThemePreview"),
         new("控制中心背景", "主页 山水 自定义 透明 图片", "Theme", "ControlCenterBackground"),
         new("胶囊背景", "胶囊 图片 透明度 填充", "Theme", "CapsuleBackground"),
-        new("系统", "开机自启 启动 控制中心", "Settings", "System"),
+        new("系统", "开机自启 启动 控制中心 键盘 导航 方向键 Enter", "Settings", "System"),
         new("外观", "透明度 阴影 粗细 长度 中心卡片", "Settings", "Appearance"),
         new("流光", "亮度 粗细 速度 跑马灯", "Settings", "Glow"),
         new("歌词", "语言 简体 繁体", "Settings", "Lyrics"),
@@ -505,6 +506,7 @@ public partial class CapsuleControlCenterWindow : Window
             StartupDisplayModeComboBox.SelectedIndex = config.StartupDisplayMode == StartupDisplayMode.CapsuleOnly
                 ? 1
                 : 0;
+            KeyboardNavigationCheckBox.IsChecked = config.IsKeyboardNavigationEnabled;
             SetSlider(GlassOpacitySlider, GlassOpacityValue, config.GlassOpacityPercent);
             SetSlider(ShadowSlider, ShadowValue, config.ShadowPercent);
             SetSlider(CapsuleThicknessSlider, CapsuleThicknessValue, config.CapsuleThicknessPercent);
@@ -625,6 +627,16 @@ public partial class CapsuleControlCenterWindow : Window
         }
 
         _settings.SetStartupDisplayMode(mode);
+    }
+
+    private void KeyboardNavigationCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing)
+        {
+            return;
+        }
+
+        _settings.SetKeyboardNavigationEnabled(KeyboardNavigationCheckBox.IsChecked == true);
     }
 
     private void ExportConfigurationButton_Click(object sender, RoutedEventArgs e)
@@ -950,6 +962,48 @@ public partial class CapsuleControlCenterWindow : Window
         for (var index = 0; index < energyColors.Length; index++)
         {
             SetGradientStopColor("EnergyFillBrush", index, energyColors[index]);
+        }
+
+        SetGradientStopColor(
+            "ControlCenterScrollThumbBrush",
+            1,
+            isWhiteTheme ? Colors.White : Color.FromRgb(0x4D, 0x8C, 0xFF));
+
+        ApplyWindowGlowTheme(isWhiteTheme);
+    }
+
+    private void ApplyWindowGlowTheme(bool isWhiteTheme)
+    {
+        if (WindowGlowFrame.BorderBrush is LinearGradientBrush glowBrush
+            && glowBrush.GradientStops.Count >= 5)
+        {
+            var glowColors = isWhiteTheme
+                ? new[]
+                {
+                    Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF),
+                    Colors.White,
+                    Color.FromRgb(0xE8, 0xF4, 0xFF),
+                    Colors.White,
+                    Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)
+                }
+                : new[]
+                {
+                    Color.FromArgb(0x24, 0x46, 0xE0, 0xFF),
+                    Color.FromRgb(0x46, 0xE0, 0xFF),
+                    Color.FromRgb(0x8A, 0x7D, 0xFF),
+                    Color.FromRgb(0x4C, 0xD9, 0x64),
+                    Color.FromArgb(0x24, 0x46, 0xE0, 0xFF)
+                };
+
+            for (var index = 0; index < glowColors.Length; index++)
+            {
+                glowBrush.GradientStops[index].Color = glowColors[index];
+            }
+        }
+
+        if (WindowGlowFrame.Effect is DropShadowEffect glowEffect)
+        {
+            glowEffect.Color = isWhiteTheme ? Colors.White : Color.FromRgb(0x46, 0xE0, 0xFF);
         }
     }
 

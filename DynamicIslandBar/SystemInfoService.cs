@@ -53,57 +53,40 @@ namespace DynamicIslandBar
             var adapter = GetActiveNetworkAdapter();
             var ip = GetLocalIPAddress();
 
-            var result = $"����: {ssid}";
+            var result = $"网络: {ssid}";
             if (!string.IsNullOrEmpty(adapter))
-                result += $"\n������: {adapter}";
+                result += $"\n适配器: {adapter}";
             if (!string.IsNullOrEmpty(ip))
-                result += $"\nIP ��ַ: {ip}";
-            result += $"\n״̬: ������";
+                result += $"\nIP 地址: {ip}";
+            result += "\n状态: 已连接";
             return result;
         }
 
         private static string GetWifiSSID()
         {
-            try
+            var currentSsid = WifiService.GetCurrentSsid();
+            if (!string.IsNullOrWhiteSpace(currentSsid))
             {
-                var psi = new ProcessStartInfo("netsh", "wlan show interfaces")
-                {
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    StandardOutputEncoding = System.Text.Encoding.GetEncoding("gbk")
-                };
-                using var proc = Process.Start(psi);
-                if (proc == null) return "δ֪";
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(2000);
-
-                foreach (var line in output.Split('\n'))
-                {
-                    var trimmed = line.Trim();
-                    if (trimmed.Contains("SSID") && !trimmed.Contains("BSSID"))
-                    {
-                        var idx = trimmed.IndexOf(':');
-                        if (idx >= 0)
-                            return trimmed[(idx + 1)..].Trim();
-                    }
-                }
+                return currentSsid;
             }
-            catch { }
 
-            // Fallback: use network adapter name
             try
             {
                 foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
                 {
                     if (ni.OperationalStatus == OperationalStatus.Up
                         && ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                    {
                         return ni.Name;
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("GetWifiSSID", ex);
+            }
 
-            return "δ֪";
+            return "未知";
         }
 
         private static string GetActiveNetworkAdapter()
@@ -217,16 +200,19 @@ namespace DynamicIslandBar
                     vol.GetMasterVolumeLevelScalar(out float level);
                     vol.GetMute(out bool muted);
                     var pct = (int)(level * 100);
-                    var muteStr = muted ? " (�Ѿ���)" : "";
+                    var muteStr = muted ? "（已静音）" : string.Empty;
                     var deviceName = GetDefaultAudioDeviceName();
-                    var result = $"����: {pct}%{muteStr}";
+                    var result = $"音量: {pct}%{muteStr}";
                     if (!string.IsNullOrEmpty(deviceName))
-                        result += $"\n����豸: {deviceName}";
+                        result += $"\n输出设备: {deviceName}";
                     return result;
                 }
             }
-            catch { }
-            return "�޷���ȡ������Ϣ";
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("GetVolumeInfo", ex);
+            }
+            return "无法读取音量信息";
         }
 
         public static int GetVolumePercent()
@@ -346,56 +332,63 @@ namespace DynamicIslandBar
 
         public static void OpenWifiSettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:network-wifi") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:network-wifi", nameof(OpenWifiSettings));
         }
 
         public static void OpenSoundSettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:sound") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:sound", nameof(OpenSoundSettings));
         }
 
         public static void OpenAvailableNetworks()
         {
-            try { Process.Start(new ProcessStartInfo("ms-availablenetworks:") { UseShellExecute = true }); }
-            catch { OpenWifiSettings(); }
+            if (!TryOpen("ms-availablenetworks:", nameof(OpenAvailableNetworks)))
+            {
+                OpenWifiSettings();
+            }
         }
 
         public static void OpenBluetoothSettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:bluetooth") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:bluetooth", nameof(OpenBluetoothSettings));
         }
 
         public static void OpenMobileHotspotSettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:network-mobilehotspot") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:network-mobilehotspot", nameof(OpenMobileHotspotSettings));
         }
 
         public static void OpenNetworkSettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:network-status") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:network-status", nameof(OpenNetworkSettings));
         }
 
         public static void OpenBatterySettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:powersleep") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:powersleep", nameof(OpenBatterySettings));
         }
 
         public static void OpenTaskManager()
         {
-            try { Process.Start(new ProcessStartInfo("taskmgr") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("taskmgr", nameof(OpenTaskManager));
         }
 
         public static void OpenLocationPrivacySettings()
         {
-            try { Process.Start(new ProcessStartInfo("ms-settings:privacy-location") { UseShellExecute = true }); }
-            catch { }
+            TryOpen("ms-settings:privacy-location", nameof(OpenLocationPrivacySettings));
+        }
+
+        private static bool TryOpen(string target, string operation)
+        {
+            try
+            {
+                return Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }) is not null;
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error(operation, ex);
+                return false;
+            }
         }
 
         #endregion

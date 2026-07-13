@@ -89,7 +89,7 @@ public class DragSnapLogicTests
     [Fact]
     public void DragEndFallback_UsesReleaseCursorCoordinates_WhenNoPreviewIsActive()
     {
-        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "DynamicIslandBar", "MainWindow.xaml.cs"));
+        var source = RepositoryFile.Read("DynamicIslandBar", "MainWindow.xaml.cs");
 
         Assert.Contains("var releaseCursorPoint = PointToScreen(e.GetPosition(this));", source);
         Assert.Contains("releaseCursorPoint);", source);

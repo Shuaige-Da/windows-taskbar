@@ -3,7 +3,7 @@
 namespace DynamicIslandBar
 {
     /// <summary>
-    /// ���� Windows ϵͳ����������ʾ/����
+    /// 控制 Windows 系统任务栏的显示和隐藏。
     /// </summary>
     public static class TaskbarManager
     {
@@ -22,25 +22,24 @@ namespace DynamicIslandBar
 
         private static IntPtr GetTaskbarHandle()
         {
-            // Windows 11 �������������� "Shell_TrayWnd"
-            // Windows 10 Ҳ�� "Shell_TrayWnd"
+            // Windows 10 和 Windows 11 的主任务栏都使用此窗口类名。
             return FindWindow("Shell_TrayWnd", "");
         }
 
         private static IntPtr GetStartButtonHandle()
         {
-            // Windows 11 ��ʼ��ť
             var handle = FindWindowEx(IntPtr.Zero, IntPtr.Zero, "Button", "Start");
             if (handle == IntPtr.Zero)
             {
-                // ���� Windows 11 ���¿�ʼ��ť����
+                // 兼容部分 Windows 11 版本的开始按钮窗口。
                 handle = FindWindow("Start", "");
             }
+
             return handle;
         }
 
         /// <summary>
-        /// ����ϵͳ������
+        /// 隐藏系统任务栏。
         /// </summary>
         public static void Hide()
         {
@@ -58,7 +57,7 @@ namespace DynamicIslandBar
         }
 
         /// <summary>
-        /// ��ʾϵͳ������
+        /// 显示系统任务栏。
         /// </summary>
         public static void Show()
         {
@@ -76,14 +75,18 @@ namespace DynamicIslandBar
         }
 
         /// <summary>
-        /// �л���������ʾ״̬
+        /// 根据指定状态显示或隐藏系统任务栏。
         /// </summary>
         public static void Toggle(bool show)
         {
             if (show)
+            {
                 Show();
+            }
             else
+            {
                 Hide();
+            }
         }
     }
 }

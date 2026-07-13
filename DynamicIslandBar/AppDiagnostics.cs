@@ -168,6 +168,7 @@ public static class AppDiagnostics
         builder.AppendLine($"胶囊模式：{config.Mode}");
         builder.AppendLine($"主题：{config.ThemePreset}");
         builder.AppendLine($"启动显示：{config.StartupDisplayMode}");
+        builder.AppendLine($"键盘导航：{config.IsKeyboardNavigationEnabled}");
         builder.AppendLine($"开机自启：{StartupRegistrationService.IsEnabled()}");
         builder.AppendLine();
         builder.AppendLine("最近日志：");

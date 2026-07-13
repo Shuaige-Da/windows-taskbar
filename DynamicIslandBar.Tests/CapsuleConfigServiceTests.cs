@@ -18,6 +18,18 @@ public class CapsuleConfigServiceTests
     }
 
     [Fact]
+    public void Serialize_RoundTripsKeyboardNavigationAndDefaultsLegacyConfigToEnabled()
+    {
+        var config = new CapsuleConfig { IsKeyboardNavigationEnabled = false };
+
+        var restored = CapsuleConfigSerializer.Deserialize(CapsuleConfigSerializer.Serialize(config));
+        var legacy = CapsuleConfigSerializer.Deserialize("{}");
+
+        Assert.False(restored.IsKeyboardNavigationEnabled);
+        Assert.True(legacy.IsKeyboardNavigationEnabled);
+    }
+
+    [Fact]
     public void Serialize_RoundTripsTransparentWhiteTheme()
     {
         var config = new CapsuleConfig { ThemePreset = CapsuleThemePreset.TransparentWhite };
@@ -36,6 +48,7 @@ public class CapsuleConfigServiceTests
         {
             ThemePreset = CapsuleThemePreset.TransparentWhite,
             StartupDisplayMode = StartupDisplayMode.CapsuleOnly,
+            IsKeyboardNavigationEnabled = false,
             GlassOpacityPercent = 44,
             LyricLanguage = LyricLanguage.Traditional
         };
@@ -48,6 +61,7 @@ public class CapsuleConfigServiceTests
 
         Assert.Equal(CapsuleThemePreset.TransparentWhite, target.ThemePreset);
         Assert.Equal(StartupDisplayMode.CapsuleOnly, target.StartupDisplayMode);
+        Assert.False(target.IsKeyboardNavigationEnabled);
         Assert.Equal(44, target.GlassOpacityPercent);
         Assert.Equal(LyricLanguage.Traditional, target.LyricLanguage);
         Assert.Equal(["new-app"], target.FavoriteApps);
@@ -131,6 +145,7 @@ public class CapsuleConfigServiceTests
         Assert.Equal(CapsuleMode.BottomTaskbar, config.Mode);
         Assert.Equal(CapsuleThemePreset.ClassicDark, config.ThemePreset);
         Assert.Equal(StartupDisplayMode.CapsuleAndControlCenter, config.StartupDisplayMode);
+        Assert.True(config.IsKeyboardNavigationEnabled);
         Assert.Empty(config.FavoriteApps);
         Assert.Empty(config.HiddenApps);
         Assert.Empty(config.KnownLaunchPaths);

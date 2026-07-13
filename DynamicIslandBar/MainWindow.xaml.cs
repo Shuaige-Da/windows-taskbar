@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -28,6 +29,7 @@ namespace DynamicIslandBar
         private const int WsExTransparent = 0x00000020;
         private const int WsExToolWindow = 0x00000080;
         private const int WsExNoActivate = 0x08000000;
+        private const int OverflowAppsSearchDebounceMilliseconds = 140;
         private static readonly Geometry PlayGeometry = CreateFrozenGeometry("M8,5 L8,19 L19,12 Z");
         private static readonly Geometry PauseGeometry = CreateFrozenGeometry(
             "M6,4 L6,20 L10,20 L10,4 Z M14,4 L14,20 L18,20 L18,4 Z");
@@ -44,6 +46,22 @@ namespace DynamicIslandBar
             Color.FromRgb(0x46, 0xE0, 0xFF));
         private static readonly SolidColorBrush LyricPreviewBrush = CreateFrozenBrush(
             Color.FromArgb(0xD8, 0x9E, 0xF4, 0xFF));
+        private static readonly SolidColorBrush PopupSuccessBrush = CreateFrozenBrush(
+            Color.FromRgb(0x34, 0xC7, 0x59));
+        private static readonly SolidColorBrush PopupWarningBrush = CreateFrozenBrush(
+            Color.FromRgb(0xFF, 0xD6, 0x6B));
+        private static readonly SolidColorBrush PopupErrorBrush = CreateFrozenBrush(
+            Color.FromRgb(0xFF, 0x82, 0x94));
+        private static readonly SolidColorBrush PopupPrimaryTextBrush = CreateFrozenBrush(
+            Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF));
+        private static readonly SolidColorBrush PopupSecondaryTextBrush = CreateFrozenBrush(
+            Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF));
+        private static readonly SolidColorBrush PopupTertiaryTextBrush = CreateFrozenBrush(
+            Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
+        private static readonly SolidColorBrush PopupFaintTextBrush = CreateFrozenBrush(
+            Color.FromArgb(0x64, 0xFF, 0xFF, 0xFF));
+        private static readonly SolidColorBrush PopupHoverBrush = CreateFrozenBrush(
+            Color.FromArgb(0x19, 0xFF, 0xFF, 0xFF));
         private static readonly System.Windows.Media.Effects.DropShadowEffect LyricPrimaryEffect =
             CreateFrozenLyricEffect(Color.FromRgb(0xFF, 0x4F, 0xA3), 16, 0.8);
         private static readonly System.Windows.Media.Effects.DropShadowEffect LyricPreviewEffect =
@@ -88,12 +106,13 @@ namespace DynamicIslandBar
         private PopupState? _pendingHoverClosePopup;
         private PermissionPromptState? _pendingPermissionPrompt;
         private WifiAccessIssue _lastWifiAccessIssue = WifiAccessIssue.None;
-        private readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Color> _accentCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Border> _appIconHosts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, string> _appIdByProcessId = new();
         private readonly Dictionary<string, DateTime> _lastNotificationAnimationUtc = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _pendingNotificationAppIds = new(StringComparer.OrdinalIgnoreCase);
+        private readonly SemaphoreSlim _localAppIconLoadGate = new(3, 3);
         private CapsuleConfig _capsuleConfig = new();
         private CapsuleTheme _currentTheme = CapsuleThemeManager.BuildTheme(CapsuleThemePreset.ClassicDark);
         private string? _cachedCapsuleBackgroundImagePath;
@@ -148,7 +167,23 @@ namespace DynamicIslandBar
         private int _playbackModeIndex;
         private IReadOnlyList<LocalInstalledApp> _installedApps = [];
         private bool _installedAppsLoaded;
+        private Task<IReadOnlyList<LocalInstalledApp>>? _installedAppsLoadTask;
+        private CancellationTokenSource? _overflowAppsSearchCancellation;
+        private int _overflowAppsSearchVersion;
+        private string _overflowAppsActiveSearchQuery = string.Empty;
+        private string _overflowAppsRenderedSearchQuery = string.Empty;
+        private IReadOnlyList<LocalInstalledApp> _overflowAppsSearchResults = [];
+        private readonly List<Border> _overflowAppsSearchResultHosts = [];
+        private int _overflowAppsSelectedSearchIndex = -1;
+        private bool _isOverflowAppsKeyboardSelectionMode;
+        private FrameworkElement? _capsuleKeyboardSelectedElement;
+        private string? _capsuleKeyboardSelectedTargetKey;
         private bool IsSideDockMode => _capsuleConfig.Mode is CapsuleMode.LeftDock or CapsuleMode.RightDock;
+
+        private sealed record CapsuleKeyboardTarget(
+            string Key,
+            FrameworkElement Element,
+            Action Activate);
 
         public MainWindow()
         {
@@ -197,6 +232,9 @@ namespace DynamicIslandBar
             _lyricsRefreshCancellation?.Cancel();
             _lyricsRefreshCancellation?.Dispose();
             _lyricsRefreshCancellation = null;
+            _overflowAppsSearchCancellation?.Cancel();
+            _overflowAppsSearchCancellation?.Dispose();
+            _overflowAppsSearchCancellation = null;
             _mediaService?.Dispose();
             _windowNotificationMonitor.ProcessAlerted -= WindowNotificationMonitor_ProcessAlerted;
             _windowNotificationMonitor.Dispose();
@@ -296,6 +334,14 @@ namespace DynamicIslandBar
             {
                 _lyricsService.PreferredLanguage = _capsuleConfig.LyricLanguage;
                 UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+            }
+
+            if (changeKind.HasFlag(CapsuleSettingsChangeKind.Input)
+                && !_capsuleConfig.IsKeyboardNavigationEnabled)
+            {
+                ClearCapsuleKeyboardSelection();
+                _isOverflowAppsKeyboardSelectionMode = false;
+                SelectOverflowAppsSearchResult(-1);
             }
         }
 
@@ -535,6 +581,10 @@ namespace DynamicIslandBar
                 _currentLayoutMetrics.PopupDirection);
             ConfigurePopup(CenterCardAppsPopup, _currentLayoutMetrics.PopupDirection, -120);
             ClearSnapPreview();
+            if (_capsuleKeyboardSelectedElement != null)
+            {
+                Dispatcher.BeginInvoke(UpdateCapsuleKeyboardFocusRing, DispatcherPriority.Loaded);
+            }
         }
 
         private void ApplyDockModeLayout()
@@ -1204,6 +1254,17 @@ namespace DynamicIslandBar
                 {
                     energyBrush.GradientStops[index].Color = colors[index];
                 }
+            }
+
+            if (Resources["CapsuleScrollThumbBrush"] is LinearGradientBrush scrollThumbBrush
+                && !scrollThumbBrush.IsFrozen
+                && scrollThumbBrush.GradientStops.Count > 1)
+            {
+                scrollThumbBrush.GradientStops[1].Color = Color.FromArgb(
+                    0xC8,
+                    accent.R,
+                    accent.G,
+                    accent.B);
             }
         }
 
@@ -2090,6 +2151,7 @@ namespace DynamicIslandBar
                 : Visibility.Collapsed;
             var summaryApp = ResolveCenterCardSummaryAppDuringIconHover();
             UpdateActiveAppSummary(summaryApp, ResolveCenterCardSummaryStatusDuringIconHover(summaryApp));
+            RestoreCapsuleKeyboardSelectionAfterRefresh();
         }
 
         private RunningAppEntry? ResolveCenterCardSummaryAppDuringIconHover()
@@ -2121,30 +2183,23 @@ namespace DynamicIslandBar
 
         private void RenderOverflowAppsPanel()
         {
-            OverflowAppsListPanel.Children.Clear();
-
             var query = OverflowAppsSearchBox.Text?.Trim() ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(query))
             {
-                EnsureInstalledAppsLoaded();
-                var searchResults = LocalAppSearchService.Search(_installedApps, query)
-                    .Take(24)
-                    .ToList();
-
-                foreach (var app in searchResults)
+                if (!string.Equals(
+                        query,
+                        _overflowAppsActiveSearchQuery,
+                        StringComparison.OrdinalIgnoreCase))
                 {
-                    OverflowAppsListPanel.Children.Add(CreateLocalAppSearchIcon(app, 44));
+                    QueueOverflowAppsSearch(query);
                 }
 
-                OverflowAppsEmptyStateText.Text = searchResults.Count == 0
-                    ? "未找到可启动的本地应用"
-                    : string.Empty;
-                OverflowAppsEmptyStateText.Visibility = searchResults.Count == 0
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
                 return;
             }
 
+            CancelPendingOverflowAppsSearch();
+            ClearOverflowAppsSearchResults();
+            OverflowAppsListPanel.Children.Clear();
             foreach (var app in _runningAppsSnapshot.OverflowApps)
             {
                 OverflowAppsListPanel.Children.Add(CreateAppIcon(app, 44, expandOnHover: false));
@@ -2158,15 +2213,145 @@ namespace DynamicIslandBar
                 : Visibility.Collapsed;
         }
 
-        private void EnsureInstalledAppsLoaded()
+        private void QueueOverflowAppsSearch(string query)
+        {
+            CancelPendingOverflowAppsSearch();
+            var cancellation = new CancellationTokenSource();
+            _overflowAppsSearchCancellation = cancellation;
+            var searchVersion = ++_overflowAppsSearchVersion;
+            _overflowAppsActiveSearchQuery = query;
+
+            OverflowAppsEmptyStateText.Text = _installedAppsLoaded
+                ? "正在搜索…"
+                : "正在准备应用索引…";
+            OverflowAppsEmptyStateText.Visibility = Visibility.Visible;
+            _ = RenderOverflowAppsSearchAsync(query, searchVersion, cancellation.Token);
+        }
+
+        private async Task RenderOverflowAppsSearchAsync(
+            string query,
+            int searchVersion,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(OverflowAppsSearchDebounceMilliseconds, cancellationToken);
+                var installedApps = await EnsureInstalledAppsLoadedAsync(cancellationToken);
+                var searchResults = LocalAppSearchService.Search(installedApps, query)
+                    .Take(24)
+                    .ToList();
+
+                if (!IsCurrentOverflowAppsSearch(query, searchVersion, cancellationToken))
+                {
+                    return;
+                }
+
+                ClearOverflowAppsSearchResults();
+                OverflowAppsListPanel.Children.Clear();
+                _overflowAppsSearchResults = searchResults;
+                _overflowAppsRenderedSearchQuery = query;
+                for (var index = 0; index < searchResults.Count; index++)
+                {
+                    var iconHost = CreateLocalAppSearchIcon(
+                        searchResults[index],
+                        index,
+                        44,
+                        cancellationToken);
+                    _overflowAppsSearchResultHosts.Add(iconHost);
+                    OverflowAppsListPanel.Children.Add(iconHost);
+                }
+
+                SelectOverflowAppsSearchResult(searchResults.Count > 0 ? 0 : -1);
+
+                OverflowAppsEmptyStateText.Text = searchResults.Count == 0
+                    ? "未找到可启动的本地应用"
+                    : string.Empty;
+                OverflowAppsEmptyStateText.Visibility = searchResults.Count == 0
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("SearchInstalledApps", ex);
+                if (IsCurrentOverflowAppsSearch(query, searchVersion, cancellationToken))
+                {
+                    ClearOverflowAppsSearchResults();
+                    OverflowAppsListPanel.Children.Clear();
+                    OverflowAppsEmptyStateText.Text = "应用搜索暂时不可用，请重试";
+                    OverflowAppsEmptyStateText.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private async Task<IReadOnlyList<LocalInstalledApp>> EnsureInstalledAppsLoadedAsync(
+            CancellationToken cancellationToken = default)
         {
             if (_installedAppsLoaded)
             {
-                return;
+                return _installedApps;
             }
 
-            _installedApps = LocalAppSearchService.EnumerateInstalledApps();
-            _installedAppsLoaded = true;
+            var loadTask = _installedAppsLoadTask ??= Task.Run(
+                LocalAppSearchService.EnumerateInstalledApps);
+            try
+            {
+                var installedApps = await loadTask.WaitAsync(cancellationToken);
+                if (!_installedAppsLoaded)
+                {
+                    _installedApps = installedApps;
+                    _installedAppsLoaded = true;
+                }
+
+                return _installedApps;
+            }
+            catch
+            {
+                if (ReferenceEquals(_installedAppsLoadTask, loadTask) && loadTask.IsFaulted)
+                {
+                    _installedAppsLoadTask = null;
+                }
+
+                throw;
+            }
+        }
+
+        private async Task PreloadInstalledAppsAsync()
+        {
+            try
+            {
+                await EnsureInstalledAppsLoadedAsync();
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("PreloadInstalledApps", ex);
+            }
+        }
+
+        private bool IsCurrentOverflowAppsSearch(
+            string query,
+            int searchVersion,
+            CancellationToken cancellationToken)
+        {
+            return !cancellationToken.IsCancellationRequested
+                && !_isWindowClosed
+                && searchVersion == _overflowAppsSearchVersion
+                && OverflowAppsPopup.IsOpen
+                && string.Equals(
+                    OverflowAppsSearchBox.Text.Trim(),
+                    query,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void CancelPendingOverflowAppsSearch()
+        {
+            _overflowAppsSearchVersion++;
+            _overflowAppsSearchCancellation?.Cancel();
+            _overflowAppsSearchCancellation?.Dispose();
+            _overflowAppsSearchCancellation = null;
+            _overflowAppsActiveSearchQuery = string.Empty;
         }
 
         private void RenderAppsManagementPanel()
@@ -2546,8 +2731,23 @@ namespace DynamicIslandBar
             AnimateAppNotification(iconHost, scale, lift, shadow, glowBrush);
         }
 
-        private Border CreateLocalAppSearchIcon(LocalInstalledApp app, double size)
+        private Border CreateLocalAppSearchIcon(
+            LocalInstalledApp app,
+            int resultIndex,
+            double size,
+            CancellationToken cancellationToken)
         {
+            var accent = BuildFallbackAccentColor(app.DisplayName);
+            var glowBrush = CreateAppIconGlowBrush(accent);
+            glowBrush.Opacity = 0.16;
+            var iconHost = new ContentControl
+            {
+                Content = BuildFallbackAppIconVisual(app.DisplayName, size * 0.48),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false,
+                Tag = app.AppId
+            };
             var border = new Border
             {
                 Width = size,
@@ -2555,30 +2755,27 @@ namespace DynamicIslandBar
                 CornerRadius = new CornerRadius(size / 2),
                 Margin = new Thickness(2, 0, 2, 6),
                 Cursor = Cursors.Hand,
-                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
+                Background = Brushes.Transparent,
+                BorderBrush = glowBrush,
                 BorderThickness = new Thickness(1),
                 ToolTip = app.DisplayName,
                 Tag = app,
-                ClipToBounds = true,
-                Child = BuildAppIconVisual(app.DisplayName, app.LaunchPath, size * 0.48)
+                ClipToBounds = false,
+                Child = iconHost
             };
 
             border.MouseEnter += (_, _) =>
             {
-                border.Background = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255));
-                border.BorderBrush = new SolidColorBrush(Color.FromArgb(92, 76, 217, 100));
+                _isOverflowAppsKeyboardSelectionMode = true;
+                SelectOverflowAppsSearchResult(resultIndex);
                 RestoreCapsuleVisibility();
                 ResetAutoHideTimer();
-            };
-            border.MouseLeave += (_, _) =>
-            {
-                border.Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255));
-                border.BorderBrush = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
             };
             border.MouseLeftButtonDown += (_, e) =>
             {
                 e.Handled = true;
+                _isOverflowAppsKeyboardSelectionMode = true;
+                SelectOverflowAppsSearchResult(resultIndex);
                 if (string.IsNullOrWhiteSpace(app.LaunchPath))
                 {
                     return;
@@ -2589,7 +2786,167 @@ namespace DynamicIslandBar
                 TryLaunchApp(app.LaunchPath);
             };
 
+            _ = LoadLocalAppIconAsync(iconHost, app, size * 0.48, cancellationToken);
             return border;
+        }
+
+        private async Task LoadLocalAppIconAsync(
+            ContentControl iconHost,
+            LocalInstalledApp app,
+            double iconSize,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _localAppIconLoadGate.WaitAsync(cancellationToken);
+                ImageSource? iconSource;
+                try
+                {
+                    var launchPath = app.LaunchPath;
+                    var iconCache = _iconCache;
+                    iconSource = await Task.Run(
+                        () => LoadIconSource(launchPath, iconCache),
+                        cancellationToken);
+                }
+                finally
+                {
+                    _localAppIconLoadGate.Release();
+                }
+
+                if (iconSource == null
+                    || cancellationToken.IsCancellationRequested
+                    || _isWindowClosed
+                    || !Equals(iconHost.Tag, app.AppId))
+                {
+                    return;
+                }
+
+                iconHost.Content = new Image
+                {
+                    Source = iconSource,
+                    Width = iconSize,
+                    Height = iconSize,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        private static FrameworkElement BuildFallbackAppIconVisual(string displayName, double iconSize)
+        {
+            return new TextBlock
+            {
+                Text = GetFallbackIconGlyph(displayName),
+                Foreground = Brushes.White,
+                FontSize = Math.Max(iconSize * 0.55, 12),
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center
+            };
+        }
+
+        private void SelectOverflowAppsSearchResult(int index)
+        {
+            var normalizedIndex = _overflowAppsSearchResultHosts.Count == 0
+                ? -1
+                : Math.Clamp(index, 0, _overflowAppsSearchResultHosts.Count - 1);
+            if (_overflowAppsSelectedSearchIndex == normalizedIndex)
+            {
+                return;
+            }
+
+            _overflowAppsSelectedSearchIndex = normalizedIndex;
+            for (var resultIndex = 0; resultIndex < _overflowAppsSearchResultHosts.Count; resultIndex++)
+            {
+                var host = _overflowAppsSearchResultHosts[resultIndex];
+                var selected = resultIndex == normalizedIndex;
+                host.BorderThickness = new Thickness(selected ? 2 : 1);
+                Panel.SetZIndex(host, selected ? 10 : 0);
+
+                if (host.BorderBrush is LinearGradientBrush glowBrush)
+                {
+                    glowBrush.Opacity = selected ? 1 : 0.16;
+                    if (glowBrush.RelativeTransform is RotateTransform rotation)
+                    {
+                        rotation.BeginAnimation(
+                            RotateTransform.AngleProperty,
+                            selected
+                                ? new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(1500))
+                                {
+                                    RepeatBehavior = RepeatBehavior.Forever
+                                }
+                                : null,
+                            HandoffBehavior.SnapshotAndReplace);
+                        if (!selected)
+                        {
+                            rotation.Angle = 0;
+                        }
+                    }
+
+                    var accent = glowBrush.GradientStops.Count > 1
+                        ? glowBrush.GradientStops[1].Color
+                        : Colors.White;
+                    host.Effect = selected
+                        ? new DropShadowEffect
+                        {
+                            Color = accent,
+                            BlurRadius = 14,
+                            ShadowDepth = 0,
+                            Opacity = 0.82
+                        }
+                        : null;
+                }
+            }
+
+            if (normalizedIndex >= 0)
+            {
+                _overflowAppsSearchResultHosts[normalizedIndex].BringIntoView();
+            }
+        }
+
+        private void MoveOverflowAppsSearchSelection(Key key)
+        {
+            if (_overflowAppsSearchResultHosts.Count == 0)
+            {
+                return;
+            }
+
+            var currentIndex = Math.Max(_overflowAppsSelectedSearchIndex, 0);
+            var columns = GetOverflowAppsSearchColumnCount();
+            var targetIndex = key switch
+            {
+                Key.Left => currentIndex - 1,
+                Key.Right => currentIndex + 1,
+                Key.Up => currentIndex - columns,
+                Key.Down => currentIndex + columns,
+                _ => currentIndex
+            };
+
+            SelectOverflowAppsSearchResult(targetIndex);
+        }
+
+        private void ClearOverflowAppsSearchResults()
+        {
+            foreach (var host in _overflowAppsSearchResultHosts)
+            {
+                if (host.BorderBrush is LinearGradientBrush
+                    {
+                        RelativeTransform: RotateTransform rotation
+                    })
+                {
+                    rotation.BeginAnimation(RotateTransform.AngleProperty, null);
+                }
+            }
+
+            _overflowAppsSearchResultHosts.Clear();
+            _overflowAppsSearchResults = [];
+            _overflowAppsSelectedSearchIndex = -1;
+            _overflowAppsRenderedSearchQuery = string.Empty;
+            _isOverflowAppsKeyboardSelectionMode = false;
         }
 
         private void ShowAppHoverOverlay(FrameworkElement iconHost, RunningAppEntry app)
@@ -3565,19 +3922,25 @@ namespace DynamicIslandBar
                 BorderBrush = new SolidColorBrush(Color.FromArgb(selected ? (byte)160 : (byte)24, accent.R, accent.G, accent.B)),
                 BorderThickness = new Thickness(selected ? 1.4 : 1),
                 ToolTip = app.DisplayName,
+                Tag = app,
                 Child = BuildAppIconVisual(app, 22)
             };
             icon.MouseLeftButtonDown += (_, args) =>
             {
                 args.Handled = true;
-                CapsuleConfigMutator.SetCenterCardApp(_capsuleConfig, app.AppId);
-                CapsuleConfigService.Save(_capsuleConfig);
-                _centerCardLiveMediaSnapshot = null;
-                CenterCardAppsPopup.IsOpen = false;
-                UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
-                _ = RefreshCenterCardMediaSnapshotAsync();
+                SelectCenterCardApp(app);
             };
             return icon;
+        }
+
+        private void SelectCenterCardApp(RunningAppEntry app)
+        {
+            CapsuleConfigMutator.SetCenterCardApp(_capsuleConfig, app.AppId);
+            CapsuleConfigService.Save(_capsuleConfig);
+            _centerCardLiveMediaSnapshot = null;
+            CenterCardAppsPopup.IsOpen = false;
+            UpdateActiveAppSummary(GetPrimarySummaryApp(), GetPrimarySummaryStatus(GetPrimarySummaryApp()));
+            _ = RefreshCenterCardMediaSnapshotAsync();
         }
 
         private void CenterCardPrevious_Click(object sender, RoutedEventArgs e)
@@ -4030,12 +4393,19 @@ namespace DynamicIslandBar
 
         private ImageSource? GetIconSource(string? exePath)
         {
+            return LoadIconSource(exePath, _iconCache);
+        }
+
+        private static ImageSource? LoadIconSource(
+            string? exePath,
+            ConcurrentDictionary<string, ImageSource> iconCache)
+        {
             if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
             {
                 return null;
             }
 
-            if (_iconCache.TryGetValue(exePath, out var cached))
+            if (iconCache.TryGetValue(exePath, out var cached))
             {
                 return cached;
             }
@@ -4053,8 +4423,7 @@ namespace DynamicIslandBar
                     Int32Rect.Empty,
                     BitmapSizeOptions.FromWidthAndHeight(32, 32));
                 source.Freeze();
-                _iconCache[exePath] = source;
-                return source;
+                return iconCache.GetOrAdd(exePath, source);
             }
             catch
             {
@@ -4745,8 +5114,626 @@ namespace DynamicIslandBar
             ScheduleHoverPopupClose(GetSystemMorePopupState());
         }
 
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (!_capsuleConfig.IsKeyboardNavigationEnabled
+                || IsTextInputSource(e.OriginalSource as DependencyObject))
+            {
+                return;
+            }
+
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+            {
+                e.Handled = TryMoveCapsuleKeyboardSelection(e.Key);
+                return;
+            }
+
+            if (e.Key == Key.Enter && _capsuleKeyboardSelectedElement != null)
+            {
+                var target = GetCapsuleKeyboardTargets().FirstOrDefault(candidate =>
+                    string.Equals(candidate.Key, _capsuleKeyboardSelectedTargetKey, StringComparison.Ordinal));
+                if (target != null)
+                {
+                    e.Handled = true;
+                    RestoreCapsuleVisibility();
+                    ResetAutoHideTimer();
+                    target.Activate();
+                }
+
+                return;
+            }
+
+            if (e.Key == Key.Escape && _capsuleKeyboardSelectedElement != null)
+            {
+                e.Handled = true;
+                ClearCapsuleKeyboardSelection();
+            }
+        }
+
+        private bool TryMoveCapsuleKeyboardSelection(Key direction)
+        {
+            var targets = GetCapsuleKeyboardTargets();
+            if (targets.Count == 0)
+            {
+                ClearCapsuleKeyboardSelection();
+                return false;
+            }
+
+            CapsuleKeyboardTarget? nextTarget;
+            var currentTarget = targets.FirstOrDefault(candidate =>
+                string.Equals(candidate.Key, _capsuleKeyboardSelectedTargetKey, StringComparison.Ordinal));
+            if (currentTarget == null
+                || !TryGetKeyboardTargetScreenBounds(currentTarget.Element, out var currentBounds))
+            {
+                nextTarget = FindInitialCapsuleKeyboardTarget(targets, direction);
+            }
+            else if (direction is Key.Up or Key.Down
+                && TryFindExpandedPopupEntryTarget(currentTarget, targets, currentBounds, out var popupTarget))
+            {
+                nextTarget = popupTarget;
+            }
+            else
+            {
+                nextTarget = FindDirectionalCapsuleKeyboardTarget(
+                    targets,
+                    currentTarget,
+                    currentBounds,
+                    direction);
+            }
+
+            if (nextTarget == null)
+            {
+                return currentTarget != null;
+            }
+
+            SelectCapsuleKeyboardTarget(nextTarget);
+            return true;
+        }
+
+        private IReadOnlyList<CapsuleKeyboardTarget> GetCapsuleKeyboardTargets()
+        {
+            var targets = new List<CapsuleKeyboardTarget>();
+
+            foreach (var iconHost in AppIconsHost.Children.OfType<FrameworkElement>())
+            {
+                if (iconHost.Tag is RunningAppEntry app)
+                {
+                    targets.Add(new CapsuleKeyboardTarget(
+                        $"main-app:{app.AppId}",
+                        iconHost,
+                        () => HandleAppPrimaryAction(app)));
+                }
+            }
+
+            targets.Add(new CapsuleKeyboardTarget(
+                "app-library",
+                OverflowFolderButton,
+                OpenOverflowAppsForKeyboard));
+
+            if (ActiveAppSummaryPanel.Tag is RunningAppEntry centerApp)
+            {
+                targets.Add(new CapsuleKeyboardTarget(
+                    "center-card",
+                    ActiveAppSummaryPanel,
+                    () => HandleAppPrimaryAction(centerApp)));
+            }
+
+            targets.Add(new CapsuleKeyboardTarget(
+                "center-app-selector",
+                CenterCardAppSelectorButton,
+                OpenCenterCardAppsPopup));
+            targets.Add(new CapsuleKeyboardTarget(
+                "center-side-app-selector",
+                CenterCardSideAppSelectorButton,
+                OpenCenterCardAppsPopup));
+            AddButtonKeyboardTarget(targets, "center-playback-mode", CenterCardPlaybackModeButton);
+            AddButtonKeyboardTarget(targets, "center-previous", CenterCardPreviousButton);
+            AddButtonKeyboardTarget(targets, "center-play-pause", CenterCardPlayPauseButton);
+            AddButtonKeyboardTarget(targets, "center-next", CenterCardNextButton);
+            AddButtonKeyboardTarget(targets, "center-volume", CenterCardVolumeButton);
+            AddButtonKeyboardTarget(targets, "center-side-playback-mode", CenterCardSidePlaybackModeButton);
+            AddButtonKeyboardTarget(targets, "center-side-previous", CenterCardSidePreviousButton);
+            AddButtonKeyboardTarget(targets, "center-side-play-pause", CenterCardSidePlayPauseButton);
+            AddButtonKeyboardTarget(targets, "center-side-next", CenterCardSideNextButton);
+            AddButtonKeyboardTarget(targets, "center-side-volume", CenterCardSideVolumeButton);
+
+            targets.Add(new CapsuleKeyboardTarget("system-wifi", WifiIcon, ActivateWifiIcon));
+            targets.Add(new CapsuleKeyboardTarget("system-volume", VolumeIcon, ActivateVolumeIcon));
+            targets.Add(new CapsuleKeyboardTarget("system-battery", BatteryIcon, ActivateBatteryIcon));
+            targets.Add(new CapsuleKeyboardTarget("system-more", SystemMoreButton, ActivateSystemMoreButton));
+            targets.Add(new CapsuleKeyboardTarget("system-apps", AppsButton, ActivateAppsButton));
+
+            AddPopupKeyboardTargets(targets);
+
+            return targets
+                .Where(target => IsKeyboardTargetAvailable(target.Element))
+                .ToList();
+        }
+
+        private static void AddButtonKeyboardTarget(
+            ICollection<CapsuleKeyboardTarget> targets,
+            string key,
+            Button button)
+        {
+            targets.Add(new CapsuleKeyboardTarget(
+                key,
+                button,
+                () => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button))));
+        }
+
+        private void AddPopupKeyboardTargets(ICollection<CapsuleKeyboardTarget> targets)
+        {
+            if (OverflowAppsPopup.IsOpen)
+            {
+                var index = 0;
+                foreach (var icon in OverflowAppsListPanel.Children.OfType<FrameworkElement>())
+                {
+                    switch (icon.Tag)
+                    {
+                        case RunningAppEntry app:
+                            targets.Add(new CapsuleKeyboardTarget(
+                                $"overflow-app:{app.AppId}:{index++}",
+                                icon,
+                                () => HandleAppPrimaryAction(app)));
+                            break;
+                        case LocalInstalledApp installedApp:
+                            targets.Add(new CapsuleKeyboardTarget(
+                                $"overflow-search:{installedApp.AppId}:{index++}",
+                                icon,
+                                () => ActivateInstalledAppSearchResult(installedApp)));
+                            break;
+                    }
+                }
+            }
+
+            if (CenterCardAppsPopup.IsOpen)
+            {
+                foreach (var icon in CenterCardAppsListPanel.Children.OfType<FrameworkElement>())
+                {
+                    if (icon.Tag is RunningAppEntry app)
+                    {
+                        targets.Add(new CapsuleKeyboardTarget(
+                            $"center-picker:{app.AppId}",
+                            icon,
+                            () => SelectCenterCardApp(app)));
+                    }
+                }
+            }
+
+            if (AppsPopup.IsOpen)
+            {
+                var index = 0;
+                foreach (var row in AppsListPanel.Children.OfType<FrameworkElement>())
+                {
+                    if (row.Tag is RunningAppEntry app)
+                    {
+                        targets.Add(new CapsuleKeyboardTarget(
+                            $"apps-panel:{app.AppId}:{index++}",
+                            row,
+                            () => HandleAppPrimaryAction(app)));
+                    }
+                }
+            }
+
+            if (WifiPopup.IsOpen)
+            {
+                AddButtonKeyboardTarget(targets, "wifi-refresh", WifiRefreshBtn);
+                AddButtonKeyboardTarget(targets, "wifi-disconnect", WifiDisconnectBtn);
+                var index = 0;
+                foreach (var row in WifiNetworksList.Children.OfType<FrameworkElement>())
+                {
+                    if (row.Tag is WifiNetwork network)
+                    {
+                        targets.Add(new CapsuleKeyboardTarget(
+                            $"wifi-network:{network.Ssid}:{index++}",
+                            row,
+                            () => ActivateWifiNetwork(network)));
+                    }
+                }
+                AddButtonKeyboardTarget(targets, "wifi-more-settings", WifiMoreSettingsButton);
+            }
+
+            if (VolumePopup.IsOpen)
+            {
+                AddButtonKeyboardTarget(targets, "volume-mute", MuteBtn);
+                var index = 0;
+                foreach (var row in AudioDevicesList.Children.OfType<FrameworkElement>())
+                {
+                    if (row.Tag is AudioDevice device)
+                    {
+                        targets.Add(new CapsuleKeyboardTarget(
+                            $"audio-device:{device.Id}:{index++}",
+                            row,
+                            () => ActivateAudioDevice(device)));
+                    }
+                }
+                AddButtonKeyboardTarget(targets, "volume-more-settings", VolumeMoreSettingsButton);
+            }
+
+            if (SystemMorePopup.IsOpen)
+            {
+                AddToggleKeyboardTarget(targets, "system-toggle-bluetooth", BluetoothToggle);
+                AddToggleKeyboardTarget(targets, "system-toggle-hotspot", MobileHotspotToggle);
+                AddToggleKeyboardTarget(targets, "system-toggle-wifi", WifiSystemToggle);
+                AddToggleKeyboardTarget(targets, "system-toggle-sound", SoundSystemToggle);
+            }
+        }
+
+        private static void AddToggleKeyboardTarget(
+            ICollection<CapsuleKeyboardTarget> targets,
+            string key,
+            CheckBox toggle)
+        {
+            targets.Add(new CapsuleKeyboardTarget(
+                key,
+                toggle,
+                () =>
+                {
+                    toggle.IsChecked = toggle.IsChecked != true;
+                    toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, toggle));
+                }));
+        }
+
+        private void ActivateInstalledAppSearchResult(LocalInstalledApp app)
+        {
+            if (string.IsNullOrWhiteSpace(app.LaunchPath))
+            {
+                return;
+            }
+
+            CloseAllPanels();
+            TryLaunchApp(app.LaunchPath);
+        }
+
+        private static bool IsTextInputSource(DependencyObject? source)
+        {
+            while (source != null)
+            {
+                if (source is TextBoxBase or PasswordBox)
+                {
+                    return true;
+                }
+
+                source = source is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(source)
+                    : LogicalTreeHelper.GetParent(source);
+            }
+
+            return false;
+        }
+
+        private static bool IsKeyboardTargetAvailable(FrameworkElement element)
+        {
+            if (!element.IsEnabled
+                || !element.IsHitTestVisible
+                || element.ActualWidth <= 0
+                || element.ActualHeight <= 0
+                || PresentationSource.FromVisual(element) == null)
+            {
+                return false;
+            }
+
+            DependencyObject? current = element;
+            while (current is UIElement uiElement)
+            {
+                if (!uiElement.IsVisible || uiElement.Opacity <= 0.02)
+                {
+                    return false;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            return true;
+        }
+
+        private CapsuleKeyboardTarget? FindInitialCapsuleKeyboardTarget(
+            IReadOnlyList<CapsuleKeyboardTarget> targets,
+            Key direction)
+        {
+            var positionedTargets = targets
+                .Select(target => new
+                {
+                    Target = target,
+                    HasBounds = TryGetKeyboardTargetScreenBounds(target.Element, out var bounds),
+                    Bounds = bounds
+                })
+                .Where(item => item.HasBounds)
+                .ToList();
+            if (positionedTargets.Count == 0)
+            {
+                return null;
+            }
+
+            return direction switch
+            {
+                Key.Left => positionedTargets
+                    .OrderByDescending(item => item.Bounds.Right)
+                    .ThenBy(item => item.Bounds.Top)
+                    .First().Target,
+                Key.Up => positionedTargets
+                    .OrderByDescending(item => item.Bounds.Bottom)
+                    .ThenBy(item => item.Bounds.Left)
+                    .First().Target,
+                Key.Down => positionedTargets
+                    .OrderBy(item => item.Bounds.Top)
+                    .ThenBy(item => item.Bounds.Left)
+                    .First().Target,
+                _ => positionedTargets
+                    .OrderBy(item => item.Bounds.Left)
+                    .ThenBy(item => item.Bounds.Top)
+                    .First().Target
+            };
+        }
+
+        private CapsuleKeyboardTarget? FindDirectionalCapsuleKeyboardTarget(
+            IReadOnlyList<CapsuleKeyboardTarget> targets,
+            CapsuleKeyboardTarget currentTarget,
+            Rect currentBounds,
+            Key direction)
+        {
+            var currentCenter = new Point(
+                currentBounds.Left + currentBounds.Width / 2,
+                currentBounds.Top + currentBounds.Height / 2);
+            CapsuleKeyboardTarget? bestTarget = null;
+            var bestScore = double.MaxValue;
+
+            foreach (var target in targets)
+            {
+                if (ReferenceEquals(target, currentTarget)
+                    || !TryGetKeyboardTargetScreenBounds(target.Element, out var bounds))
+                {
+                    continue;
+                }
+
+                var targetCenter = new Point(
+                    bounds.Left + bounds.Width / 2,
+                    bounds.Top + bounds.Height / 2);
+                var deltaX = targetCenter.X - currentCenter.X;
+                var deltaY = targetCenter.Y - currentCenter.Y;
+                var (primaryDistance, perpendicularDistance) = direction switch
+                {
+                    Key.Left when deltaX < -1 => (-deltaX, Math.Abs(deltaY)),
+                    Key.Right when deltaX > 1 => (deltaX, Math.Abs(deltaY)),
+                    Key.Up when deltaY < -1 => (-deltaY, Math.Abs(deltaX)),
+                    Key.Down when deltaY > 1 => (deltaY, Math.Abs(deltaX)),
+                    _ => (double.NaN, double.NaN)
+                };
+                if (double.IsNaN(primaryDistance))
+                {
+                    continue;
+                }
+
+                var score = primaryDistance + perpendicularDistance * 2.5;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = target;
+                }
+            }
+
+            return bestTarget;
+        }
+
+        private bool TryFindExpandedPopupEntryTarget(
+            CapsuleKeyboardTarget currentTarget,
+            IReadOnlyList<CapsuleKeyboardTarget> targets,
+            Rect currentBounds,
+            out CapsuleKeyboardTarget? popupTarget)
+        {
+            popupTarget = null;
+            var popupPanel = currentTarget.Key switch
+            {
+                "app-library" when OverflowAppsPopup.IsOpen => OverflowAppsPanel,
+                "center-app-selector" or "center-side-app-selector" when CenterCardAppsPopup.IsOpen => CenterCardAppsPanel,
+                "system-wifi" when WifiPopup.IsOpen => WifiPanel,
+                "system-volume" when VolumePopup.IsOpen => VolumePanel,
+                "system-more" when SystemMorePopup.IsOpen => SystemMorePanel,
+                "system-apps" when AppsPopup.IsOpen => AppsPanel,
+                _ => null
+            };
+            if (popupPanel == null)
+            {
+                return false;
+            }
+
+            var ownerCenter = new Point(
+                currentBounds.Left + currentBounds.Width / 2,
+                currentBounds.Top + currentBounds.Height / 2);
+            popupTarget = targets
+                .Where(target => IsVisualDescendantOf(target.Element, popupPanel))
+                .Select(target => new
+                {
+                    Target = target,
+                    HasBounds = TryGetKeyboardTargetScreenBounds(target.Element, out var bounds),
+                    Bounds = bounds
+                })
+                .Where(item => item.HasBounds)
+                .OrderBy(item =>
+                {
+                    var centerX = item.Bounds.Left + item.Bounds.Width / 2;
+                    var centerY = item.Bounds.Top + item.Bounds.Height / 2;
+                    return Math.Pow(centerX - ownerCenter.X, 2) + Math.Pow(centerY - ownerCenter.Y, 2);
+                })
+                .Select(item => item.Target)
+                .FirstOrDefault();
+            return popupTarget != null;
+        }
+
+        private static bool IsVisualDescendantOf(DependencyObject element, DependencyObject ancestor)
+        {
+            DependencyObject? current = element;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, ancestor))
+                {
+                    return true;
+                }
+
+                current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            }
+
+            return false;
+        }
+
+        private static bool TryGetKeyboardTargetScreenBounds(FrameworkElement element, out Rect bounds)
+        {
+            bounds = Rect.Empty;
+            try
+            {
+                var topLeft = element.PointToScreen(new Point(0, 0));
+                var bottomRight = element.PointToScreen(new Point(element.ActualWidth, element.ActualHeight));
+                bounds = new Rect(topLeft, bottomRight);
+                return !bounds.IsEmpty && bounds.Width > 0 && bounds.Height > 0;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        private bool TryGetKeyboardTargetRootBounds(FrameworkElement element, out Rect bounds)
+        {
+            bounds = Rect.Empty;
+            try
+            {
+                var transform = element.TransformToAncestor(RootGrid);
+                bounds = transform.TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+                return !bounds.IsEmpty;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        private void SelectCapsuleKeyboardTarget(CapsuleKeyboardTarget target)
+        {
+            _capsuleKeyboardSelectedTargetKey = target.Key;
+            _capsuleKeyboardSelectedElement = target.Element;
+            if (!IsVisualDescendantOf(target.Element, RootGrid))
+            {
+                CancelHoverPopupClose();
+            }
+            RestoreCapsuleVisibility();
+            ResetAutoHideTimer();
+            UpdateCapsuleKeyboardFocusRing();
+            CapsuleKeyboardFocusRotation.BeginAnimation(
+                RotateTransform.AngleProperty,
+                new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(1600))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                },
+                HandoffBehavior.SnapshotAndReplace);
+            CapsulePopupKeyboardFocusRotation.BeginAnimation(
+                RotateTransform.AngleProperty,
+                new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(1600))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                },
+                HandoffBehavior.SnapshotAndReplace);
+        }
+
+        private void UpdateCapsuleKeyboardFocusRing()
+        {
+            if (_capsuleKeyboardSelectedElement == null
+                || !IsKeyboardTargetAvailable(_capsuleKeyboardSelectedElement))
+            {
+                ClearCapsuleKeyboardSelection();
+                return;
+            }
+
+            const double padding = 4;
+            if (IsVisualDescendantOf(_capsuleKeyboardSelectedElement, RootGrid)
+                && TryGetKeyboardTargetRootBounds(_capsuleKeyboardSelectedElement, out var rootBounds))
+            {
+                CapsulePopupKeyboardFocusPopup.IsOpen = false;
+                CapsuleKeyboardFocusRing.Width = rootBounds.Width + padding * 2;
+                CapsuleKeyboardFocusRing.Height = rootBounds.Height + padding * 2;
+                CapsuleKeyboardFocusRing.CornerRadius = new CornerRadius(
+                    Math.Min((rootBounds.Height + padding * 2) / 2, 22));
+                Canvas.SetLeft(CapsuleKeyboardFocusRing, rootBounds.Left - padding);
+                Canvas.SetTop(CapsuleKeyboardFocusRing, rootBounds.Top - padding);
+                CapsuleKeyboardFocusRing.Visibility = Visibility.Visible;
+                return;
+            }
+
+            CapsuleKeyboardFocusRing.Visibility = Visibility.Collapsed;
+            CapsulePopupKeyboardFocusPopup.IsOpen = false;
+            CapsulePopupKeyboardFocusPopup.PlacementTarget = _capsuleKeyboardSelectedElement;
+            CapsulePopupKeyboardFocusPopup.HorizontalOffset = -padding;
+            CapsulePopupKeyboardFocusPopup.VerticalOffset = -padding;
+            CapsulePopupKeyboardFocusRing.Width = _capsuleKeyboardSelectedElement.ActualWidth + padding * 2;
+            CapsulePopupKeyboardFocusRing.Height = _capsuleKeyboardSelectedElement.ActualHeight + padding * 2;
+            CapsulePopupKeyboardFocusRing.CornerRadius = new CornerRadius(
+                Math.Min((_capsuleKeyboardSelectedElement.ActualHeight + padding * 2) / 2, 22));
+            CapsulePopupKeyboardFocusPopup.IsOpen = true;
+        }
+
+        private void ClearCapsuleKeyboardSelection()
+        {
+            _capsuleKeyboardSelectedElement = null;
+            _capsuleKeyboardSelectedTargetKey = null;
+            CapsuleKeyboardFocusRotation.BeginAnimation(RotateTransform.AngleProperty, null);
+            CapsuleKeyboardFocusRotation.Angle = 0;
+            CapsulePopupKeyboardFocusRotation.BeginAnimation(RotateTransform.AngleProperty, null);
+            CapsulePopupKeyboardFocusRotation.Angle = 0;
+            CapsuleKeyboardFocusRing.Visibility = Visibility.Collapsed;
+            CapsulePopupKeyboardFocusPopup.IsOpen = false;
+        }
+
+        private void RestoreCapsuleKeyboardSelectionAfterRefresh()
+        {
+            if (string.IsNullOrWhiteSpace(_capsuleKeyboardSelectedTargetKey))
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                var target = GetCapsuleKeyboardTargets().FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate.Key,
+                        _capsuleKeyboardSelectedTargetKey,
+                        StringComparison.Ordinal));
+                if (target == null)
+                {
+                    ClearCapsuleKeyboardSelection();
+                    return;
+                }
+
+                SelectCapsuleKeyboardTarget(target);
+            }, DispatcherPriority.Loaded);
+        }
+
+        private void OpenOverflowAppsForKeyboard()
+        {
+            ShowHoverPopup(GetOverflowPopupState(), RefreshOverflowAppsPanel);
+            CancelHoverPopupClose();
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!OverflowAppsPopup.IsOpen)
+                {
+                    return;
+                }
+
+                Activate();
+                OverflowAppsSearchBox.Focus();
+                Keyboard.Focus(OverflowAppsSearchBox);
+            }, DispatcherPriority.Input);
+        }
+
+        private void ActivateSystemMoreButton()
+        {
+            ShowHoverPopup(GetSystemMorePopupState(), RefreshSystemMorePanel);
+            CancelHoverPopupClose();
+        }
+
         private void OverflowAppsSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            _isOverflowAppsKeyboardSelectionMode = false;
             RestoreCapsuleVisibility();
             ResetAutoHideTimer();
 
@@ -4756,21 +5743,129 @@ namespace DynamicIslandBar
             }
         }
 
-        private void OverflowAppsSearchButton_Click(object sender, RoutedEventArgs e)
+        private void OverflowAppsSearchBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            ActivateFirstInstalledAppSearchResultOrFocus();
+            _isOverflowAppsKeyboardSelectionMode = false;
+            RestoreCapsuleVisibility();
+            _autoHideTimer.Stop();
+            CancelHoverPopupClose();
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (_isWindowClosed || !OverflowAppsPopup.IsOpen)
+                {
+                    return;
+                }
+
+                Activate();
+                OverflowAppsSearchBox.Focus();
+                Keyboard.Focus(OverflowAppsSearchBox);
+            }, DispatcherPriority.Input);
         }
 
-        private void OverflowAppsSearchBox_KeyDown(object sender, KeyEventArgs e)
+        private void OverflowAppsSearchButton_Click(object sender, RoutedEventArgs e)
         {
+            ActivateSelectedInstalledAppSearchResultOrFocus();
+        }
+
+        private void OverflowAppsSearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (!_capsuleConfig.IsKeyboardNavigationEnabled)
+            {
+                return;
+            }
+
+            if (!_isOverflowAppsKeyboardSelectionMode)
+            {
+                if (e.Key == Key.Down && _overflowAppsSearchResultHosts.Count > 0)
+                {
+                    e.Handled = true;
+                    _isOverflowAppsKeyboardSelectionMode = true;
+                    SelectOverflowAppsSearchResult(
+                        Math.Max(_overflowAppsSelectedSearchIndex, 0));
+                    return;
+                }
+
+                if (e.Key == Key.Down && TryEnterOverflowAppsPanelFromSearch())
+                {
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+            {
+                e.Handled = true;
+                if (e.Key == Key.Up
+                    && _overflowAppsSelectedSearchIndex >= 0
+                    && _overflowAppsSelectedSearchIndex < GetOverflowAppsSearchColumnCount())
+                {
+                    ExitOverflowAppsKeyboardSelectionMode();
+                    return;
+                }
+
+                MoveOverflowAppsSearchSelection(e.Key);
+                return;
+            }
+
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                ExitOverflowAppsKeyboardSelectionMode();
+                return;
+            }
+
             if (e.Key == Key.Enter)
             {
-                ActivateFirstInstalledAppSearchResultOrFocus();
                 e.Handled = true;
+                ActivateSelectedInstalledAppSearchResultOrFocus();
             }
         }
 
-        private void ActivateFirstInstalledAppSearchResultOrFocus()
+        private bool TryEnterOverflowAppsPanelFromSearch()
+        {
+            var target = GetCapsuleKeyboardTargets()
+                .Where(candidate => IsVisualDescendantOf(candidate.Element, OverflowAppsPanel))
+                .Select(candidate => new
+                {
+                    Target = candidate,
+                    HasBounds = TryGetKeyboardTargetScreenBounds(candidate.Element, out var bounds),
+                    Bounds = bounds
+                })
+                .Where(item => item.HasBounds)
+                .OrderBy(item => item.Bounds.Top)
+                .ThenBy(item => item.Bounds.Left)
+                .Select(item => item.Target)
+                .FirstOrDefault();
+            if (target == null)
+            {
+                return false;
+            }
+
+            _isOverflowAppsKeyboardSelectionMode = false;
+            CapsuleLayoutPresenter.Focusable = true;
+            Keyboard.Focus(CapsuleLayoutPresenter);
+            SelectCapsuleKeyboardTarget(target);
+            return true;
+        }
+
+        private int GetOverflowAppsSearchColumnCount()
+        {
+            var availableWidth = OverflowAppsListPanel.ActualWidth > 0
+                ? OverflowAppsListPanel.ActualWidth
+                : Math.Max(OverflowAppsPanel.ActualWidth - 24, 48);
+            return Math.Max(1, (int)Math.Floor(availableWidth / 48));
+        }
+
+        private void ExitOverflowAppsKeyboardSelectionMode()
+        {
+            _isOverflowAppsKeyboardSelectionMode = false;
+            SelectOverflowAppsSearchResult(-1);
+            OverflowAppsSearchBox.Focus();
+            Keyboard.Focus(OverflowAppsSearchBox);
+        }
+
+        private void ActivateSelectedInstalledAppSearchResultOrFocus()
         {
             var query = OverflowAppsSearchBox.Text.Trim();
             if (query.Length == 0)
@@ -4779,9 +5874,24 @@ namespace DynamicIslandBar
                 return;
             }
 
-            EnsureInstalledAppsLoaded();
-            var app = LocalAppSearchService.Search(_installedApps, query).FirstOrDefault();
-            if (app == null || string.IsNullOrWhiteSpace(app.LaunchPath))
+            if (!string.Equals(
+                    query,
+                    _overflowAppsRenderedSearchQuery,
+                    StringComparison.OrdinalIgnoreCase)
+                || _overflowAppsSelectedSearchIndex < 0
+                || _overflowAppsSelectedSearchIndex >= _overflowAppsSearchResults.Count)
+            {
+                if (!string.Equals(query, _overflowAppsActiveSearchQuery, StringComparison.OrdinalIgnoreCase))
+                {
+                    QueueOverflowAppsSearch(query);
+                }
+
+                OverflowAppsSearchBox.Focus();
+                return;
+            }
+
+            var app = _overflowAppsSearchResults[_overflowAppsSelectedSearchIndex];
+            if (string.IsNullOrWhiteSpace(app.LaunchPath))
             {
                 OverflowAppsSearchBox.Focus();
                 return;
@@ -4897,6 +6007,13 @@ namespace DynamicIslandBar
                 return;
             }
 
+            if (_capsuleKeyboardSelectedElement != null
+                && IsVisualDescendantOf(_capsuleKeyboardSelectedElement, _pendingHoverClosePopup.Panel))
+            {
+                _pendingHoverClosePopup = null;
+                return;
+            }
+
             _pendingHoverClosePopup.Popup.IsOpen = false;
             _pendingHoverClosePopup = null;
             UpdateRunningAppsRefreshInterval();
@@ -4905,6 +6022,11 @@ namespace DynamicIslandBar
         private void WifiIcon_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+            ActivateWifiIcon();
+        }
+
+        private void ActivateWifiIcon()
+        {
             CloseAllPanels();
             HidePermissionPrompt();
             SystemInfoService.OpenWifiSettings();
@@ -4913,6 +6035,11 @@ namespace DynamicIslandBar
         private void VolumeIcon_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+            ActivateVolumeIcon();
+        }
+
+        private void ActivateVolumeIcon()
+        {
             CloseAllPanels();
             HidePermissionPrompt();
             SystemInfoService.OpenSoundSettings();
@@ -4921,6 +6048,11 @@ namespace DynamicIslandBar
         private void BatteryIcon_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+            ActivateBatteryIcon();
+        }
+
+        private void ActivateBatteryIcon()
+        {
             HidePermissionPrompt();
             SystemInfoService.OpenBatterySettings();
         }
@@ -4928,6 +6060,11 @@ namespace DynamicIslandBar
         private void AppsButton_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
+            ActivateAppsButton();
+        }
+
+        private void ActivateAppsButton()
+        {
             CloseAllPanels();
             HidePermissionPrompt();
             SystemInfoService.OpenTaskManager();
@@ -4935,6 +6072,23 @@ namespace DynamicIslandBar
 
         private void Popup_Closed(object sender, EventArgs e)
         {
+            var closedPanel = sender switch
+            {
+                Popup popup when ReferenceEquals(popup, WifiPopup) => WifiPanel,
+                Popup popup when ReferenceEquals(popup, VolumePopup) => VolumePanel,
+                Popup popup when ReferenceEquals(popup, AppsPopup) => AppsPanel,
+                Popup popup when ReferenceEquals(popup, OverflowAppsPopup) => OverflowAppsPanel,
+                Popup popup when ReferenceEquals(popup, SystemMorePopup) => SystemMorePanel,
+                Popup popup when ReferenceEquals(popup, CenterCardAppsPopup) => CenterCardAppsPanel,
+                _ => null
+            };
+            if (closedPanel != null
+                && _capsuleKeyboardSelectedElement != null
+                && IsVisualDescendantOf(_capsuleKeyboardSelectedElement, closedPanel))
+            {
+                ClearCapsuleKeyboardSelection();
+            }
+
             CancelHoverPopupClose();
             SetSystemIconHighlight(WifiIcon, WifiIcon.IsMouseOver || WifiPanel.IsMouseOver);
             SetSystemIconHighlight(VolumeIcon, VolumeIcon.IsMouseOver || VolumePanel.IsMouseOver);
@@ -4943,10 +6097,14 @@ namespace DynamicIslandBar
             SetSystemIconHighlight(SystemMoreButton, SystemMoreButton.IsMouseOver || SystemMorePanel.IsMouseOver);
             ClearCenterCardAppSelectorHighlight();
 
-            if (ReferenceEquals(sender, OverflowAppsPopup)
-                && !string.IsNullOrEmpty(OverflowAppsSearchBox.Text))
+            if (ReferenceEquals(sender, OverflowAppsPopup))
             {
-                OverflowAppsSearchBox.Text = string.Empty;
+                CancelPendingOverflowAppsSearch();
+                ClearOverflowAppsSearchResults();
+                if (!string.IsNullOrEmpty(OverflowAppsSearchBox.Text))
+                {
+                    OverflowAppsSearchBox.Text = string.Empty;
+                }
             }
 
             // Clean up dynamic app volume panel
@@ -4970,6 +6128,7 @@ namespace DynamicIslandBar
 
         private void RefreshOverflowAppsPanel()
         {
+            _ = PreloadInstalledAppsAsync();
             RenderOverflowAppsPanel();
         }
 
@@ -4983,6 +6142,10 @@ namespace DynamicIslandBar
             {
                 return;
             }
+
+            ClearCapsuleKeyboardSelection();
+            _isOverflowAppsKeyboardSelectionMode = false;
+            SelectOverflowAppsSearchResult(-1);
 
             if (TryBeginCapsuleThicknessResize(e))
             {
@@ -5443,29 +6606,14 @@ namespace DynamicIslandBar
             var refreshVersion = ++_wifiRefreshVersion;
             WifiRefreshBtn.IsEnabled = false;
             WifiNetworksList.Children.Clear();
-            var currentSsid = WifiService.GetCurrentSsid();
             WifiSystemAccessHint.Visibility = Visibility.Collapsed;
             WifiSystemAccessHint.Text = string.Empty;
             WifiMoreSettingsButton.Content = "更多 WiFi 设置";
 
-            if (!string.IsNullOrEmpty(currentSsid))
-            {
-                WifiCurrentNetwork.Visibility = Visibility.Visible;
-                WifiCurrentSsid.Text = currentSsid;
-                WifiStatusText.Text = "已连接";
-                WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59));
-            }
-            else
-            {
-                WifiCurrentNetwork.Visibility = Visibility.Collapsed;
-                WifiStatusText.Text = "未连接";
-                WifiStatusText.Foreground = new SolidColorBrush(Color.FromArgb(0xA0, 0xFF, 0xFF, 0xFF));
-            }
-
             WifiNetworksList.Children.Add(new TextBlock
             {
                 Text = "正在加载 WiFi 列表...",
-                Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)),
+                Foreground = PopupSecondaryTextBrush,
                 FontSize = 12,
                 Margin = new Thickness(0, 8, 0, 8)
             });
@@ -5473,7 +6621,7 @@ namespace DynamicIslandBar
             Task.Run(() =>
             {
                 var snapshot = WifiService.GetNetworkSnapshot();
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(() =>
                 {
                     if (refreshVersion != _wifiRefreshVersion || !WifiPopup.IsOpen)
                     {
@@ -5482,6 +6630,7 @@ namespace DynamicIslandBar
 
                     _lastWifiAccessIssue = snapshot.AccessIssue;
                     ApplyWifiAccessIssue(snapshot.AccessIssue);
+                    ApplyWifiConnectionState(snapshot.CurrentSsid);
 
                     WifiNetworksList.Children.Clear();
                     if (snapshot.Networks.Count == 0)
@@ -5491,7 +6640,7 @@ namespace DynamicIslandBar
                         WifiNetworksList.Children.Add(new TextBlock
                         {
                             Text = GetWifiEmptyStateMessage(snapshot.AccessIssue),
-                            Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)),
+                            Foreground = PopupSecondaryTextBrush,
                             TextWrapping = TextWrapping.Wrap,
                             FontSize = 12,
                             Margin = new Thickness(0, 8, 0, 8)
@@ -5507,22 +6656,23 @@ namespace DynamicIslandBar
                             Padding = new Thickness(10, 8, 10, 8),
                             Margin = new Thickness(0, 2, 0, 2),
                             Cursor = Cursors.Hand,
-                            Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255))
+                            Background = Brushes.Transparent,
+                            Tag = net
                         };
                         var panel = new DockPanel();
                         var nameBlock = new TextBlock
                         {
                             Text = net.Ssid,
                             Foreground = net.IsConnected
-                                ? new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59))
-                                : new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+                                ? PopupSuccessBrush
+                                : PopupPrimaryTextBrush,
                             FontSize = 13,
                             VerticalAlignment = VerticalAlignment.Center
                         };
                         var signalBlock = new TextBlock
                         {
                             Text = net.SignalStrength,
-                            Foreground = new SolidColorBrush(Color.FromArgb(128, 255, 255, 255)),
+                            Foreground = PopupTertiaryTextBrush,
                             FontSize = 11,
                             VerticalAlignment = VerticalAlignment.Center,
                             Margin = new Thickness(8, 0, 0, 0)
@@ -5535,7 +6685,7 @@ namespace DynamicIslandBar
                             rightPanel.Children.Add(new TextBlock
                             {
                                 Text = " 🔒",
-                                Foreground = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
+                                Foreground = PopupFaintTextBrush,
                                 FontSize = 10,
                                 VerticalAlignment = VerticalAlignment.Center
                             });
@@ -5545,36 +6695,38 @@ namespace DynamicIslandBar
                         row.Child = panel;
 
                         var capturedNet = net;
-                        row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255));
-                        row.MouseLeave += (_, _) => row.Background = new SolidColorBrush(Color.FromArgb(0, 255, 255, 255));
-                        row.ToolTip = capturedNet.IsConnected
-                            ? "当前已连接"
-                            : capturedNet.HasSavedProfile
-                                ? "单击连接"
-                                : "单击后在 Windows 网络面板中输入密码";
+                        row.MouseEnter += (_, _) => row.Background = PopupHoverBrush;
+                        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+                        row.ToolTip = GetWifiNetworkToolTip(capturedNet);
                         row.MouseLeftButtonUp += (_, e) =>
                         {
                             e.Handled = true;
-                            if (!capturedNet.IsConnected)
-                            {
-                                RequestPermission(
-                                    AppPermission.WifiControl,
-                                    "WiFi 控制权限",
-                                    $"允许切换到“{capturedNet.Ssid}”并管理当前 WiFi 连接。",
-                                    async () => await ConnectToWifiAsync(capturedNet));
-                            }
+                            ActivateWifiNetwork(capturedNet);
                         };
                         WifiNetworksList.Children.Add(row);
                     }
                     WifiRefreshBtn.IsEnabled = true;
+                    RestoreCapsuleKeyboardSelectionAfterRefresh();
                 });
             });
+        }
+
+        private void ApplyWifiConnectionState(string? currentSsid)
+        {
+            var isConnected = !string.IsNullOrWhiteSpace(currentSsid);
+            WifiCurrentNetwork.Visibility = isConnected ? Visibility.Visible : Visibility.Collapsed;
+            WifiStatusText.Text = isConnected ? "已连接" : "未连接";
+            WifiStatusText.Foreground = isConnected ? PopupSuccessBrush : PopupSecondaryTextBrush;
+            if (isConnected)
+            {
+                WifiCurrentSsid.Text = currentSsid;
+            }
         }
 
         private async Task ConnectToWifiAsync(WifiNetwork network)
         {
             WifiStatusText.Text = $"正在连接 {network.Ssid}";
-            WifiStatusText.Foreground = new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF));
+            WifiStatusText.Foreground = PopupPrimaryTextBrush;
             WifiNetworksList.IsEnabled = false;
             var result = await WifiService.ConnectAsync(network.Ssid);
             WifiNetworksList.IsEnabled = true;
@@ -5583,25 +6735,51 @@ namespace DynamicIslandBar
             {
                 case WifiConnectionResult.Connected:
                     WifiStatusText.Text = "已连接";
-                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59));
+                    WifiStatusText.Foreground = PopupSuccessBrush;
                     RefreshWifiPanelCore();
                     break;
                 case WifiConnectionResult.ProfileMissing:
                     WifiStatusText.Text = "请在系统面板输入密码";
-                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD6, 0x6B));
+                    WifiStatusText.Foreground = PopupWarningBrush;
                     SystemInfoService.OpenAvailableNetworks();
                     break;
                 case WifiConnectionResult.TimedOut:
                     WifiStatusText.Text = "连接超时，请重试";
-                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x82, 0x94));
+                    WifiStatusText.Foreground = PopupErrorBrush;
                     RefreshWifiPanelCore();
                     break;
                 default:
                     WifiStatusText.Text = "连接失败";
-                    WifiStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x82, 0x94));
+                    WifiStatusText.Foreground = PopupErrorBrush;
                     RefreshWifiPanelCore();
                     break;
             }
+        }
+
+        private void ActivateWifiNetwork(WifiNetwork network)
+        {
+            if (network.IsConnected)
+            {
+                return;
+            }
+
+            RequestPermission(
+                AppPermission.WifiControl,
+                "WiFi 控制权限",
+                $"允许切换到“{network.Ssid}”并管理当前 WiFi 连接。",
+                async () => await ConnectToWifiAsync(network));
+        }
+
+        private static string GetWifiNetworkToolTip(WifiNetwork network)
+        {
+            if (network.IsConnected)
+            {
+                return "当前已连接";
+            }
+
+            return network.HasSavedProfile
+                ? "单击连接"
+                : "单击后在 Windows 网络面板中输入密码";
         }
 
         private void WifiRefresh_Click(object sender, RoutedEventArgs e)
@@ -5776,7 +6954,7 @@ namespace DynamicIslandBar
             Task.Run(() =>
             {
                 var devices = AudioService.GetOutputDevices();
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(() =>
                 {
                     if (refreshVersion != _volumeRefreshVersion || !VolumePopup.IsOpen)
                     {
@@ -5792,6 +6970,7 @@ namespace DynamicIslandBar
                             Padding = new Thickness(10, 6, 10, 6),
                             Margin = new Thickness(0, 1, 0, 1),
                             Cursor = Cursors.Hand,
+                            Tag = dev,
                             Background = dev.IsDefault
                                 ? new SolidColorBrush(Color.FromArgb(25, 76, 217, 100))
                                 : new SolidColorBrush(Color.FromArgb(0, 255, 255, 255))
@@ -5811,22 +6990,11 @@ namespace DynamicIslandBar
                         row.MouseLeftButtonDown += (_, e) =>
                         {
                             e.Handled = true;
-                            RequestPermission(
-                                AppPermission.AudioControl,
-                                "声音控制权限",
-                                $"允许切换当前默认输出设备到“{dev.Name}”。",
-                                () =>
-                                {
-                                    if (!AudioService.SwitchDevice(dev.Id))
-                                    {
-                                        SystemInfoService.OpenSoundSettings();
-                                    }
-
-                                    RefreshVolumePanelCore();
-                                });
+                            ActivateAudioDevice(dev);
                         };
                         AudioDevicesList.Children.Add(row);
                     }
+                    RestoreCapsuleKeyboardSelectionAfterRefresh();
                 });
             });
         }
@@ -5878,7 +7046,29 @@ namespace DynamicIslandBar
             SystemInfoService.OpenSoundSettings();
         }
 
-        private async void RefreshSystemMorePanel()
+        private void ActivateAudioDevice(AudioDevice device)
+        {
+            RequestPermission(
+                AppPermission.AudioControl,
+                "声音控制权限",
+                $"允许切换当前默认输出设备到“{device.Name}”。",
+                () =>
+                {
+                    if (!AudioService.SwitchDevice(device.Id))
+                    {
+                        SystemInfoService.OpenSoundSettings();
+                    }
+
+                    RefreshVolumePanelCore();
+                });
+        }
+
+        private void RefreshSystemMorePanel()
+        {
+            _ = RefreshSystemMorePanelAsync();
+        }
+
+        private async Task RefreshSystemMorePanelAsync()
         {
             if (_isUpdatingSystemFeatureToggles)
             {
@@ -5886,27 +7076,38 @@ namespace DynamicIslandBar
             }
 
             _isUpdatingSystemFeatureToggles = true;
-            SystemFeatureStatusText.Text = "正在读取系统状态…";
-            var entries = new[]
+            SetSystemFeatureStatus("正在读取系统状态…", PopupSecondaryTextBrush);
+            try
             {
-                (Feature: SystemFeatureToggle.Bluetooth, Toggle: BluetoothToggle),
-                (Feature: SystemFeatureToggle.MobileHotspot, Toggle: MobileHotspotToggle),
-                (Feature: SystemFeatureToggle.Wifi, Toggle: WifiSystemToggle),
-                (Feature: SystemFeatureToggle.Sound, Toggle: SoundSystemToggle)
-            };
-            var states = await Task.WhenAll(entries.Select(entry =>
-                SystemFeatureToggleService.GetStateAsync(entry.Feature)));
-            for (var index = 0; index < entries.Length; index++)
-            {
-                entries[index].Toggle.IsChecked = states[index].IsOn;
-                entries[index].Toggle.IsEnabled = states[index].IsAvailable;
-                entries[index].Toggle.ToolTip = states[index].Message;
-            }
+                var entries = new[]
+                {
+                    (Feature: SystemFeatureToggle.Bluetooth, Toggle: BluetoothToggle),
+                    (Feature: SystemFeatureToggle.MobileHotspot, Toggle: MobileHotspotToggle),
+                    (Feature: SystemFeatureToggle.Wifi, Toggle: WifiSystemToggle),
+                    (Feature: SystemFeatureToggle.Sound, Toggle: SoundSystemToggle)
+                };
+                var states = await Task.WhenAll(entries.Select(entry =>
+                    SystemFeatureToggleService.GetStateAsync(entry.Feature)));
+                for (var index = 0; index < entries.Length; index++)
+                {
+                    ApplySystemFeatureState(entries[index].Toggle, states[index]);
+                }
 
-            SystemFeatureStatusText.Text = states.Any(state => !state.IsAvailable)
-                ? "部分功能受设备或系统权限限制"
-                : "点击开关可直接切换系统状态";
-            _isUpdatingSystemFeatureToggles = false;
+                SetSystemFeatureStatus(
+                    states.Any(state => !state.IsAvailable)
+                        ? "部分功能受设备或系统权限限制"
+                        : "点击开关可直接切换系统状态",
+                    PopupSecondaryTextBrush);
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.Error("RefreshSystemFeatures", ex);
+                SetSystemFeatureStatus("无法读取系统状态", PopupErrorBrush);
+            }
+            finally
+            {
+                _isUpdatingSystemFeatureToggles = false;
+            }
         }
 
         private async void SystemFeatureToggle_Click(object sender, RoutedEventArgs e)
@@ -5920,28 +7121,48 @@ namespace DynamicIslandBar
 
             _isUpdatingSystemFeatureToggles = true;
             toggle.IsEnabled = false;
-            SystemFeatureStatusText.Text = "正在切换…";
-            var state = await SystemFeatureToggleService.SetStateAsync(feature, toggle.IsChecked == true);
-            toggle.IsChecked = state.IsOn;
-            toggle.IsEnabled = state.IsAvailable;
-            toggle.ToolTip = state.Message;
-            SystemFeatureStatusText.Text = state.Message ?? "系统状态已更新";
-            SystemFeatureStatusText.Foreground = new SolidColorBrush(state.IsAvailable
-                ? Color.FromRgb(0x72, 0xF4, 0xA4)
-                : Color.FromRgb(0xFF, 0x82, 0x94));
-            _isUpdatingSystemFeatureToggles = false;
-
-            if (feature == SystemFeatureToggle.Wifi)
+            SetSystemFeatureStatus("正在切换…", PopupSecondaryTextBrush);
+            try
             {
-                if (WifiPopup.IsOpen)
+                var state = await SystemFeatureToggleService.SetStateAsync(feature, toggle.IsChecked == true);
+                ApplySystemFeatureState(toggle, state);
+                SetSystemFeatureStatus(
+                    state.Message ?? "系统状态已更新",
+                    state.IsAvailable ? PopupSuccessBrush : PopupErrorBrush);
+
+                if (feature == SystemFeatureToggle.Wifi && WifiPopup.IsOpen)
                 {
                     RefreshWifiPanelCore();
                 }
+                else if (feature == SystemFeatureToggle.Sound)
+                {
+                    RefreshVolumePanelCore();
+                }
             }
-            else if (feature == SystemFeatureToggle.Sound)
+            catch (Exception ex)
             {
-                RefreshVolumePanelCore();
+                AppDiagnostics.Error($"ToggleSystemFeature-{feature}", ex);
+                toggle.IsChecked = toggle.IsChecked != true;
+                toggle.IsEnabled = true;
+                SetSystemFeatureStatus("系统状态切换失败", PopupErrorBrush);
             }
+            finally
+            {
+                _isUpdatingSystemFeatureToggles = false;
+            }
+        }
+
+        private static void ApplySystemFeatureState(CheckBox toggle, SystemFeatureToggleState state)
+        {
+            toggle.IsChecked = state.IsOn;
+            toggle.IsEnabled = state.IsAvailable;
+            toggle.ToolTip = state.Message;
+        }
+
+        private void SetSystemFeatureStatus(string message, Brush foreground)
+        {
+            SystemFeatureStatusText.Text = message;
+            SystemFeatureStatusText.Foreground = foreground;
         }
 
         #endregion

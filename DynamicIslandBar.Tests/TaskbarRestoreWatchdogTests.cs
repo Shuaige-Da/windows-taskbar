@@ -48,14 +48,6 @@ public class TaskbarRestoreWatchdogTests
 
     private static string ReadProjectFile(params string[] pathParts)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null &&
-               !File.Exists(Path.Combine(directory.FullName, "DynamicIslandBar", "DynamicIslandBar.csproj")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.NotNull(directory);
-        return File.ReadAllText(Path.Combine(new[] { directory!.FullName }.Concat(pathParts).ToArray()));
+        return RepositoryFile.Read(pathParts);
     }
 }

@@ -11,6 +11,7 @@ namespace DynamicIslandBar
     {
         public required List<WifiNetwork> Networks { get; init; }
         public required WifiAccessIssue AccessIssue { get; init; }
+        public string? CurrentSsid { get; init; }
     }
 
     public static class WifiAccessAnalyzer

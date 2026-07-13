@@ -61,7 +61,7 @@ public class VisualLayerContractTests
         Assert.Contains("CapsuleAppearanceMapper.BuildPanelBackgroundBrush(_capsuleConfig.GlassOpacityPercent)", code);
         Assert.Contains("CapsuleAppearanceMapper.BuildPanelBorderBrush(_capsuleConfig.GlowIntensityPercent)", code);
         Assert.DoesNotContain("WifiPanel.Background = CreateBrush(_currentTheme.PanelBackground)", code);
-        Assert.Contains("BorderBrush=\"#6046E0FF\"", xaml);
+        Assert.Contains("BorderBrush=\"{StaticResource CapsuleMenuBorderBrush}\"", xaml);
     }
 
     [Fact]
@@ -502,14 +502,6 @@ public class VisualLayerContractTests
 
     private static string ReadProjectFile(params string[] pathParts)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null &&
-               !File.Exists(Path.Combine(directory.FullName, "DynamicIslandBar", "MainWindow.xaml")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.NotNull(directory);
-        return File.ReadAllText(Path.Combine(new[] { directory!.FullName }.Concat(pathParts).ToArray()));
+        return RepositoryFile.Read(pathParts);
     }
 }
